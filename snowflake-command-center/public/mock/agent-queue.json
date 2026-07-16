@@ -1,0 +1,129 @@
+{
+  "generatedAt": "2026-07-15T23:05:00.000Z",
+  "source": "SNOWFLAKE_REVENUE_CC.CORE.REVENUE_CC_AGENT (live Cortex Agent run)",
+  "agent": "SNOWFLAKE_REVENUE_CC.CORE.REVENUE_CC_AGENT",
+  "featured": {
+    "question": "Why did renewal risk increase for West Enterprise accounts this month and what should we do?",
+    "answer": "All 241 West Enterprise accounts remain at High or Critical risk with $441M in revenue at risk. The root cause is incident INC-0001, a 6-hour 47-minute platform reliability degradation on May 28, 2026, affecting 77% of the West Enterprise portfolio. The three primary risk drivers are: SLA Breach Spike (83 accounts), Product Usage Drop (80 accounts), and Negative Support Sentiment (78 accounts). Immediate churn threats include TechNova Solutions ($2.8M ARR, renewal July 31), NovaPay Financial ($3.6M ARR, July 15), and Acme Financial Services ($4.2M ARR, August 15). The CRO escalation memo estimates $14.8M in probability-weighted revenue at risk and projects a 72% save rate if you act immediately. Prioritized actions: Execute Renewal Save Play for 73 accounts with multi-year commitment incentives, launch Executive Outreach for 63 accounts, process Reliability Credit Review for 56 accounts using the $2.1M SLA credits budget, and deploy the 90-Day Reliability Proof Program for accounts with 60+ days to renewal.",
+    "metrics": {
+      "revenueAtRisk": 63428261.76,
+      "avgRiskScore": 83.23,
+      "highRiskAccounts": 241,
+      "slaBreaches": 17
+    },
+    "toolCalls": [
+      {
+        "tool": "Analyst",
+        "type": "cortex_analyst_text_to_sql",
+        "sql": "WITH __risk AS (SELECT risk_month, account_id, region, segment, renewal_risk_score, risk_tier, top_risk_driver, revenue_at_risk FROM SNOWFLAKE_REVENUE_CC.CORE.FACT_RENEWAL_RISK) SELECT risk.top_risk_driver, COUNT(DISTINCT risk.account_id) AS affected_accounts, AVG(risk.renewal_risk_score) AS avg_risk_score FROM __risk risk WHERE risk.region = 'West' AND risk.segment = 'Enterprise' AND risk.risk_month = DATE_TRUNC('MONTH', CURRENT_DATE) GROUP BY risk.top_risk_driver ORDER BY affected_accounts DESC"
+      },
+      {
+        "tool": "Search",
+        "type": "cortex_search",
+        "query": "West Enterprise accounts renewal risk churn incidents support issues SLA breaches"
+      }
+    ],
+    "citations": [
+      {
+        "docId": "DOC-001",
+        "title": "INC-0001 Post-Incident Review: West Region Platform Reliability Degradation",
+        "docType": "Incident Postmortem",
+        "account": "Acme Financial Services",
+        "region": "West",
+        "snippet": "Incident INC-0001 was declared on 2026-05-28 at 14:32 UTC when monitoring detected sustained p99 latency spikes exceeding 4500ms on the West region primary compute cluster. Root cause traced to firmware defect in NVMe controllers."
+      },
+      {
+        "docId": "DOC-002",
+        "title": "INC-0001 Customer Impact Assessment: West Enterprise Cohort",
+        "docType": "Incident Postmortem",
+        "account": "Pacific Mutual Insurance",
+        "region": "West",
+        "snippet": "Of 312 total West Enterprise accounts, 241 (77%) experienced measurable service degradation during the 6h47m incident window. Impact severity: 89 accounts experienced complete service unavailability."
+      },
+      {
+        "docId": "DOC-052",
+        "title": "ESCALATION: West Enterprise Portfolio Risk - CRO Strategic Review",
+        "docType": "Executive Escalation",
+        "account": "ALL ACCOUNTS",
+        "region": "West",
+        "snippet": "EXECUTIVE ESCALATION - PORTFOLIO LEVEL. To: CRO, CFO, VP Sales West, VP Customer Success. Subject: West Enterprise renewal portfolio risk following INC-0001. Probability-weighted revenue at risk: $14.8M."
+      },
+      {
+        "docId": "DOC-012",
+        "title": "CASE-88801: TechNova Solutions - Reliability Guarantee Request",
+        "docType": "Support Case Note",
+        "account": "TechNova Solutions",
+        "region": "West",
+        "snippet": "Customer: TechNova Solutions. Case opened by CTO directly to account executive. Issue: Customer requesting enhanced SLA with 99.99% uptime guarantee or evaluating competitive alternatives."
+      }
+    ]
+  },
+  "recommendations": [
+    {
+      "id": "REC-001",
+      "account": "Acme Financial Services",
+      "region": "West",
+      "segment": "Enterprise",
+      "revenueAtRisk": 4200000,
+      "riskScore": 91,
+      "play": "Executive Escalation Protocol",
+      "rationale": "CFO expressed intent to invoke termination clause at Q2 QBR; VP Engineering engagement required within 48 hours per 'Save Play: Executive Escalation Protocol for At-Risk Enterprise Accounts' (DOC-040).",
+      "approvalStatus": "Approved"
+    },
+    {
+      "id": "REC-002",
+      "account": "TechNova Solutions",
+      "region": "West",
+      "segment": "Enterprise",
+      "revenueAtRisk": 2800000,
+      "riskScore": 94,
+      "play": "Multi-Year Commitment Incentive",
+      "rationale": "CTO receiving competitive proposals with 99.99% SLA guarantees; 8-12% multi-year discount with enhanced SLA per 'Save Play: Multi-Year Commitment Incentive for At-Risk Renewals' (DOC-045). Renewal July 31.",
+      "approvalStatus": "Pending"
+    },
+    {
+      "id": "REC-003",
+      "account": "NovaPay Financial",
+      "region": "West",
+      "segment": "Enterprise",
+      "revenueAtRisk": 3600000,
+      "riskScore": 89,
+      "play": "Service Credit and Commercial Concession",
+      "rationale": "Transaction processing SLA breach triggered penalty clause; immediate credit allocation from $2.1M budget per 'Save Play: Service Credit and Commercial Concession Framework' (DOC-041). Renewal July 15.",
+      "approvalStatus": "Pending"
+    },
+    {
+      "id": "REC-004",
+      "account": "Pacific Mutual Insurance",
+      "region": "West",
+      "segment": "Enterprise",
+      "revenueAtRisk": 3100000,
+      "riskScore": 86,
+      "play": "Success Plan Reset for Post-Incident Recovery",
+      "rationale": "14,000 claims required manual intervention during INC-0001; CIO demands structured recovery plan per 'Save Play: Success Plan Reset for Post-Incident Recovery' (DOC-043).",
+      "approvalStatus": "Pending"
+    },
+    {
+      "id": "REC-005",
+      "account": "Western Digital Analytics",
+      "region": "West",
+      "segment": "Enterprise",
+      "revenueAtRisk": 1900000,
+      "riskScore": 82,
+      "play": "90-Day Reliability Proof Program",
+      "rationale": "CTO requested detailed reliability roadmap at Q2 QBR; customer-visible uptime dashboard with failover demos per 'Save Play: 90-Day Reliability Proof Program' (DOC-073). Renewal in 90+ days.",
+      "approvalStatus": "Pending"
+    },
+    {
+      "id": "REC-006",
+      "account": "Cascade Health Systems",
+      "region": "West",
+      "segment": "Enterprise",
+      "revenueAtRisk": 2200000,
+      "riskScore": 84,
+      "play": "Competitive Displacement Defense",
+      "rationale": "CISO raised regulatory compliance concerns post-incident and is evaluating alternatives; deploy competitive defense positioning per 'Save Play: Competitive Displacement Defense for West Enterprise' (DOC-044).",
+      "approvalStatus": "Pending"
+    }
+  ]
+}

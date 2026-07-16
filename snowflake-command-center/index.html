@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Snowflake Revenue Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,600;0,700;0,800&family=Roboto+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<!-- Reskin design system: tokens (canonical :root) + component library, then app-specific additions. -->
+<link rel="stylesheet" href="./src/design-tokens.css" />
+<link rel="stylesheet" href="./src/kit-styles.css" />
+<link rel="stylesheet" href="./src/app.css" />
+</head>
+<body>
+<div class="app-shell">
+
+  <header class="app-header">
+    <div class="brand-row">
+      <span class="brand-lockup">
+        <img class="cobrand" src="./public/brand/domo-snowflake-logo.svg" alt="Domo + Snowflake" />
+      </span>
+      <span class="brand-divider"></span>
+      <span class="panel-tag">Revenue Command Center</span>
+      <span class="brand-spacer"></span>
+      <span class="env-chip"><span class="env-dot"></span> <span id="envLabel">Synthetic data · Horizon-governed</span></span>
+    </div>
+
+    <div class="header-titles">
+      <p class="eyebrow">Build with Snowflake · Deliver with Domo</p>
+      <h1>Revenue Command Center</h1>
+      <p class="subtitle">One governed brain, many governed surfaces. Snowflake Horizon + semantic views + Cortex are the intelligence plane; Domo is the delivery and action plane. Metrics never fork out of Snowflake.</p>
+    </div>
+
+    <div class="header-controls">
+      <div class="control-group">
+        <span class="label">Persona</span>
+        <div class="select" id="personaSelect">
+          <button class="select-trigger" aria-expanded="false" aria-haspopup="listbox">
+            <span class="select-value">Executive Sponsor</span>
+            <span class="select-caret"></span>
+          </button>
+          <div class="select-menu" role="listbox" id="personaMenu"></div>
+        </div>
+      </div>
+      <span class="mode-pill" id="modePill">Loading</span>
+    </div>
+  </header>
+
+  <nav class="view-tabs" role="tablist" id="viewTabs"></nav>
+
+  <main id="view"></main>
+
+  <footer class="app-footer">
+    <span class="powered">Snowflake AI Data Cloud + Domo · Open Sans + Roboto Mono · synthetic data</span>
+    <span class="tag-chip"><span class="env-dot"></span> <span id="sourceLabel">SNOWFLAKE_REVENUE_CC.CORE</span></span>
+  </footer>
+</div>
+
+<!-- Domo runtime (served by the platform when published; absent in local preview). -->
+<script src="/domo.js"></script>
+<script src="./src/app.js"></script>
+</body>
+</html>

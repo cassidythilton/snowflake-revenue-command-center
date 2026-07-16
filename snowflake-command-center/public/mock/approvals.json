@@ -1,0 +1,173 @@
+{
+  "generatedAt": "2026-07-15T00:00:00.000Z",
+  "source": "SNOWFLAKE_REVENUE_CC.CORE GOLD_AGENT_ACTION_QUEUE + GOLD_PROTECTED_REVENUE_ROLLUP (live)",
+  "protected": {
+    "baseline": 48187517.331,
+    "writeback": 0,
+    "total": 48187517.331,
+    "approvedCount": 0,
+    "executedCount": 0
+  },
+  "pending": [
+    {
+      "actionId": "ACT-0011826",
+      "accountId": "ACC-03221",
+      "accountName": "Beacon Analytics 3221",
+      "region": "West",
+      "segment": "Enterprise",
+      "sourceAgent": "Domo Agent Catalyst",
+      "sourceQuestion": "Why did renewal risk increase and which action should we take?",
+      "recommendation": "Technical success plan",
+      "expectedRevenueProtected": 207447.8592,
+      "riskScore": 84
+    },
+    {
+      "actionId": "ACT-0000018",
+      "accountId": "ACC-00312",
+      "accountName": "Cobalt Group 312",
+      "region": "West",
+      "segment": "Enterprise",
+      "sourceAgent": "Domo Agent Catalyst",
+      "sourceQuestion": "Why did renewal risk increase and which action should we take?",
+      "recommendation": "Technical success plan",
+      "expectedRevenueProtected": 202173.2448,
+      "riskScore": 72
+    },
+    {
+      "actionId": "ACT-0000055",
+      "accountId": "ACC-01860",
+      "accountName": "Acme Group 1860",
+      "region": "West",
+      "segment": "Enterprise",
+      "sourceAgent": "Domo Agent Catalyst",
+      "sourceQuestion": "Why did renewal risk increase and which action should we take?",
+      "recommendation": "Executive outreach",
+      "expectedRevenueProtected": 199175.6704,
+      "riskScore": 75
+    },
+    {
+      "actionId": "ACT-0000044",
+      "accountId": "ACC-01013",
+      "accountName": "Delta Holdings 1013",
+      "region": "West",
+      "segment": "Enterprise",
+      "sourceAgent": "Domo Agent Catalyst",
+      "sourceQuestion": "Why did renewal risk increase and which action should we take?",
+      "recommendation": "Technical success plan",
+      "expectedRevenueProtected": 196260.5696,
+      "riskScore": 77
+    },
+    {
+      "actionId": "ACT-0011824",
+      "accountId": "ACC-03690",
+      "accountName": "Acme Industries 3690",
+      "region": "West",
+      "segment": "Enterprise",
+      "sourceAgent": "Domo Agent Catalyst",
+      "sourceQuestion": "Why did renewal risk increase and which action should we take?",
+      "recommendation": "Executive outreach",
+      "expectedRevenueProtected": 194702.976,
+      "riskScore": 78
+    },
+    {
+      "actionId": "ACT-0011870",
+      "accountId": "ACC-01426",
+      "accountName": "Granite Labs 1426",
+      "region": "West",
+      "segment": "Enterprise",
+      "sourceAgent": "Domo Agent Catalyst",
+      "sourceQuestion": "Why did renewal risk increase and which action should we take?",
+      "recommendation": "Technical success plan",
+      "expectedRevenueProtected": 193332.7872,
+      "riskScore": 73
+    },
+    {
+      "actionId": "ACT-0000074",
+      "accountId": "ACC-03499",
+      "accountName": "Juniper Labs 3499",
+      "region": "West",
+      "segment": "Enterprise",
+      "sourceAgent": "Domo Agent Catalyst",
+      "sourceQuestion": "Why did renewal risk increase and which action should we take?",
+      "recommendation": "Executive outreach",
+      "expectedRevenueProtected": 193331.8912,
+      "riskScore": 87
+    },
+    {
+      "actionId": "ACT-0011885",
+      "accountId": "ACC-00252",
+      "accountName": "Cobalt Holdings 252",
+      "region": "West",
+      "segment": "Enterprise",
+      "sourceAgent": "Genie-assisted triage",
+      "sourceQuestion": "Why did renewal risk increase and which action should we take?",
+      "recommendation": "Reliability credit review",
+      "expectedRevenueProtected": 193286.576,
+      "riskScore": 85
+    },
+    {
+      "actionId": "ACT-0011830",
+      "accountId": "ACC-00661",
+      "accountName": "Beacon Systems 661",
+      "region": "West",
+      "segment": "Enterprise",
+      "sourceAgent": "Domo Agent Catalyst",
+      "sourceQuestion": "Why did renewal risk increase and which action should we take?",
+      "recommendation": "Renewal save play",
+      "expectedRevenueProtected": 192999.888,
+      "riskScore": 90
+    }
+  ],
+  "history": [
+    {
+      "actionId": "ACT-0000000",
+      "accountId": "ACC-02343",
+      "accountName": "Delta Labs 2343",
+      "region": "West",
+      "recommendation": "Renewal save play",
+      "approvedBy": "vp.success@demo.local",
+      "actualRevenueProtected": 176166.656,
+      "completedTs": "2026-06-11T00:00:00.000Z"
+    },
+    {
+      "actionId": "ACT-0011811",
+      "accountId": "ACC-03724",
+      "accountName": "Evergreen Labs 3724",
+      "region": "West",
+      "recommendation": "Reliability credit review",
+      "approvedBy": "vp.success@demo.local",
+      "actualRevenueProtected": 176119.424,
+      "completedTs": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "actionId": "ACT-0000023",
+      "accountId": "ACC-01162",
+      "accountName": "Cobalt Systems 1162",
+      "region": "West",
+      "recommendation": "Executive outreach",
+      "approvedBy": "vp.success@demo.local",
+      "actualRevenueProtected": 175694.9056,
+      "completedTs": "2026-06-14T00:00:00.000Z"
+    },
+    {
+      "actionId": "ACT-0000005",
+      "accountId": "ACC-01768",
+      "accountName": "Ion Holdings 1768",
+      "region": "West",
+      "recommendation": "Technical success plan",
+      "approvedBy": "vp.success@demo.local",
+      "actualRevenueProtected": 175550.464,
+      "completedTs": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "actionId": "ACT-0000001",
+      "accountId": "ACC-02343",
+      "accountName": "Delta Labs 2343",
+      "region": "West",
+      "recommendation": "Reliability credit review",
+      "approvedBy": "vp.success@demo.local",
+      "actualRevenueProtected": 171762.4896,
+      "completedTs": "2026-07-09T00:00:00.000Z"
+    }
+  ]
+}

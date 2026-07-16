@@ -1,0 +1,6 @@
+codeengine/
+SNOWFLAKE-CONNECT.md
+README.md
+.domoignore
+node_modules/
+tools/

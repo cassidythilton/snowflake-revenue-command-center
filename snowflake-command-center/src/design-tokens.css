@@ -1,0 +1,105 @@
+/* ============================================================================
+   Domo design tokens — the canonical palette + scale.
+   Copy this :root block into your app verbatim and theme everything off it.
+   Anchored on domo-styleguide.mdc. Domo Blue is the dominant brand color;
+   orange is the secondary accent; violet and sage are used SPARINGLY and must
+   never overpower Domo Blue. Full component CSS lives in references/styles.css.
+   ============================================================================ */
+
+:root {
+  color-scheme: light;
+
+  /* ---- Brand (Domo) ---- */
+  --domo-blue: #99ccee;       /* primary — dominant brand color */
+  --domo-blue-deep: #4a90c2;  /* primary, stronger (lines, fills, focus) */
+  --domo-blue-ink: #1f5d86;   /* primary, darkest (links, active text) */
+  --domo-orange: #ff9922;     /* secondary — accents only, never dominant */
+
+  /* ---- Neutrals (from styleguide) ---- */
+  --n-050: #f1f6fa;
+  --n-100: #dce4ea;
+  --n-300: #b7c1cb;
+  --n-500: #68737f;
+  --n-700: #3f454d;
+  --white: #ffffff;
+
+  /* ---- Domo accents (use sparingly; never overpower Domo Blue) ---- */
+  --accent-violet: #776cb0;
+  --accent-orchid: #c179bd;
+  --accent-pink: #eca4dd;
+  --accent-sage: #add4c1;
+
+  /* ---- Snowflake (partner co-brand — subordinate to Domo Blue) ----
+     Snowflake Blue is the partner brand color (logos, chips, dots, status).
+     Snowflake Blue sits close to Domo Blue, so use the deeper Star Blue for
+     high-contrast action surfaces (primary partner buttons, active states) to
+     preserve legibility. Snowflake must never overpower Domo Blue. */
+  --sf-blue: #29b5e8;       /* Snowflake Blue — partner brand accent */
+  --sf-blue-deep: #11567f;  /* Star Blue — high-contrast actions on light bg */
+  --sf-ink: #1b2a3a;        /* Snowflake Midnight — dark partner ink */
+  /* Snowflake blue ramp (from the brand palette swatches) — charts/gradients */
+  --sf-100: #b1e5f7;
+  --sf-200: #a1dff4;
+  --sf-300: #90d9f3;
+  --sf-400: #82d4f2;
+  --sf-500: #70cef0;
+  --sf-600: #62c8ed;
+  --sf-700: #50c3ec;
+  --sf-800: #40bdea;
+  --sf-900: #2cb6e8;
+
+  /* ---- Ink (dark surface for code blocks / inverted panels) ---- */
+  --ink: #2a2e36;
+  --ink-soft: #3a3f48;
+
+  /* ---- Status (semantic) ---- */
+  --status-good: #3f8f6b;  --status-good-bg: #eaf4ee;
+  --status-warn: #b9700f;  --status-warn-bg: #fdf1e1;
+  --status-bad:  #c0392b;  --status-bad-bg:  #fcedeb;
+  --status-info: #4a7a9c;  --status-info-bg: #e9f2f8;
+
+  /* ---- Semantic surface roles ---- */
+  --bg: var(--n-050);
+  --surface: var(--white);
+  --line: var(--n-100);
+  --line-strong: var(--n-300);
+  --text: var(--n-700);
+  --muted: var(--n-500);
+  --hairline: rgba(63, 69, 77, 0.12);
+
+  /* ---- Radii (small — native-Domo analyzer chrome) ---- */
+  --r-lg: 8px;
+  --r-md: 6px;
+  --r-sm: 4px;
+  --r-pill: 999px;
+
+  /* ---- Elevation (panels are flat; elevation only for true overlays) ---- */
+  --shadow-sm: none;
+  --shadow-md: 0 1px 2px rgba(63, 69, 77, 0.05), 0 6px 18px rgba(63, 69, 77, 0.07);
+  --shadow-lg: 0 2px 6px rgba(63, 69, 77, 0.07), 0 14px 34px rgba(63, 69, 77, 0.12);
+
+  /* ---- Typography ---- */
+  --font: "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Roboto Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+}
+
+/* Load the typefaces (Open Sans for everything, Roboto Mono for code/IDs):
+   <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,600;0,700;0,800&family=Roboto+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+   Open Sans Bold (700/800) for titles, Open Sans Light (300) for subtitles,
+   Open Sans Regular (400) for body copy — per domo-styleguide.mdc.
+
+   Base body styles for reference:
+   body {
+     font-family: var(--font);
+     font-size: 13px;
+     line-height: 1.45;
+     color: var(--text);
+     background:
+       radial-gradient(1100px 420px at 6% -10%, rgba(153, 204, 238, 0.24), transparent 60%),
+       radial-gradient(900px 360px at 104% -4%, rgba(153, 204, 238, 0.12), transparent 55%),
+       var(--bg);
+     -webkit-font-smoothing: antialiased;
+   }
+*/

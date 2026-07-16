@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Domo Design System — Reference Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,600;0,700;0,800&family=Roboto+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<!-- The design system. design-tokens.css is the canonical :root block; styles.css is the component library. -->
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- ================= HEADER ================= -->
+  <header class="app-header">
+    <div class="brand-row">
+      <span class="brand-lockup">
+        <span class="logo-chip"><img src="../assets/logos/domo-logo.png" alt="Domo" /></span>
+        <span class="brand-word">Domo</span>
+      </span>
+      <span class="brand-divider"></span>
+      <span class="panel-tag">Design System Reference</span>
+      <span class="brand-spacer"></span>
+      <span class="env-chip"><span class="env-dot"></span> Production · synthetic data</span>
+    </div>
+
+    <div class="header-titles">
+      <p class="eyebrow">Revenue Operations</p>
+      <h1>Pipeline Command Center</h1>
+      <p class="subtitle">A worked example of the Domo design system: Domo Blue as the dominant color, orange as a sparing accent, flat panels with hairline borders, Open Sans typography, and tabular numerics for every metric.</p>
+    </div>
+
+    <div class="header-controls">
+      <div class="control-group">
+        <span class="label">Region</span>
+        <div class="select" id="regionSelect">
+          <button class="select-trigger" aria-expanded="false" aria-haspopup="listbox">
+            <span class="select-value">All Regions</span>
+            <span class="select-caret"></span>
+          </button>
+          <div class="select-menu" role="listbox">
+            <div class="select-option" role="option" aria-selected="true">All Regions <span class="check"></span></div>
+            <div class="select-option" role="option" aria-selected="false">North America <span class="check"></span></div>
+            <div class="select-option" role="option" aria-selected="false">EMEA <span class="check"></span></div>
+            <div class="select-option" role="option" aria-selected="false">APAC <span class="check"></span></div>
+          </div>
+        </div>
+      </div>
+      <span class="mode-pill live">Live</span>
+    </div>
+  </header>
+
+  <!-- ================= VIEW TABS ================= -->
+  <nav class="view-tabs" role="tablist">
+    <button class="view-tab active" role="tab" aria-selected="true">Overview</button>
+    <button class="view-tab" role="tab" aria-selected="false">Forecast</button>
+    <button class="view-tab" role="tab" aria-selected="false">Accounts</button>
+    <button class="view-tab" role="tab" aria-selected="false">How It Works</button>
+  </nav>
+
+  <!-- ================= KPI ROW ================= -->
+  <section class="kpi-row">
+    <article class="kpi">
+      <span class="kpi-label">Pipeline Value</span>
+      <span class="kpi-value">$48.2M</span>
+      <div class="kpi-meta"><span class="kpi-delta up">▲ 6.4%</span> vs. last quarter</div>
+    </article>
+    <article class="kpi is-good">
+      <span class="kpi-label">Weighted Forecast</span>
+      <span class="kpi-value">$31.7M</span>
+      <div class="kpi-meta"><span class="kpi-delta up">▲ 3.1%</span> above target</div>
+    </article>
+    <article class="kpi is-warn">
+      <span class="kpi-label">At-Risk ARR</span>
+      <span class="kpi-value">$4.9M</span>
+      <div class="kpi-meta"><span class="kpi-delta down">▼ 1.8%</span> 12 accounts</div>
+    </article>
+    <article class="kpi is-alt">
+      <span class="kpi-label">Win Rate</span>
+      <span class="kpi-value">27.4%</span>
+      <div class="kpi-meta"><span class="kpi-delta warn">± 0.3%</span> trailing 90 days</div>
+    </article>
+  </section>
+
+  <!-- ================= MAIN GRID ================= -->
+  <section class="grid">
+
+    <!-- Forecast line chart -->
+    <article class="panel col-8">
+      <div class="panel-head">
+        <div>
+          <h2>Bookings vs. Forecast</h2>
+          <p>Actuals through today, model forecast to quarter end</p>
+        </div>
+        <div class="panel-head-actions">
+          <div class="seg" role="group" aria-label="Cadence">
+            <button class="seg-btn">Weekly</button>
+            <button class="seg-btn active">Monthly</button>
+          </div>
+        </div>
+      </div>
+      <div class="chart">
+        <svg viewBox="0 0 640 220" width="100%" height="220" role="img" aria-label="Bookings versus forecast line chart">
+          <line class="chart-grid" x1="40" y1="20" x2="40" y2="180" />
+          <line class="chart-grid" x1="40" y1="180" x2="620" y2="180" />
+          <line class="chart-grid" x1="40" y1="130" x2="620" y2="130" />
+          <line class="chart-grid" x1="40" y1="80" x2="620" y2="80" />
+          <line class="chart-grid" x1="40" y1="30" x2="620" y2="30" />
+          <text class="chart-ylab" x="34" y="184">0</text>
+          <text class="chart-ylab" x="34" y="134">15M</text>
+          <text class="chart-ylab" x="34" y="84">30M</text>
+          <text class="chart-ylab" x="34" y="34">45M</text>
+          <polygon class="chart-band" points="380,150 440,128 500,118 560,104 620,86 620,180 380,180" />
+          <polyline class="chart-line" points="40,162 100,150 160,140 220,120 280,112 340,100 380,96" />
+          <polyline class="chart-line dashed" points="380,96 440,82 500,70 560,58 620,44" />
+          <circle class="chart-dot" cx="40" cy="162" r="3" />
+          <circle class="chart-dot" cx="160" cy="140" r="3" />
+          <circle class="chart-dot" cx="280" cy="112" r="3" />
+          <circle class="chart-dot" cx="380" cy="96" r="3.5" />
+          <text class="chart-xlab" x="40" y="200">Jan</text>
+          <text class="chart-xlab" x="220" y="200">Mar</text>
+          <text class="chart-xlab" x="380" y="200">May</text>
+          <text class="chart-xlab" x="560" y="200">Jul</text>
+        </svg>
+      </div>
+      <div class="chart-legend">
+        <span class="lg-item"><span class="lg-line"></span> Actual bookings</span>
+        <span class="lg-item"><span class="lg-line dashed"></span> Model forecast</span>
+        <span class="lg-item"><span class="lg-band"></span> Confidence band</span>
+      </div>
+    </article>
+
+    <!-- Insight rail -->
+    <article class="panel col-4">
+      <div class="panel-head">
+        <div>
+          <h2>Insights</h2>
+          <p>Generated from the latest run</p>
+        </div>
+      </div>
+      <div class="insight-rail">
+        <div class="insight warn">
+          <span class="insight-dot"></span>
+          <div class="insight-body">
+            <h3>Renewal risk rising in EMEA</h3>
+            <p>Three enterprise accounts slipped a stage this week, putting $1.4M at risk.</p>
+            <button class="insight-cta">Review accounts →</button>
+          </div>
+        </div>
+        <div class="insight info">
+          <span class="insight-dot"></span>
+          <div class="insight-body">
+            <h3>Forecast confidence improved</h3>
+            <p>Model variance narrowed to ±4.2% after this month's actuals landed.</p>
+            <button class="insight-cta">Open forecast →</button>
+          </div>
+        </div>
+        <div class="insight good">
+          <span class="insight-dot"></span>
+          <div class="insight-body">
+            <h3>New-logo pace ahead of plan</h3>
+            <p>NA new-logo bookings are tracking 11% above the quarterly commit.</p>
+            <button class="insight-cta">See breakdown →</button>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- Bar chart -->
+    <article class="panel col-6">
+      <div class="panel-head">
+        <div>
+          <h2>Pipeline by Region</h2>
+          <p>Open opportunities, weighted</p>
+        </div>
+      </div>
+      <div class="bar-chart">
+        <div class="bar-row">
+          <span class="bar-label">NA</span>
+          <span class="bar-track"><span class="bar-fill" style="width: 86%"></span></span>
+          <span class="bar-value">$19.4M</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">EMEA</span>
+          <span class="bar-track"><span class="bar-fill hot" style="width: 58%"></span></span>
+          <span class="bar-value">$13.1M <span class="bar-flag">Risk</span></span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">APAC</span>
+          <span class="bar-track"><span class="bar-fill" style="width: 41%"></span></span>
+          <span class="bar-value">$9.3M</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">LATAM</span>
+          <span class="bar-track"><span class="bar-fill" style="width: 27%"></span></span>
+          <span class="bar-value">$6.4M</span>
+        </div>
+      </div>
+    </article>
+
+    <!-- Metric list -->
+    <article class="panel col-6">
+      <div class="panel-head">
+        <div>
+          <h2>Quarter Summary</h2>
+          <p>As of today</p>
+        </div>
+        <span class="panel-tag">Q3 FY26</span>
+      </div>
+      <dl class="metric-list">
+        <div><dt>Closed-won</dt><dd>$22.8M</dd></div>
+        <div><dt>Commit</dt><dd>$31.7M</dd></div>
+        <div><dt>Best case</dt><dd>$37.2M</dd></div>
+        <div><dt>Coverage ratio</dt><dd>3.4×</dd></div>
+        <div><dt>Avg. deal size</dt><dd>$84.5K</dd></div>
+      </dl>
+    </article>
+
+    <!-- Accounts table -->
+    <article class="panel col-8">
+      <div class="panel-head">
+        <div>
+          <h2>Top Open Accounts</h2>
+          <p>Sorted by weighted value</p>
+        </div>
+        <button class="btn btn-secondary btn-sm">Export</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Account</th>
+              <th>Stage</th>
+              <th>Owner</th>
+              <th class="num">Weighted</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Northwind Traders</td>
+              <td>Negotiation</td>
+              <td>A. Okafor</td>
+              <td class="num">$2.1M</td>
+              <td><span class="status good">On track</span></td>
+            </tr>
+            <tr>
+              <td>Contoso Ltd.</td>
+              <td>Proposal</td>
+              <td>R. Chen</td>
+              <td class="num">$1.8M</td>
+              <td><span class="status warn">Slipping</span></td>
+            </tr>
+            <tr>
+              <td>Fabrikam Inc.</td>
+              <td>Discovery</td>
+              <td>M. Silva</td>
+              <td class="num">$1.3M</td>
+              <td><span class="status info">In review</span></td>
+            </tr>
+            <tr>
+              <td>Adventure Works</td>
+              <td>Negotiation</td>
+              <td>J. Park</td>
+              <td class="num">$1.1M</td>
+              <td><span class="status bad">At risk</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <!-- Governed sources -->
+    <article class="panel col-4">
+      <div class="panel-head">
+        <div>
+          <h2>Governed Sources</h2>
+          <p>Datasets powering this view</p>
+        </div>
+        <button class="pill-btn inspect" id="openDrawer">Inspect</button>
+      </div>
+      <div class="dataset-grid">
+        <div class="dataset-card">
+          <div class="alias"><img class="brand-mark" src="../assets/brand/domo-cloud-amplifier.svg" alt="" /> opportunities</div>
+          <div class="object">revops.pipeline.opportunities</div>
+          <div class="dataset-links">
+            <button>Lineage</button>
+            <button>Schema</button>
+          </div>
+        </div>
+        <div class="dataset-card">
+          <div class="alias"><img class="brand-mark" src="../assets/brand/domo-workflows.svg" alt="" /> forecast_runs</div>
+          <div class="object">revops.ml.forecast_runs</div>
+          <div class="dataset-links">
+            <button>Lineage</button>
+            <button>Schema</button>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- Process timeline -->
+    <article class="panel col-12">
+      <div class="panel-head">
+        <div>
+          <h2>Approval Journey</h2>
+          <p>How a flagged forecast adjustment moves from detection to action</p>
+        </div>
+      </div>
+      <div class="timeline">
+        <div class="tl-node is-done">
+          <span class="tl-dot">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h6l2-4 4 8 2-4h4"/></svg>
+            <span class="tl-badge ok">✓</span>
+          </span>
+          <span class="tl-plane">Detect</span>
+          <span class="tl-label">Variance flagged</span>
+          <span class="tl-sub">Model run · 06:02</span>
+        </div>
+        <div class="tl-node is-done">
+          <span class="tl-dot">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-3.3 3.6-6 8-6s8 2.7 8 6"/></svg>
+            <span class="tl-badge ok">✓</span>
+          </span>
+          <span class="tl-plane">Notify</span>
+          <span class="tl-label">Owner alerted</span>
+          <span class="tl-sub">A. Okafor</span>
+        </div>
+        <div class="tl-node alt is-active">
+          <span class="tl-dot">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="3"/></svg>
+          </span>
+          <span class="tl-plane">Review</span>
+          <span class="tl-label">Pending approval</span>
+          <span class="tl-sub">Awaiting RevOps</span>
+        </div>
+        <div class="tl-node is-todo">
+          <span class="tl-dot">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5 11-11"/></svg>
+          </span>
+          <span class="tl-plane">Act</span>
+          <span class="tl-label">Forecast updated</span>
+          <span class="tl-sub">Writes back to source</span>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ================= FOOTER ================= -->
+  <footer class="app-footer">
+    <span class="powered">Built on Domo · Open Sans + Roboto Mono · all numbers synthetic</span>
+    <span class="tag-chip"><span class="env-dot"></span> Design system reference</span>
+  </footer>
+</div>
+
+<!-- ================= INSPECTOR DRAWER ================= -->
+<div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
+<aside class="drawer" id="drawer" hidden aria-hidden="true">
+  <div class="drawer-head">
+    <span class="drawer-tag">Source of truth</span>
+    <button class="drawer-close" id="closeDrawer" aria-label="Close">×</button>
+  </div>
+  <code class="inline">revops.pipeline.opportunities</code>
+  <p class="note" style="margin-top:12px">This drawer is the overlay pattern: elevation is reserved for true overlays only — panels themselves stay flat with hairline borders.</p>
+  <div class="field" style="margin-top:4px">
+    <span>Business description</span>
+    <textarea rows="3">Open and recently closed opportunities, refreshed hourly from the CRM connector.</textarea>
+  </div>
+  <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap">
+    <button class="btn btn-primary">Save</button>
+    <button class="btn btn-secondary" id="closeDrawer2">Cancel</button>
+  </div>
+</aside>
+
+<script>
+  // Dropdown
+  const sel = document.getElementById('regionSelect');
+  const trigger = sel.querySelector('.select-trigger');
+  const valueEl = sel.querySelector('.select-value');
+  trigger.addEventListener('click', () => {
+    const open = sel.classList.toggle('open');
+    trigger.setAttribute('aria-expanded', String(open));
+  });
+  sel.querySelectorAll('.select-option').forEach((opt) => {
+    opt.addEventListener('click', () => {
+      sel.querySelectorAll('.select-option').forEach((o) => o.setAttribute('aria-selected', 'false'));
+      opt.setAttribute('aria-selected', 'true');
+      valueEl.textContent = opt.textContent.trim();
+      sel.classList.remove('open');
+      trigger.setAttribute('aria-expanded', 'false');
+    });
+  });
+  document.addEventListener('click', (e) => {
+    if (!sel.contains(e.target)) { sel.classList.remove('open'); trigger.setAttribute('aria-expanded', 'false'); }
+  });
+
+  // Tabs
+  document.querySelectorAll('.view-tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.view-tab').forEach((t) => { t.classList.remove('active'); t.setAttribute('aria-selected', 'false'); });
+      tab.classList.add('active');
+      tab.setAttribute('aria-selected', 'true');
+    });
+  });
+
+  // Segmented control
+  document.querySelectorAll('.seg').forEach((seg) => {
+    seg.querySelectorAll('.seg-btn').forEach((b) => {
+      b.addEventListener('click', () => {
+        seg.querySelectorAll('.seg-btn').forEach((x) => x.classList.remove('active'));
+        b.classList.add('active');
+      });
+    });
+  });
+
+  // Drawer
+  const drawer = document.getElementById('drawer');
+  const backdrop = document.getElementById('drawerBackdrop');
+  function openDrawer() {
+    drawer.hidden = false; backdrop.hidden = false;
+    requestAnimationFrame(() => drawer.classList.add('open'));
+    drawer.setAttribute('aria-hidden', 'false');
+  }
+  function closeDrawer() {
+    drawer.classList.remove('open');
+    drawer.setAttribute('aria-hidden', 'true');
+    setTimeout(() => { drawer.hidden = true; backdrop.hidden = true; }, 200);
+  }
+  document.getElementById('openDrawer').addEventListener('click', openDrawer);
+  document.getElementById('closeDrawer').addEventListener('click', closeDrawer);
+  document.getElementById('closeDrawer2').addEventListener('click', closeDrawer);
+  backdrop.addEventListener('click', closeDrawer);
+</script>
+</body>
+</html>

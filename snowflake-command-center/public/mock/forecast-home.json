@@ -1,0 +1,125 @@
+{
+  "generatedAt": "2026-07-15T20:29:25Z",
+  "source": "SNOWFLAKE_REVENUE_CC.CORE (live Cortex read)",
+  "kpis": {
+    "netRevenue": {
+      "label": "Net Revenue (MTD)",
+      "value": 32653685,
+      "priorValue": 78528563,
+      "deltaPct": -58.4,
+      "unit": "USD"
+    },
+    "revenueAtRisk": {
+      "label": "Revenue at Risk",
+      "value": 90507081,
+      "unit": "USD",
+      "context": "current month, all regions"
+    },
+    "protectedRevenue": {
+      "label": "Protected Revenue",
+      "value": 48187517,
+      "unit": "USD",
+      "context": "executed agent actions"
+    },
+    "slaBreachRate": {
+      "label": "SLA Breach Rate (90d)",
+      "value": 69.9,
+      "unit": "%",
+      "breaches": 31382,
+      "cases": 44896
+    }
+  },
+  "actualVsForecast": [
+    { "period": "2024-07", "actual": 30612830, "forecast": 33274815 },
+    { "period": "2024-08", "actual": 68767951, "forecast": 68767951 },
+    { "period": "2024-09", "actual": 78528563, "forecast": 66549630 },
+    { "period": "2024-10", "actual": 68767951, "forecast": 68767951 },
+    { "period": "2024-11", "actual": 66549630, "forecast": 66549630 },
+    { "period": "2024-12", "actual": 81146182, "forecast": 68767951 },
+    { "period": "2025-01", "actual": 63266515, "forecast": 68767951 },
+    { "period": "2025-02", "actual": 62112988, "forecast": 62112988 },
+    { "period": "2025-03", "actual": 81146182, "forecast": 68767951 },
+    { "period": "2025-04", "actual": 66549630, "forecast": 66549630 },
+    { "period": "2025-05", "actual": 68767951, "forecast": 68767951 },
+    { "period": "2025-06", "actual": 78528563, "forecast": 66549630 },
+    { "period": "2025-07", "actual": 63266515, "forecast": 68767951 },
+    { "period": "2025-08", "actual": 68767951, "forecast": 68767951 }
+  ],
+  "revenueForecast": {
+    "source": "SNOWFLAKE_REVENUE_CC.CORE.FACT_REVENUE_DAILY via SNOWFLAKE.ML.FORECAST",
+    "grain": "month",
+    "unit": "USD",
+    "predictionInterval": 0.95,
+    "history": [
+      { "period": "2024-07", "actual": 30612830 },
+      { "period": "2024-08", "actual": 68767951 },
+      { "period": "2024-09", "actual": 78528563 },
+      { "period": "2024-10", "actual": 68767951 },
+      { "period": "2024-11", "actual": 66549630 },
+      { "period": "2024-12", "actual": 81146182 },
+      { "period": "2025-01", "actual": 63266515 },
+      { "period": "2025-02", "actual": 62112988 },
+      { "period": "2025-03", "actual": 81146182 },
+      { "period": "2025-04", "actual": 66549630 },
+      { "period": "2025-05", "actual": 68767951 },
+      { "period": "2025-06", "actual": 78528563 },
+      { "period": "2025-07", "actual": 63266515 },
+      { "period": "2025-08", "actual": 68767951 },
+      { "period": "2025-09", "actual": 78528563 },
+      { "period": "2025-10", "actual": 68767951 },
+      { "period": "2025-11", "actual": 66549630 },
+      { "period": "2025-12", "actual": 81146182 },
+      { "period": "2026-01", "actual": 63266515 },
+      { "period": "2026-02", "actual": 62112988 },
+      { "period": "2026-03", "actual": 81146182 },
+      { "period": "2026-04", "actual": 66549630 },
+      { "period": "2026-05", "actual": 68767951 },
+      { "period": "2026-06", "actual": 78528563 }
+    ],
+    "forecast": [
+      { "period": "2026-07", "forecast": 66646829, "lower": 59509267, "upper": 73784392 },
+      { "period": "2026-08", "forecast": 71096519, "lower": 63958958, "upper": 78234083 },
+      { "period": "2026-09", "forecast": 77167973, "lower": 70030412, "upper": 84305537 },
+      { "period": "2026-10", "forecast": 70805986, "lower": 63668423, "upper": 77943548 },
+      { "period": "2026-11", "forecast": 69029076, "lower": 61891514, "upper": 76166639 },
+      { "period": "2026-12", "forecast": 82818755, "lower": 75681195, "upper": 89956320 }
+    ]
+  },
+  "regionalRisk": [
+    { "region": "West", "segment": "Enterprise", "avgRisk": 83.2, "highRiskAccounts": 241, "revenueAtRisk": 63428262 },
+    { "region": "East", "segment": "Enterprise", "avgRisk": 39.2, "highRiskAccounts": 25, "revenueAtRisk": 6349956 },
+    { "region": "Central", "segment": "Enterprise", "avgRisk": 40.6, "highRiskAccounts": 13, "revenueAtRisk": 4821257 },
+    { "region": "South", "segment": "Enterprise", "avgRisk": 40.4, "highRiskAccounts": 12, "revenueAtRisk": 4679435 },
+    { "region": "West", "segment": "Mid-Market", "avgRisk": 39.9, "highRiskAccounts": 67, "revenueAtRisk": 2989834 },
+    { "region": "East", "segment": "Mid-Market", "avgRisk": 40.5, "highRiskAccounts": 48, "revenueAtRisk": 2350613 },
+    { "region": "South", "segment": "Mid-Market", "avgRisk": 39.1, "highRiskAccounts": 40, "revenueAtRisk": 2028159 },
+    { "region": "Central", "segment": "Mid-Market", "avgRisk": 39.8, "highRiskAccounts": 28, "revenueAtRisk": 1842932 },
+    { "region": "West", "segment": "SMB", "avgRisk": 40.3, "highRiskAccounts": 62, "revenueAtRisk": 731457 },
+    { "region": "East", "segment": "SMB", "avgRisk": 39.4, "highRiskAccounts": 55, "revenueAtRisk": 484520 },
+    { "region": "Central", "segment": "SMB", "avgRisk": 40.4, "highRiskAccounts": 49, "revenueAtRisk": 414876 },
+    { "region": "South", "segment": "SMB", "avgRisk": 39.7, "highRiskAccounts": 41, "revenueAtRisk": 385780 }
+  ],
+  "actionQueue": {
+    "pending": 2332,
+    "approved": 6974,
+    "executed": 8248,
+    "rejected": 1420,
+    "notRequired": 1274,
+    "topActions": [
+      { "action": "Champion mapping", "count": 2880, "revenueAtRisk": 10327108 },
+      { "action": "No action", "count": 2849, "revenueAtRisk": 9463503 },
+      { "action": "Usage enablement", "count": 2802, "revenueAtRisk": 9432366 },
+      { "action": "QBR follow-up", "count": 2796, "revenueAtRisk": 9994401 },
+      { "action": "Renewal save play", "count": 180, "revenueAtRisk": 20358363 }
+    ]
+  },
+  "incident": {
+    "id": "INC-0001",
+    "region": "West",
+    "segment": "Enterprise",
+    "rootCause": "Workflow queue saturation after regional failover",
+    "affectedAccounts": 241,
+    "slaBreaches": 30000,
+    "revenueAtRisk": 63428262
+  }
+}

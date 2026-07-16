@@ -1,0 +1,73 @@
+{
+  "generatedAt": "2026-07-15T00:00:00.000Z",
+  "source": "SNOWFLAKE_REVENUE_CC.CORE.REVENUE_CC_ANALYST (live Cortex Analyst read)",
+  "suggested": [
+    "Why did renewal risk increase for West Enterprise accounts this month?",
+    "Which regions have the highest revenue at risk this month?",
+    "How much revenue have executed agent actions protected so far?"
+  ],
+  "answers": [
+    {
+      "question": "Why did renewal risk increase for West Enterprise accounts this month?",
+      "interpretation": "The question is clear and I can answer it with the following SQL.",
+      "sql": "SELECT * FROM SEMANTIC_VIEW(snowflake_revenue_cc.core.revenue_cc_analyst METRICS risk.avg_renewal_risk_score, risk.high_risk_account_count DIMENSIONS risk.region, risk.segment, risk.risk_month WHERE risk.region = 'West' AND risk.segment = 'Enterprise' AND risk.risk_month = DATE_TRUNC('MONTH', CURRENT_DATE))",
+      "confidenceVerified": false,
+      "verifiedQueryName": "",
+      "requestId": "3c8443a8-6300-47f5-b27a-7cbfa7a48f18",
+      "columns": [
+        {"name": "AVG_RENEWAL_RISK_SCORE", "type": "real"},
+        {"name": "HIGH_RISK_ACCOUNT_COUNT", "type": "fixed"},
+        {"name": "REGION", "type": "text"},
+        {"name": "SEGMENT", "type": "text"},
+        {"name": "RISK_MONTH", "type": "date"}
+      ],
+      "rows": [
+        {
+          "AVG_RENEWAL_RISK_SCORE": 83.232365145,
+          "HIGH_RISK_ACCOUNT_COUNT": 241,
+          "REGION": "West",
+          "SEGMENT": "Enterprise",
+          "RISK_MONTH": "2026-07-01"
+        }
+      ],
+      "rowCount": 1,
+      "suggestions": []
+    },
+    {
+      "question": "Which regions have the highest revenue at risk this month?",
+      "interpretation": "The question is clear and I can answer it with the following SQL.",
+      "sql": "SELECT * FROM SEMANTIC_VIEW(snowflake_revenue_cc.core.revenue_cc_analyst METRICS rev.revenue_at_risk_total DIMENSIONS rev.region WHERE rev.date >= DATE_TRUNC('month', CURRENT_DATE)) ORDER BY revenue_at_risk_total DESC NULLS LAST",
+      "confidenceVerified": false,
+      "verifiedQueryName": "",
+      "requestId": "8516a015-c334-4032-bd2a-531db2315369",
+      "columns": [
+        {"name": "REVENUE_AT_RISK_TOTAL", "type": "real"},
+        {"name": "REGION", "type": "text"}
+      ],
+      "rows": [
+        {"REVENUE_AT_RISK_TOTAL": 444122026.343, "REGION": "West"},
+        {"REVENUE_AT_RISK_TOTAL": 6724815.773, "REGION": "East"},
+        {"REVENUE_AT_RISK_TOTAL": 5140250.582, "REGION": "Central"},
+        {"REVENUE_AT_RISK_TOTAL": 4905562.926, "REGION": "South"}
+      ],
+      "rowCount": 4,
+      "suggestions": []
+    },
+    {
+      "question": "How much revenue have executed agent actions protected so far?",
+      "interpretation": "The question is clear and I can answer it with the following SQL.",
+      "sql": "SELECT * FROM SEMANTIC_VIEW(snowflake_revenue_cc.core.revenue_cc_analyst METRICS actions.actual_revenue_protected_total WHERE actions.execution_status = 'Executed')",
+      "confidenceVerified": false,
+      "verifiedQueryName": "",
+      "requestId": "01216fc9-01b3-4fdb-8d53-4ecbedd5a281",
+      "columns": [
+        {"name": "ACTUAL_REVENUE_PROTECTED_TOTAL", "type": "real"}
+      ],
+      "rows": [
+        {"ACTUAL_REVENUE_PROTECTED_TOTAL": 48187517.331}
+      ],
+      "rowCount": 1,
+      "suggestions": []
+    }
+  ]
+}

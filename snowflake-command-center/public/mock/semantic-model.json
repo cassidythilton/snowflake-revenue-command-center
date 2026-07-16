@@ -1,0 +1,1220 @@
+{
+  "status": "SUCCEEDED",
+  "mode": "SAMPLE",
+  "view": "SNOWFLAKE_REVENUE_CC.CORE.REVENUE_CC_ANALYST",
+  "sql": "DESCRIBE SEMANTIC VIEW SNOWFLAKE_REVENUE_CC.CORE.REVENUE_CC_ANALYST",
+  "model": {
+    "name": "SNOWFLAKE_REVENUE_CC.CORE.REVENUE_CC_ANALYST",
+    "customInstruction": "When asked about revenue at risk, prefer the rev.revenue_at_risk_total metric from fact_revenue_daily. When asked about renewal risk or churn, use the risk table metrics. For SLA or support questions, use support table metrics. Region values are: West, East, Central, South. Segment values are: Enterprise, Mid-Market, SMB. Risk tier values are: Critical, High, Medium, Low. Current month means the most recent risk_month in the risk table.",
+    "stats": {
+      "tables": 9,
+      "relationships": 14,
+      "dimensions": 50,
+      "facts": 17,
+      "metrics": 18,
+      "verifiedQueries": 5
+    },
+    "tables": [
+      {
+        "name": "ACCT",
+        "base": "DIM_ACCOUNT",
+        "database": "SNOWFLAKE_REVENUE_CC",
+        "schema": "CORE",
+        "comment": "Customer accounts with ARR, region, segment, health tier, and renewal dates",
+        "synonyms": [
+          "account",
+          "customer",
+          "client"
+        ],
+        "primaryKey": [
+          "ACCOUNT_ID"
+        ],
+        "dimensions": [
+          {
+            "name": "ACCOUNT_ID",
+            "expression": "acct.account_id",
+            "dataType": "VARCHAR(16777216)",
+            "comment": "Account identifier",
+            "synonyms": [
+              "account ID"
+            ]
+          },
+          {
+            "name": "ACCOUNT_NAME",
+            "expression": "acct.account_name",
+            "dataType": "VARCHAR(16777216)",
+            "comment": "Account display name",
+            "synonyms": [
+              "account name",
+              "customer name"
+            ]
+          },
+          {
+            "name": "ACCOUNT_OWNER_NAME",
+            "expression": "acct.account_owner_name",
+            "dataType": "VARCHAR(16777216)",
+            "comment": "Account owner / CSM name",
+            "synonyms": [
+              "account owner",
+              "CSM"
+            ]
+          },
+          {
+            "name": "HEALTH_TIER",
+            "expression": "acct.health_tier",
+            "dataType": "VARCHAR(7)",
+            "comment": "Account health classification (Healthy, Growth, Watch, At Risk)",
+            "synonyms": [
+              "health tier",
+              "account health",
+              "health status"
+            ]
+          },
+          {
+            "name": "INDUSTRY",
+            "expression": "acct.industry",
+            "dataType": "VARCHAR(16777216)",
+            "comment": "Account industry vertical",
+            "synonyms": [
+              "industry",
+              "vertical"
+            ]
+          },
+          {
+            "name": "REGION",
+            "expression": "acct.region",
+            "dataType": "VARCHAR(7)",
+            "comment": "Account region",
+            "synonyms": [
+              "account region"
+            ]
+          },
+          {
+            "name": "SEGMENT",
+            "expression": "acct.segment",
+            "dataType": "VARCHAR(10)",
+            "comment": "Account segment",
+            "synonyms": [
+              "account segment"
+            ]
+          }
+        ],
+        "facts": [],
+        "metrics": []
+      },
+      {
+        "name": "ACTIONS",
+        "base": "FACT_AGENT_ACTIONS",
+        "database": "SNOWFLAKE_REVENUE_CC",
+        "schema": "CORE",
+        "comment": "AI agent recommended and executed actions with protected revenue outcomes",
+        "synonyms": [
+          "agent action",
+          "recommendation",
+          "intervention"
+        ],
+        "primaryKey": [],
+        "dimensions": [
+          {
+            "name": "APPROVAL_STATUS",
+            "expression": "actions.approval_status",
+            "dataType": "VARCHAR(12)",
+            "comment": "Whether the action was approved",
+            "synonyms": [
+              "approval status",
+              "approved"
+            ]
+          },
+          {
+            "name": "DATE",
+            "expression": "actions.date",
+            "dataType": "DATE",
+            "comment": "Date of the agent action",
+            "synonyms": [
+              "action date"
+            ]
+          },
+          {
+            "name": "EXECUTION_STATUS",
+            "expression": "actions.execution_status",
+            "dataType": "VARCHAR(9)",
+            "comment": "Whether the action was executed",
+            "synonyms": [
+              "execution status",
+              "executed"
+            ]
+          },
+          {
+            "name": "RECOMMENDATION",
+            "expression": "actions.recommendation",
+            "dataType": "VARCHAR(16777216)",
+            "comment": "Specific recommendation text",
+            "synonyms": [
+              "action recommendation"
+            ]
+          },
+          {
+            "name": "REGION",
+            "expression": "actions.region",
+            "dataType": "VARCHAR(7)",
+            "comment": "Region for agent actions",
+            "synonyms": [
+              "action region"
+            ]
+          },
+          {
+            "name": "SEGMENT",
+            "expression": "actions.segment",
+            "dataType": "VARCHAR(10)",
+            "comment": "Segment for agent actions",
+            "synonyms": [
+              "action segment"
+            ]
+          },
+          {
+            "name": "WORKFLOW_NAME",
+            "expression": "actions.workflow_name",
+            "dataType": "VARCHAR(28)",
+            "comment": "Name of the automated workflow",
+            "synonyms": [
+              "workflow",
+              "workflow name"
+            ]
+          }
+        ],
+        "facts": [
+          {
+            "name": "ACTUAL_REVENUE_PROTECTED",
+            "expression": "actions.actual_revenue_protected",
+            "dataType": "FLOAT",
+            "comment": "Actual revenue confirmed protected after action execution",
+            "synonyms": [
+              "actual protected revenue",
+              "saved revenue"
+            ]
+          },
+          {
+            "name": "EXPECTED_REVENUE_PROTECTED",
+            "expression": "actions.expected_revenue_protected",
+            "dataType": "FLOAT",
+            "comment": "Expected revenue protected by the action",
+            "synonyms": [
+              "expected protected revenue"
+            ]
+          }
+        ],
+        "metrics": [
+          {
+            "name": "ACTUAL_REVENUE_PROTECTED_TOTAL",
+            "expression": "SUM(actions.actual_revenue_protected)",
+            "dataType": "FLOAT",
+            "comment": "Total actual revenue protected after action execution (SUM)",
+            "synonyms": [
+              "total actual protected revenue",
+              "actual savings",
+              "saved revenue",
+              "protected revenue"
+            ]
+          },
+          {
+            "name": "EXPECTED_REVENUE_PROTECTED_TOTAL",
+            "expression": "SUM(actions.expected_revenue_protected)",
+            "dataType": "FLOAT",
+            "comment": "Total expected revenue protected by agent actions (SUM)",
+            "synonyms": [
+              "total expected protected revenue",
+              "expected savings"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "INCIDENT",
+        "base": "FACT_INCIDENTS",
+        "database": "SNOWFLAKE_REVENUE_CC",
+        "schema": "CORE",
+        "comment": "Product incidents with severity, root cause, and estimated revenue impact",
+        "synonyms": [
+          "incident",
+          "outage",
+          "reliability event"
+        ],
+        "primaryKey": [],
+        "dimensions": [
+          {
+            "name": "CUSTOMER_IMPACT_LEVEL",
+            "expression": "incident.customer_impact_level",
+            "dataType": "VARCHAR(16777216)",
+            "comment": "Customer impact level (Low, Medium, High)",
+            "synonyms": [
+              "customer impact",
+              "impact level"
+            ]
+          },
+          {
+            "name": "INCIDENT_CATEGORY",
+            "expression": "incident.incident_category",
+            "dataType": "VARCHAR(16777216)",
+            "comment": "Category of the incident (Reliability, Latency, etc.)",
+            "synonyms": [
+              "incident category",
+              "incident type"
+            ]
+          },
+          {
+            "name": "INCIDENT_DATE",
+            "expression": "incident.incident_date",
+            "dataType": "DATE",
+            "comment": "Date of the incident",
+            "synonyms": [
+              "incident date"
+            ]
+          },
+          {
+            "name": "INCIDENT_ID",
+            "expression": "incident.incident_id",
+            "dataType": "VARCHAR(16777216)",
+            "comment": "Incident identifier",
+            "synonyms": [
+              "incident ID"
+            ]
+          },
+          {
+            "name": "REGION",
+            "expression": "incident.region",
+            "dataType": "VARCHAR(16777216)",
+            "comment": "Region affected by the incident",
+            "synonyms": [
+              "incident region"
+            ]
+          },
+          {
+            "name": "ROOT_CAUSE",
+            "expression": "incident.root_cause",
+            "dataType": "VARCHAR(16777216)",
+            "comment": "Root cause of the incident",
+            "synonyms": [
+              "root cause",
+              "cause"
+            ]
+          },
+          {
+            "name": "SEVERITY",
+            "expression": "incident.severity",
+            "dataType": "VARCHAR(16777216)",
+            "comment": "Incident severity (SEV-1 through SEV-4)",
+            "synonyms": [
+              "incident severity"
+            ]
+          }
+        ],
+        "facts": [],
+        "metrics": []
+      },
+      {
+        "name": "PRODUCT",
+        "base": "DIM_PRODUCT",
+        "database": "SNOWFLAKE_REVENUE_CC",
+        "schema": "CORE",
+        "comment": "Product catalog with family and criticality",
+        "synonyms": [
+          "product",
+          "service",
+          "module"
+        ],
+        "primaryKey": [
+          "PRODUCT_ID"
+        ],
+        "dimensions": [
+          {
+            "name": "CRITICALITY",
+            "expression": "product.criticality",
+            "dataType": "VARCHAR(8)",
+            "comment": "Product criticality level",
+            "synonyms": [
+              "product criticality"
+            ]
+          },
+          {
+            "name": "PRODUCT_FAMILY",
+            "expression": "product.product_family",
+            "dataType": "VARCHAR(11)",
+            "comment": "Product family (Automation, Integration, Analytics, etc.)",
+            "synonyms": [
+              "product family",
+              "product category"
+            ]
+          },
+          {
+            "name": "PRODUCT_NAME",
+            "expression": "product.product_name",
+            "dataType": "VARCHAR(22)",
+            "comment": "Product display name",
+            "synonyms": [
+              "product name",
+              "product"
+            ]
+          }
+        ],
+        "facts": [],
+        "metrics": []
+      },
+      {
+        "name": "REV",
+        "base": "FACT_REVENUE_DAILY",
+        "database": "SNOWFLAKE_REVENUE_CC",
+        "schema": "CORE",
+        "comment": "Daily revenue grain with ARR, bookings, expansion, contraction, churn, margin, and risk",
+        "synonyms": [
+          "revenue",
+          "daily revenue",
+          "ARR",
+          "bookings"
+        ],
+        "primaryKey": [],
+        "dimensions": [
+          {
+            "name": "DATE",
+            "expression": "rev.date",
+            "dataType": "DATE",
+            "comment": "Calendar date for revenue",
+            "synonyms": [
+              "revenue date",
+              "date"
+            ]
+          },
+          {
+            "name": "FISCAL_PERIOD",
+            "expression": "rev.fiscal_period",
+            "dataType": "VARCHAR(16777216)",
+            "comment": "Fiscal period / month grain",
+            "synonyms": [
+              "fiscal period",
+              "period",
+              "month"
+            ]
+          },
+          {
+            "name": "FISCAL_YEAR",
+            "expression": "rev.fiscal_year",
+            "dataType": "NUMBER(4,0)",
+            "comment": "Fiscal year",
+            "synonyms": [
+              "fiscal year",
+              "FY"
+            ]
+          },
+          {
+            "name": "QUARTER",
+            "expression": "rev.quarter",
+            "dataType": "VARCHAR(16777216)",
+            "comment": "Fiscal quarter (Q1-Q4)",
+            "synonyms": [
+              "quarter",
+              "fiscal quarter"
+            ]
+          },
+          {
+            "name": "REGION",
+            "expression": "rev.region",
+            "dataType": "VARCHAR(7)",
+            "comment": "Geographic region (West, East, Central, South)",
+            "synonyms": [
+              "region",
+              "geo"
+            ]
+          },
+          {
+            "name": "SEGMENT",
+            "expression": "rev.segment",
+            "dataType": "VARCHAR(10)",
+            "comment": "Customer segment (Enterprise, Mid-Market, SMB)",
+            "synonyms": [
+              "segment",
+              "customer segment"
+            ]
+          }
+        ],
+        "facts": [
+          {
+            "name": "BOOKINGS_AMOUNT",
+            "expression": "rev.bookings_amount",
+            "dataType": "FLOAT",
+            "comment": "Bookings amount for the day",
+            "synonyms": [
+              "bookings"
+            ]
+          },
+          {
+            "name": "CHURNED_ARR",
+            "expression": "rev.churned_arr",
+            "dataType": "FLOAT",
+            "comment": "Churned ARR for the day",
+            "synonyms": [
+              "churned ARR",
+              "churn amount"
+            ]
+          },
+          {
+            "name": "CONTRACTION_ARR",
+            "expression": "rev.contraction_arr",
+            "dataType": "FLOAT",
+            "comment": "Contraction ARR for the day",
+            "synonyms": [
+              "contraction",
+              "downsell"
+            ]
+          },
+          {
+            "name": "DAILY_ARR",
+            "expression": "rev.daily_arr",
+            "dataType": "FLOAT",
+            "comment": "Daily annual recurring revenue for an account",
+            "synonyms": [
+              "daily ARR",
+              "recurring revenue"
+            ]
+          },
+          {
+            "name": "EXPANSION_ARR",
+            "expression": "rev.expansion_arr",
+            "dataType": "FLOAT",
+            "comment": "Expansion ARR for the day",
+            "synonyms": [
+              "expansion",
+              "upsell"
+            ]
+          },
+          {
+            "name": "GROSS_MARGIN",
+            "expression": "rev.gross_margin",
+            "dataType": "FLOAT",
+            "comment": "Gross margin for the day",
+            "synonyms": [
+              "margin",
+              "gross margin"
+            ]
+          },
+          {
+            "name": "NET_REVENUE",
+            "expression": "rev.net_revenue",
+            "dataType": "FLOAT",
+            "comment": "Net revenue for the day",
+            "synonyms": [
+              "net revenue",
+              "revenue"
+            ]
+          },
+          {
+            "name": "REVENUE_AT_RISK",
+            "expression": "rev.revenue_at_risk",
+            "dataType": "FLOAT",
+            "comment": "Revenue at risk from fact_revenue_daily",
+            "synonyms": [
+              "revenue at risk",
+              "at-risk revenue"
+            ]
+          }
+        ],
+        "metrics": [
+          {
+            "name": "ACCOUNT_COUNT",
+            "expression": "COUNT(DISTINCT rev.account_id)",
+            "dataType": "NUMBER(18,0)",
+            "comment": "Distinct count of accounts",
+            "synonyms": [
+              "number of accounts",
+              "account count",
+              "customer count"
+            ]
+          },
+          {
+            "name": "CHURNED_ARR_TOTAL",
+            "expression": "SUM(rev.churned_arr)",
+            "dataType": "FLOAT",
+            "comment": "Total churned ARR (SUM)",
+            "synonyms": [
+              "total churned ARR",
+              "churn amount",
+              "lost ARR"
+            ]
+          },
+          {
+            "name": "EXPANSION_ARR_TOTAL",
+            "expression": "SUM(rev.expansion_arr)",
+            "dataType": "FLOAT",
+            "comment": "Total expansion ARR (SUM)",
+            "synonyms": [
+              "total expansion",
+              "expansion ARR",
+              "upsell total"
+            ]
+          },
+          {
+            "name": "GROSS_MARGIN_TOTAL",
+            "expression": "SUM(rev.gross_margin)",
+            "dataType": "FLOAT",
+            "comment": "Total gross margin (SUM)",
+            "synonyms": [
+              "total gross margin",
+              "margin"
+            ]
+          },
+          {
+            "name": "NET_REVENUE_TOTAL",
+            "expression": "SUM(rev.net_revenue)",
+            "dataType": "FLOAT",
+            "comment": "Total net revenue (SUM)",
+            "synonyms": [
+              "total net revenue",
+              "revenue",
+              "total revenue"
+            ]
+          },
+          {
+            "name": "REVENUE_AT_RISK_TOTAL",
+            "expression": "SUM(rev.revenue_at_risk)",
+            "dataType": "FLOAT",
+            "comment": "Total revenue at risk from daily revenue (SUM)",
+            "synonyms": [
+              "total revenue at risk",
+              "revenue at risk",
+              "at-risk revenue"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "RISK",
+        "base": "FACT_RENEWAL_RISK",
+        "database": "SNOWFLAKE_REVENUE_CC",
+        "schema": "CORE",
+        "comment": "Monthly renewal-risk scores, predicted churn probability, risk drivers, and recommended actions",
+        "synonyms": [
+          "renewal risk",
+          "churn risk",
+          "risk assessment"
+        ],
+        "primaryKey": [],
+        "dimensions": [
+          {
+            "name": "ACCOUNT_ID",
+            "expression": "risk.account_id",
+            "dataType": "VARCHAR(16777216)",
+            "comment": "Account ID from risk table",
+            "synonyms": [
+              "risk account ID"
+            ]
+          },
+          {
+            "name": "RECOMMENDED_ACTION",
+            "expression": "risk.recommended_action",
+            "dataType": "VARCHAR(16777216)",
+            "comment": "AI-recommended action to mitigate risk",
+            "synonyms": [
+              "recommended action",
+              "action",
+              "recommendation"
+            ]
+          },
+          {
+            "name": "REGION",
+            "expression": "risk.region",
+            "dataType": "VARCHAR(7)",
+            "comment": "Region from renewal risk",
+            "synonyms": [
+              "risk region"
+            ]
+          },
+          {
+            "name": "RISK_MONTH",
+            "expression": "risk.risk_month",
+            "dataType": "DATE",
+            "comment": "Month of the risk assessment",
+            "synonyms": [
+              "risk month",
+              "assessment month"
+            ]
+          },
+          {
+            "name": "RISK_TIER",
+            "expression": "risk.risk_tier",
+            "dataType": "VARCHAR(6)",
+            "comment": "Risk classification tier (Critical, High, Medium, Low)",
+            "synonyms": [
+              "risk tier",
+              "risk level",
+              "risk category"
+            ]
+          },
+          {
+            "name": "SEGMENT",
+            "expression": "risk.segment",
+            "dataType": "VARCHAR(10)",
+            "comment": "Segment from renewal risk",
+            "synonyms": [
+              "risk segment"
+            ]
+          },
+          {
+            "name": "TOP_RISK_DRIVER",
+            "expression": "risk.top_risk_driver",
+            "dataType": "VARCHAR(16777216)",
+            "comment": "Primary driver of renewal risk",
+            "synonyms": [
+              "risk driver",
+              "churn driver",
+              "risk reason"
+            ]
+          }
+        ],
+        "facts": [
+          {
+            "name": "PREDICTED_CHURN_PROBABILITY",
+            "expression": "risk.predicted_churn_probability",
+            "dataType": "FLOAT",
+            "comment": "ML-predicted probability of churn",
+            "synonyms": [
+              "churn probability",
+              "churn likelihood"
+            ]
+          },
+          {
+            "name": "RENEWAL_RISK_SCORE",
+            "expression": "risk.renewal_risk_score",
+            "dataType": "FLOAT",
+            "comment": "Renewal risk score 0-100",
+            "synonyms": [
+              "risk score",
+              "renewal score"
+            ]
+          },
+          {
+            "name": "RISK_REVENUE_AT_RISK",
+            "expression": "risk.revenue_at_risk",
+            "dataType": "FLOAT",
+            "comment": "Revenue at risk from renewal risk assessment",
+            "synonyms": [
+              "risk revenue at risk"
+            ]
+          }
+        ],
+        "metrics": [
+          {
+            "name": "AVG_PREDICTED_CHURN_PROBABILITY",
+            "expression": "AVG(risk.predicted_churn_probability)",
+            "dataType": "FLOAT",
+            "comment": "Average predicted churn probability",
+            "synonyms": [
+              "average churn probability",
+              "avg churn rate",
+              "predicted churn"
+            ]
+          },
+          {
+            "name": "AVG_RENEWAL_RISK_SCORE",
+            "expression": "AVG(risk.renewal_risk_score)",
+            "dataType": "FLOAT",
+            "comment": "Average renewal risk score (0-100)",
+            "synonyms": [
+              "average risk score",
+              "avg renewal risk",
+              "mean risk score"
+            ]
+          },
+          {
+            "name": "HIGH_RISK_ACCOUNT_COUNT",
+            "expression": "COUNT_IF(risk.risk_tier IN ('Critical', 'High'))",
+            "dataType": "NUMBER(13,0)",
+            "comment": "Count of accounts in Critical or High risk tiers",
+            "synonyms": [
+              "high risk accounts",
+              "critical accounts",
+              "at-risk account count"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "SUPPORT",
+        "base": "FACT_SUPPORT_CASES",
+        "database": "SNOWFLAKE_REVENUE_CC",
+        "schema": "CORE",
+        "comment": "Support cases with SLA, resolution time, and sentiment",
+        "synonyms": [
+          "support case",
+          "ticket",
+          "case"
+        ],
+        "primaryKey": [],
+        "dimensions": [
+          {
+            "name": "ACCOUNT_ID",
+            "expression": "support.account_id",
+            "dataType": "VARCHAR(16777216)",
+            "comment": "Account from support case",
+            "synonyms": [
+              "support account ID"
+            ]
+          },
+          {
+            "name": "CUSTOMER_SENTIMENT",
+            "expression": "support.customer_sentiment",
+            "dataType": "VARCHAR(16777216)",
+            "comment": "Customer sentiment on the case (Positive, Neutral, Negative)",
+            "synonyms": [
+              "sentiment",
+              "customer sentiment",
+              "CSAT"
+            ]
+          },
+          {
+            "name": "DATE",
+            "expression": "support.date",
+            "dataType": "DATE",
+            "comment": "Date the support case was created",
+            "synonyms": [
+              "support date",
+              "case date"
+            ]
+          },
+          {
+            "name": "INCIDENT_ID",
+            "expression": "support.incident_id",
+            "dataType": "VARCHAR(16777216)",
+            "comment": "Incident ID linked to the support case",
+            "synonyms": [
+              "linked incident"
+            ]
+          },
+          {
+            "name": "PRIORITY",
+            "expression": "support.priority",
+            "dataType": "VARCHAR(2)",
+            "comment": "Support case priority (P1-P4)",
+            "synonyms": [
+              "priority",
+              "case priority",
+              "severity level"
+            ]
+          },
+          {
+            "name": "REGION",
+            "expression": "support.region",
+            "dataType": "VARCHAR(7)",
+            "comment": "Region from support cases",
+            "synonyms": [
+              "support region"
+            ]
+          },
+          {
+            "name": "SEGMENT",
+            "expression": "support.segment",
+            "dataType": "VARCHAR(10)",
+            "comment": "Segment from support cases",
+            "synonyms": [
+              "support segment"
+            ]
+          }
+        ],
+        "facts": [
+          {
+            "name": "RESOLUTION_HOURS",
+            "expression": "support.resolution_hours",
+            "dataType": "FLOAT",
+            "comment": "Hours to resolve the support case",
+            "synonyms": [
+              "resolution time",
+              "time to resolve"
+            ]
+          },
+          {
+            "name": "SLA_BREACHED_FLAG",
+            "expression": "support.sla_breached_flag",
+            "dataType": "BOOLEAN",
+            "comment": "Flag indicating SLA was breached (1=breached)",
+            "synonyms": [
+              "SLA breach",
+              "SLA breached"
+            ]
+          }
+        ],
+        "metrics": [
+          {
+            "name": "AVG_RESOLUTION_HOURS",
+            "expression": "AVG(support.resolution_hours)",
+            "dataType": "FLOAT",
+            "comment": "Average support case resolution time in hours",
+            "synonyms": [
+              "average resolution time",
+              "mean time to resolve",
+              "MTTR"
+            ]
+          },
+          {
+            "name": "NEGATIVE_SENTIMENT_CASE_COUNT",
+            "expression": "COUNT_IF(support.customer_sentiment = 'Negative')",
+            "dataType": "NUMBER(13,0)",
+            "comment": "Count of cases with negative customer sentiment",
+            "synonyms": [
+              "negative sentiment cases",
+              "unhappy customers",
+              "negative CSAT"
+            ]
+          },
+          {
+            "name": "SLA_BREACH_COUNT",
+            "expression": "COUNT_IF(support.sla_breached_flag)",
+            "dataType": "NUMBER(13,0)",
+            "comment": "Count of SLA breaches",
+            "synonyms": [
+              "SLA breaches",
+              "breached SLAs",
+              "SLA violations"
+            ]
+          },
+          {
+            "name": "SLA_BREACH_RATE",
+            "expression": "AVG(IFF(support.sla_breached_flag, 1.0, 0.0))",
+            "dataType": "NUMBER(19,6)",
+            "comment": "SLA breach rate (proportion of cases that breached SLA)",
+            "synonyms": [
+              "SLA breach rate",
+              "breach percentage"
+            ]
+          },
+          {
+            "name": "SUPPORT_CASE_COUNT",
+            "expression": "COUNT(support.case_id)",
+            "dataType": "NUMBER(18,0)",
+            "comment": "Total support case count",
+            "synonyms": [
+              "case count",
+              "support cases",
+              "ticket count",
+              "number of cases"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "TENANT",
+        "base": "DIM_TENANT",
+        "database": "SNOWFLAKE_REVENUE_CC",
+        "schema": "CORE",
+        "comment": "Multi-tenant organizations grouping accounts",
+        "synonyms": [
+          "tenant",
+          "organization"
+        ],
+        "primaryKey": [
+          "TENANT_ID"
+        ],
+        "dimensions": [
+          {
+            "name": "INDUSTRY",
+            "expression": "tenant.industry",
+            "dataType": "VARCHAR(18)",
+            "comment": "Tenant industry",
+            "synonyms": [
+              "tenant industry"
+            ]
+          },
+          {
+            "name": "TENANT_NAME",
+            "expression": "tenant.tenant_name",
+            "dataType": "VARCHAR(21)",
+            "comment": "Tenant organization name",
+            "synonyms": [
+              "tenant name",
+              "organization name"
+            ]
+          },
+          {
+            "name": "TENANT_SEGMENT",
+            "expression": "tenant.tenant_segment",
+            "dataType": "VARCHAR(10)",
+            "comment": "Tenant segment (Strategic, Commercial, Emerging)",
+            "synonyms": [
+              "tenant segment"
+            ]
+          }
+        ],
+        "facts": [],
+        "metrics": []
+      },
+      {
+        "name": "USAGE",
+        "base": "FACT_PRODUCT_USAGE_DAILY",
+        "database": "SNOWFLAKE_REVENUE_CC",
+        "schema": "CORE",
+        "comment": "Daily product usage metrics per account and product",
+        "synonyms": [
+          "product usage",
+          "adoption",
+          "engagement"
+        ],
+        "primaryKey": [],
+        "dimensions": [
+          {
+            "name": "DATE",
+            "expression": "usage.date",
+            "dataType": "DATE",
+            "comment": "Date of usage measurement",
+            "synonyms": [
+              "usage date"
+            ]
+          },
+          {
+            "name": "REGION",
+            "expression": "usage.region",
+            "dataType": "VARCHAR(7)",
+            "comment": "Region from usage data",
+            "synonyms": [
+              "usage region"
+            ]
+          },
+          {
+            "name": "SEGMENT",
+            "expression": "usage.segment",
+            "dataType": "VARCHAR(10)",
+            "comment": "Segment from usage data",
+            "synonyms": [
+              "usage segment"
+            ]
+          }
+        ],
+        "facts": [
+          {
+            "name": "USAGE_DROP_FLAG",
+            "expression": "usage.usage_drop_flag",
+            "dataType": "BOOLEAN",
+            "comment": "Flag indicating significant usage drop",
+            "synonyms": [
+              "usage drop",
+              "declining usage"
+            ]
+          },
+          {
+            "name": "USAGE_SCORE",
+            "expression": "usage.usage_score",
+            "dataType": "FLOAT",
+            "comment": "Composite usage score 0-100",
+            "synonyms": [
+              "usage score",
+              "engagement score"
+            ]
+          }
+        ],
+        "metrics": [
+          {
+            "name": "AVG_USAGE_SCORE",
+            "expression": "AVG(usage.usage_score)",
+            "dataType": "FLOAT",
+            "comment": "Average product usage/engagement score",
+            "synonyms": [
+              "average usage score",
+              "mean engagement",
+              "adoption score"
+            ]
+          },
+          {
+            "name": "USAGE_DROP_DAY_COUNT",
+            "expression": "COUNT_IF(usage.usage_drop_flag)",
+            "dataType": "NUMBER(13,0)",
+            "comment": "Count of days with significant usage drop",
+            "synonyms": [
+              "usage drop days",
+              "declining usage days",
+              "drop count"
+            ]
+          }
+        ]
+      }
+    ],
+    "relationships": [
+      {
+        "name": "ACCT_TO_TENANT",
+        "from": "ACCT",
+        "to": "TENANT",
+        "foreignKey": [
+          "TENANT_ID"
+        ],
+        "refKey": [
+          "TENANT_ID"
+        ]
+      },
+      {
+        "name": "ACTIONS_TO_ACCT",
+        "from": "ACTIONS",
+        "to": "ACCT",
+        "foreignKey": [
+          "ACCOUNT_ID"
+        ],
+        "refKey": [
+          "ACCOUNT_ID"
+        ]
+      },
+      {
+        "name": "ACTIONS_TO_TENANT",
+        "from": "ACTIONS",
+        "to": "TENANT",
+        "foreignKey": [
+          "TENANT_ID"
+        ],
+        "refKey": [
+          "TENANT_ID"
+        ]
+      },
+      {
+        "name": "INCIDENT_TO_PRODUCT",
+        "from": "INCIDENT",
+        "to": "PRODUCT",
+        "foreignKey": [
+          "PRODUCT_ID"
+        ],
+        "refKey": [
+          "PRODUCT_ID"
+        ]
+      },
+      {
+        "name": "REV_TO_ACCT",
+        "from": "REV",
+        "to": "ACCT",
+        "foreignKey": [
+          "ACCOUNT_ID"
+        ],
+        "refKey": [
+          "ACCOUNT_ID"
+        ]
+      },
+      {
+        "name": "REV_TO_TENANT",
+        "from": "REV",
+        "to": "TENANT",
+        "foreignKey": [
+          "TENANT_ID"
+        ],
+        "refKey": [
+          "TENANT_ID"
+        ]
+      },
+      {
+        "name": "RISK_TO_ACCT",
+        "from": "RISK",
+        "to": "ACCT",
+        "foreignKey": [
+          "ACCOUNT_ID"
+        ],
+        "refKey": [
+          "ACCOUNT_ID"
+        ]
+      },
+      {
+        "name": "RISK_TO_TENANT",
+        "from": "RISK",
+        "to": "TENANT",
+        "foreignKey": [
+          "TENANT_ID"
+        ],
+        "refKey": [
+          "TENANT_ID"
+        ]
+      },
+      {
+        "name": "SUPPORT_TO_ACCT",
+        "from": "SUPPORT",
+        "to": "ACCT",
+        "foreignKey": [
+          "ACCOUNT_ID"
+        ],
+        "refKey": [
+          "ACCOUNT_ID"
+        ]
+      },
+      {
+        "name": "SUPPORT_TO_PRODUCT",
+        "from": "SUPPORT",
+        "to": "PRODUCT",
+        "foreignKey": [
+          "PRODUCT_ID"
+        ],
+        "refKey": [
+          "PRODUCT_ID"
+        ]
+      },
+      {
+        "name": "SUPPORT_TO_TENANT",
+        "from": "SUPPORT",
+        "to": "TENANT",
+        "foreignKey": [
+          "TENANT_ID"
+        ],
+        "refKey": [
+          "TENANT_ID"
+        ]
+      },
+      {
+        "name": "USAGE_TO_ACCT",
+        "from": "USAGE",
+        "to": "ACCT",
+        "foreignKey": [
+          "ACCOUNT_ID"
+        ],
+        "refKey": [
+          "ACCOUNT_ID"
+        ]
+      },
+      {
+        "name": "USAGE_TO_PRODUCT",
+        "from": "USAGE",
+        "to": "PRODUCT",
+        "foreignKey": [
+          "PRODUCT_ID"
+        ],
+        "refKey": [
+          "PRODUCT_ID"
+        ]
+      },
+      {
+        "name": "USAGE_TO_TENANT",
+        "from": "USAGE",
+        "to": "TENANT",
+        "foreignKey": [
+          "TENANT_ID"
+        ],
+        "refKey": [
+          "TENANT_ID"
+        ]
+      }
+    ],
+    "verifiedQueries": [
+      {
+        "name": "Q1_WEST_ENTERPRISE_RISK",
+        "question": "Why did renewal risk increase for West Enterprise accounts this month?",
+        "sql": "SELECT * FROM SEMANTIC_VIEW(SNOWFLAKE_REVENUE_CC.CORE.REVENUE_CC_ANALYST DIMENSIONS risk.region, risk.segment, risk.risk_month METRICS risk.avg_renewal_risk_score, risk.high_risk_account_count WHERE risk.region = 'West' AND risk.segment = 'Enterprise' AND risk.risk_month = DATE_TRUNC('month', CURRENT_DATE()))"
+      },
+      {
+        "name": "Q2_INCIDENT_AFFECTED_ACCOUNTS",
+        "question": "Which accounts were most affected by the reliability incident?",
+        "sql": "SELECT * FROM SEMANTIC_VIEW(SNOWFLAKE_REVENUE_CC.CORE.REVENUE_CC_ANALYST DIMENSIONS support.account_id, support.region, support.segment METRICS support.sla_breach_count, support.support_case_count WHERE support.incident_id = 'INC-0001') ORDER BY SLA_BREACH_COUNT DESC LIMIT 20"
+      },
+      {
+        "name": "Q3_REVENUE_AT_RISK_SLA",
+        "question": "How much revenue is at risk because of SLA breaches?",
+        "sql": "SELECT * FROM SEMANTIC_VIEW(SNOWFLAKE_REVENUE_CC.CORE.REVENUE_CC_ANALYST DIMENSIONS rev.region, rev.segment METRICS rev.revenue_at_risk_total)"
+      },
+      {
+        "name": "Q4_RECOMMENDED_ACTIONS_WEST",
+        "question": "Which recommended actions should the regional manager approve first?",
+        "sql": "SELECT * FROM SEMANTIC_VIEW(SNOWFLAKE_REVENUE_CC.CORE.REVENUE_CC_ANALYST DIMENSIONS risk.recommended_action, risk.region METRICS risk.avg_renewal_risk_score, risk.high_risk_account_count WHERE risk.region = 'West') ORDER BY HIGH_RISK_ACCOUNT_COUNT DESC"
+      },
+      {
+        "name": "Q5_AGENT_ACTIONS_PROTECTED_REVENUE",
+        "question": "Did approved agent actions reduce revenue at risk after the incident?",
+        "sql": "SELECT * FROM SEMANTIC_VIEW(SNOWFLAKE_REVENUE_CC.CORE.REVENUE_CC_ANALYST DIMENSIONS actions.date METRICS actions.actual_revenue_protected_total WHERE actions.approval_status = 'Approved') ORDER BY DATE"
+      }
+    ]
+  },
+  "generatedAt": "2026-07-16T16:56:12.839Z"
+}

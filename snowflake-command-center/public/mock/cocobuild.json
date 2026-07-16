@@ -1,0 +1,16 @@
+{
+  "generatedAt": "2026-07-16T01:35:43.175497+00:00",
+  "status": "Live",
+  "builder": "CoCo (Cortex CLI, --mode code)",
+  "task": "Create GOLD_REGION_SAVEPLAY_LEADERBOARD view summarizing revenue_at_risk, account counts, and avg renewal_risk_score by region and segment",
+  "plan": [
+    "Inspect fact_renewal_risk and existing gold views for real column names",
+    "Author and CREATE VIEW GOLD_REGION_SAVEPLAY_LEADERBOARD in SNOWFLAKE_REVENUE_CC.CORE",
+    "GRANT SELECT to REVENUE_CC_READER, REVENUE_CC_READER_WEST, REVENUE_CC_READER_EAST",
+    "Validate with SELECT returning 12 rows; confirm no existing objects modified"
+  ],
+  "sql": "CREATE OR REPLACE VIEW GOLD_REGION_SAVEPLAY_LEADERBOARD AS\nSELECT\n  r.region,\n  r.segment,\n  COUNT(DISTINCT r.account_id) AS account_count,\n  ROUND(SUM(r.revenue_at_risk), 2) AS total_revenue_at_risk,\n  ROUND(AVG(r.renewal_risk_score), 2) AS avg_renewal_risk_score,\n  SUM(CASE WHEN r.risk_tier = 'High' THEN 1 ELSE 0 END) AS high_risk_accounts,\n  SUM(CASE WHEN r.recommended_action = 'Renewal save play' THEN 1 ELSE 0 END) AS saveplay_recommendations\nFROM fact_renewal_risk r\nWHERE r.risk_month = DATE_TRUNC('MONTH', CURRENT_DATE())\nGROUP BY r.region, r.segment\nORDER BY total_revenue_at_risk DESC;",
+  "result": "View created; 12 rows; West Enterprise tops the leaderboard at $63.4M at risk with 241 high-risk accounts and 73 save-play recommendations",
+  "reversible": "DROP VIEW SNOWFLAKE_REVENUE_CC.CORE.GOLD_REGION_SAVEPLAY_LEADERBOARD; -- additive only, no existing object modified",
+  "object": "SNOWFLAKE_REVENUE_CC.CORE.GOLD_REGION_SAVEPLAY_LEADERBOARD"
+}

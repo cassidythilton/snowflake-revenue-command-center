@@ -1,0 +1,158 @@
+{
+  "generatedAt": "2026-07-15T22:30:00.000Z",
+  "source": "SNOWFLAKE_REVENUE_CC.CORE.REVENUE_CC_RISK_MODEL (live native inference)",
+  "model": {
+    "name": "REVENUE_CC_RISK_MODEL",
+    "version": "10.0",
+    "type": "SNOWFLAKE.ML.CLASSIFICATION (gradient-boosted trees, in-warehouse)",
+    "target": "IS_HIGH_RISK = risk_tier='High' OR predicted_churn_probability>=0.5",
+    "trainingRows": 96000,
+    "latencySec": 3.5,
+    "topFeatures": [
+      {"feature": "ANNUAL_RECURRING_REVENUE", "importance": 0.343},
+      {"feature": "AVG_USAGE_SCORE_90D", "importance": 0.340},
+      {"feature": "CASES_90D", "importance": 0.112},
+      {"feature": "NEGATIVE_CASES_90D", "importance": 0.070},
+      {"feature": "SLA_BREACHES_90D", "importance": 0.067}
+    ]
+  },
+  "inferenceSql": "SELECT * FROM TABLE(SNOWFLAKE_REVENUE_CC.CORE.PREDICT_RENEWAL_RISK('ACC-00008'))",
+  "accounts": [
+    {
+      "accountId": "ACC-00008",
+      "accountName": "Ion Partners 8",
+      "region": "West",
+      "segment": "Enterprise",
+      "arr": 624829,
+      "features": {
+        "cases90d": 128,
+        "slaBreaches90d": 125,
+        "negativeCases90d": 85,
+        "avgUsageScore90d": 72.688888889,
+        "usageDropDays90d": 14
+      },
+      "predictedClass": 1,
+      "predictedProbability": 0.9989167501,
+      "predictedLabel": "High Risk"
+    },
+    {
+      "accountId": "ACC-00016",
+      "accountName": "Granite Industries 16",
+      "region": "West",
+      "segment": "Enterprise",
+      "arr": 1363499,
+      "features": {
+        "cases90d": 128,
+        "slaBreaches90d": 126,
+        "negativeCases90d": 84,
+        "avgUsageScore90d": 71.294117647,
+        "usageDropDays90d": 16
+      },
+      "predictedClass": 1,
+      "predictedProbability": 0.9988299879,
+      "predictedLabel": "High Risk"
+    },
+    {
+      "accountId": "ACC-00062",
+      "accountName": "Cobalt Group 62",
+      "region": "West",
+      "segment": "Enterprise",
+      "arr": 1129195,
+      "features": {
+        "cases90d": 130,
+        "slaBreaches90d": 126,
+        "negativeCases90d": 83,
+        "avgUsageScore90d": 68.94,
+        "usageDropDays90d": 20
+      },
+      "predictedClass": 1,
+      "predictedProbability": 0.9989003671,
+      "predictedLabel": "High Risk"
+    },
+    {
+      "accountId": "ACC-00050",
+      "accountName": "Acme Holdings 50",
+      "region": "West",
+      "segment": "Enterprise",
+      "arr": 337740,
+      "features": {
+        "cases90d": 131,
+        "slaBreaches90d": 125,
+        "negativeCases90d": 80,
+        "avgUsageScore90d": 69.30952381,
+        "usageDropDays90d": 16
+      },
+      "predictedClass": 1,
+      "predictedProbability": 0.9989037869,
+      "predictedLabel": "High Risk"
+    },
+    {
+      "accountId": "ACC-00067",
+      "accountName": "Harbor Networks 67",
+      "region": "West",
+      "segment": "Enterprise",
+      "arr": 540011,
+      "features": {
+        "cases90d": 129,
+        "slaBreaches90d": 127,
+        "negativeCases90d": 81,
+        "avgUsageScore90d": 72.436363636,
+        "usageDropDays90d": 17
+      },
+      "predictedClass": 1,
+      "predictedProbability": 0.9989167501,
+      "predictedLabel": "High Risk"
+    },
+    {
+      "accountId": "ACC-00002",
+      "accountName": "Cobalt Holdings 2",
+      "region": "Central",
+      "segment": "Enterprise",
+      "arr": 314508,
+      "features": {
+        "cases90d": 4,
+        "slaBreaches90d": 1,
+        "negativeCases90d": 0,
+        "avgUsageScore90d": 82.244444444,
+        "usageDropDays90d": 0
+      },
+      "predictedClass": 0,
+      "predictedProbability": 0.1117756947,
+      "predictedLabel": "Low Risk"
+    },
+    {
+      "accountId": "ACC-00001",
+      "accountName": "Beacon Systems 1",
+      "region": "Central",
+      "segment": "SMB",
+      "arr": 27520,
+      "features": {
+        "cases90d": 2,
+        "slaBreaches90d": 0,
+        "negativeCases90d": 1,
+        "avgUsageScore90d": 83.673913043,
+        "usageDropDays90d": 0
+      },
+      "predictedClass": 0,
+      "predictedProbability": 0.1636013323,
+      "predictedLabel": "Low Risk"
+    },
+    {
+      "accountId": "ACC-00003",
+      "accountName": "Delta Partners 3",
+      "region": "East",
+      "segment": "Mid-Market",
+      "arr": 92364,
+      "features": {
+        "cases90d": 4,
+        "slaBreaches90d": 1,
+        "negativeCases90d": 1,
+        "avgUsageScore90d": 82.727272727,
+        "usageDropDays90d": 0
+      },
+      "predictedClass": 0,
+      "predictedProbability": 0.1174786658,
+      "predictedLabel": "Low Risk"
+    }
+  ]
+}

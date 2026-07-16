@@ -1,0 +1,14 @@
+# Local QA / testing harness (Puppeteer + screenshots) — not part of the app
+.qa/
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Editor / OS
+.vscode/
+.DS_Store
+
+# Logs / scratch
+*.log
+tmp/

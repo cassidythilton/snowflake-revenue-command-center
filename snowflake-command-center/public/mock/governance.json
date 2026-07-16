@@ -1,0 +1,194 @@
+{
+  "generatedAt": "2026-07-16T00:57:40Z",
+  "source": "SNOWFLAKE_REVENUE_CC.CORE Horizon policies + ACCOUNT_USAGE (live)",
+  "serviceIdentity": {
+    "user": "SVC_REVENUE_CC",
+    "baseRole": "REVENUE_CC_READER",
+    "note": "Governance is enforced at the query engine by role under a named service identity. Per-end-user identity passthrough (C8) is a documented target-instance enablement, not claimed here."
+  },
+  "semantic": {
+    "semanticView": "REVENUE_CC_ANALYST",
+    "goldViews": [
+      "GOLD_EXECUTIVE_REVENUE_HEALTH",
+      "GOLD_CUSTOMER_RENEWAL_RISK",
+      "GOLD_INCIDENT_REVENUE_IMPACT",
+      "GOLD_AGENT_ACTION_QUEUE",
+      "GOLD_PORTAL_USER_SCOPE"
+    ],
+    "searchService": "REVENUE_CC_SEARCH",
+    "model": "REVENUE_CC_RISK_MODEL",
+    "agent": "REVENUE_CC_AGENT"
+  },
+  "policies": [
+    {
+      "name": "RAP_REGION",
+      "kind": "Row access",
+      "target": "DIM_ACCOUNT.REGION",
+      "status": "ACTIVE",
+      "description": "Fail-open for base reader/writer/sysadmin; region-scoped roles see only their mapped region via GOV_ROLE_REGION_MAP."
+    },
+    {
+      "name": "MASK_ARR",
+      "kind": "Masking",
+      "target": "DIM_ACCOUNT.ANNUAL_RECURRING_REVENUE",
+      "status": "ACTIVE",
+      "description": "Real ARR for base roles; NULL for region-scoped roles."
+    }
+  ],
+  "parity": {
+    "query": "SELECT region, COUNT(*) AS accounts, ROUND(SUM(revenue_at_risk)) AS rev_at_risk FROM GOLD_CUSTOMER_RENEWAL_RISK GROUP BY region ORDER BY region",
+    "roles": [
+      {
+        "role": "REVENUE_CC_READER",
+        "scope": "All regions",
+        "total": 4000,
+        "rows": [
+          {
+            "region": "Central",
+            "accounts": 799,
+            "revAtRisk": 7079065
+          },
+          {
+            "region": "East",
+            "accounts": 1027,
+            "revAtRisk": 9185089
+          },
+          {
+            "region": "South",
+            "accounts": 791,
+            "revAtRisk": 7093374
+          },
+          {
+            "region": "West",
+            "accounts": 1383,
+            "revAtRisk": 67149553
+          }
+        ]
+      },
+      {
+        "role": "REVENUE_CC_READER_WEST",
+        "scope": "West only",
+        "total": 1383,
+        "rows": [
+          {
+            "region": "West",
+            "accounts": 1383,
+            "revAtRisk": 67149553
+          }
+        ]
+      },
+      {
+        "role": "REVENUE_CC_READER_EAST",
+        "scope": "East only",
+        "total": 1027,
+        "rows": [
+          {
+            "region": "East",
+            "accounts": 1027,
+            "revAtRisk": 9185089
+          }
+        ]
+      }
+    ]
+  },
+  "masking": {
+    "column": "ANNUAL_RECURRING_REVENUE",
+    "baseRole": "REVENUE_CC_READER",
+    "maskedRole": "REVENUE_CC_READER_WEST",
+    "sample": [
+      {
+        "accountId": "ACC-00007",
+        "real": 125116.0,
+        "masked": null
+      },
+      {
+        "accountId": "ACC-00008",
+        "real": 624829.0,
+        "masked": null
+      },
+      {
+        "accountId": "ACC-00009",
+        "real": 34010.0,
+        "masked": null
+      }
+    ]
+  },
+  "guardrails": {
+    "cortexGuard": {
+      "status": "Available",
+      "detail": "Cortex AI Guardrails (prompt injection/jailbreak detection) is an account-level setting via AI_SETTINGS parameter, not a per-agent object. Cross-region inference prerequisite is met (CORTEX_ENABLED_CROSS_REGION=ANY_REGION), but AI_SETTINGS is currently unset so guardrails are not active. REVENUE_CC_AGENT does not carry its own guardrail config; protection applies globally once the ACCOUNTADMIN enables it."
+    },
+    "observability": {
+      "status": "Enabled",
+      "detail": "AI Observability is active on this account. SNOWFLAKE.LOCAL.AI_OBSERVABILITY_EVENTS contains 56,787 events including agent traces (planning, tool execution, response generation). Monitoring pane available in Snowsight under AI & ML > Agents for REVENUE_CC_AGENT."
+    },
+    "evaluations": {
+      "status": "Available",
+      "detail": "Cortex Agent Evaluations are part of the Agent monitoring experience (evaluation trace summaries in AI_OBSERVABILITY_EVENTS). The feature is available on this account but no evaluation jobs have been configured for REVENUE_CC_AGENT yet."
+    }
+  },
+  "trace": [
+    {
+      "time": "2026-07-16T06:18:59Z",
+      "role": "REVENUE_CC_READER",
+      "status": "SUCCESS",
+      "statement": "SELECT COUNT(*) AS reader_total_rows FROM GOLD_CUSTOMER_RENEWAL_RISK;"
+    },
+    {
+      "time": "2026-07-16T06:18:58Z",
+      "role": "REVENUE_CC_READER_WEST",
+      "status": "SUCCESS",
+      "statement": "SELECT ACCOUNT_ID, ANNUAL_RECURRING_REVENUE FROM DIM_ACCOUNT LIMIT 3"
+    },
+    {
+      "time": "2026-07-16T06:18:58Z",
+      "role": "REVENUE_CC_READER",
+      "status": "SUCCESS",
+      "statement": "SELECT ACCOUNT_ID, ANNUAL_RECURRING_REVENUE FROM DIM_ACCOUNT LIMIT 3;"
+    },
+    {
+      "time": "2026-07-16T06:18:50Z",
+      "role": "REVENUE_CC_READER",
+      "status": "SUCCESS",
+      "statement": "SELECT region, COUNT(*) AS accounts, ROUND(SUM(revenue_at_risk)) FROM GOLD_CUSTOMER_RENEWAL_RISK GROUP BY region ORDER BY region"
+    },
+    {
+      "time": "2026-07-16T06:18:49Z",
+      "role": "REVENUE_CC_READER_EAST",
+      "status": "SUCCESS",
+      "statement": "SELECT region, COUNT(*) AS accounts, ROUND(SUM(revenue_at_risk)) FROM GOLD_CUSTOMER_RENEWAL_RISK GROUP BY region ORDER BY region"
+    }
+  ],
+  "readinessParity": [
+    {
+      "capability": "Governed metric layer",
+      "snowflake": "Horizon + Semantic View (REVENUE_CC_ANALYST)",
+      "domo": "AI Readiness: certified data + metric definitions"
+    },
+    {
+      "capability": "Row-level entitlement",
+      "snowflake": "Row access policy (RAP_REGION)",
+      "domo": "PDP policy"
+    },
+    {
+      "capability": "Column masking",
+      "snowflake": "Masking policy (MASK_ARR)",
+      "domo": "Column-level PDP / redaction"
+    },
+    {
+      "capability": "AI guardrails",
+      "snowflake": "Cortex Guard",
+      "domo": "AI governance guardrails"
+    },
+    {
+      "capability": "Lineage + observability",
+      "snowflake": "ACCOUNT_USAGE + AI Observability",
+      "domo": "Lineage + AI Readiness score"
+    },
+    {
+      "capability": "Agent evaluation",
+      "snowflake": "Agent Evaluations",
+      "domo": "(not native)"
+    }
+  ]
+}

@@ -1,0 +1,119 @@
+{
+  "generatedAt": "2026-07-15T22:30:00.000Z",
+  "source": "SNOWFLAKE_REVENUE_CC.CORE hybrid tables (live)",
+  "scenarios": [
+    {
+      "scenarioId": "e3ff3380-9581-4d72-932f-a3ab667f0c00",
+      "createdTs": "2026-07-16 05:19:38.326",
+      "createdBy": "west.manager@demo.local",
+      "accountId": "ACC-00008",
+      "accountName": "Harbor Networks 8",
+      "region": "West",
+      "segment": "Enterprise",
+      "scenarioName": "Delayed renewal - budget freeze",
+      "predictedRiskProbability": 0.78,
+      "assumptionNotes": "Customer indicated budget freeze through Q3; assume 60-day delay.",
+      "projectedRevenueAtRisk": 420000,
+      "status": "Open"
+    },
+    {
+      "scenarioId": "94f429ec-dc14-4f57-9adf-604a3d58ea77",
+      "createdTs": "2026-07-16 05:19:38.326",
+      "createdBy": "owner.west@demo.local",
+      "accountId": "ACC-00003",
+      "accountName": "Delta Partners 3",
+      "region": "West",
+      "segment": "Enterprise",
+      "scenarioName": "Executive sponsor departure",
+      "predictedRiskProbability": 0.72,
+      "assumptionNotes": "VP Data left the company; new sponsor TBD. Risk of re-evaluation.",
+      "projectedRevenueAtRisk": 540000,
+      "status": "Open"
+    },
+    {
+      "scenarioId": "b47bcb0f-d97c-4b42-ae74-dc83d20234a4",
+      "createdTs": "2026-07-16 05:19:38.326",
+      "createdBy": "west.manager@demo.local",
+      "accountId": "ACC-00016",
+      "accountName": "Cobalt Holdings 16",
+      "region": "West",
+      "segment": "Enterprise",
+      "scenarioName": "Competitor displacement risk",
+      "predictedRiskProbability": 0.65,
+      "assumptionNotes": "Competitor POC confirmed by champion; engagement declining.",
+      "projectedRevenueAtRisk": 310000,
+      "status": "Under Review"
+    },
+    {
+      "scenarioId": "0e0a356c-ccf0-4938-bf40-313ce50ae66f",
+      "createdTs": "2026-07-16 05:19:38.326",
+      "createdBy": "exec@demo.local",
+      "accountId": "ACC-00014",
+      "accountName": "Evergreen Industries 14",
+      "region": "West",
+      "segment": "Enterprise",
+      "scenarioName": "Product gap - missing governance module",
+      "predictedRiskProbability": 0.55,
+      "assumptionNotes": "Customer requires Raptor Governance GA before renewal; currently in preview.",
+      "projectedRevenueAtRisk": 275000,
+      "status": "Accepted"
+    }
+  ],
+  "feedback": [
+    {
+      "feedbackId": "20f20e5d-c2b2-498c-a9ed-7ccba8add089",
+      "createdTs": "2026-07-16 05:19:49.554",
+      "createdBy": "west.manager@demo.local",
+      "accountId": "ACC-00008",
+      "modelVersion": "v1.0-2026-06",
+      "predictedRiskProbability": 0.78,
+      "humanVerdict": "Agree",
+      "correctedLabel": "High Risk",
+      "comment": "Model correctly identified risk; budget freeze confirmed via CSM notes."
+    },
+    {
+      "feedbackId": "0313d3b4-2295-4a9f-b589-28ebc45a7db4",
+      "createdTs": "2026-07-16 05:19:49.554",
+      "createdBy": "east.manager@demo.local",
+      "accountId": "ACC-00008",
+      "modelVersion": "v1.0-2026-06",
+      "predictedRiskProbability": 0.78,
+      "humanVerdict": "Agree",
+      "correctedLabel": "High Risk",
+      "comment": "Cross-regional review concurs with West assessment."
+    },
+    {
+      "feedbackId": "e2a03ed5-7674-4df4-9ce1-4fccbdc3bee9",
+      "createdTs": "2026-07-16 05:19:49.554",
+      "createdBy": "west.manager@demo.local",
+      "accountId": "ACC-00016",
+      "modelVersion": "v1.0-2026-06",
+      "predictedRiskProbability": 0.65,
+      "humanVerdict": "Agree",
+      "correctedLabel": "Medium Risk",
+      "comment": "Competitor POC real but champion still engaged - medium, not high."
+    },
+    {
+      "feedbackId": "a113f86f-319e-4e96-937c-a44017f95905",
+      "createdTs": "2026-07-16 05:19:49.554",
+      "createdBy": "owner.west@demo.local",
+      "accountId": "ACC-00003",
+      "modelVersion": "v1.0-2026-06",
+      "predictedRiskProbability": 0.72,
+      "humanVerdict": "Disagree",
+      "correctedLabel": "Low Risk",
+      "comment": "New VP already onboarded and is a prior Snowflake customer. Risk overstated."
+    },
+    {
+      "feedbackId": "1c32c463-4e94-4805-86bd-24d5293410a2",
+      "createdTs": "2026-07-16 05:19:49.554",
+      "createdBy": "exec@demo.local",
+      "accountId": "ACC-00014",
+      "modelVersion": "v1.0-2026-06",
+      "predictedRiskProbability": 0.55,
+      "humanVerdict": "Unsure",
+      "correctedLabel": "None",
+      "comment": "Governance module on roadmap for Q4. Outcome depends on release timing."
+    }
+  ]
+}

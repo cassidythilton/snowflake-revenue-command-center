@@ -1,0 +1,938 @@
+{
+  "name": "Snowflake Revenue Command Center",
+  "version": "0.2.0",
+  "description": "Governed Snowflake + Domo revenue command center. Snowflake is the intelligence plane (Horizon + semantic views + Cortex Analyst/Agent + native ML + Hybrid Tables); Domo is the delivery + action plane. A live Code Engine bridge (package SnowflakeRevenueCommandCenter, key-pair JWT via Domo-managed account 148 / DOMO_CE_USER) powers Forecast Home, Cortex Analyst, Cortex Agent Queue, Snowflake ML inference, Hybrid Table ops, approval writeback, Horizon governance parity, and Cloud Amplifier registration.",
+  "size": {
+    "width": 1,
+    "height": 1
+  },
+  "proxyId": "snowflakece",
+  "datasetsMapping": [],
+  "workflowMapping": [],
+  "collectionsMapping": [
+    {
+      "name": "configuration",
+      "schema": {
+        "columns": [
+          {
+            "name": "snowflake_warehouse",
+            "type": "STRING"
+          },
+          {
+            "name": "snowflake_database",
+            "type": "STRING"
+          },
+          {
+            "name": "snowflake_schema",
+            "type": "STRING"
+          },
+          {
+            "name": "snowflake_role",
+            "type": "STRING"
+          },
+          {
+            "name": "snowflake_view",
+            "type": "STRING"
+          }
+        ]
+      }
+    },
+    {
+      "name": "recent_queries",
+      "schema": {
+        "columns": [
+          {
+            "name": "query_text",
+            "type": "STRING"
+          },
+          {
+            "name": "sql_generated",
+            "type": "STRING"
+          },
+          {
+            "name": "result_columns",
+            "type": "STRING"
+          },
+          {
+            "name": "result_row_count",
+            "type": "LONG"
+          },
+          {
+            "name": "created_at",
+            "type": "STRING"
+          },
+          {
+            "name": "analyst_message",
+            "type": "STRING"
+          }
+        ]
+      }
+    }
+  ],
+  "packagesMapping": [
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "ping",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.1.0",
+      "functionName": "ping",
+      "parameters": [],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
+    },
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "runSql",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.1.0",
+      "functionName": "runSql",
+      "parameters": [
+        {
+          "name": "statement",
+          "displayName": "statement",
+          "type": "text",
+          "value": null,
+          "nullable": false,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "statement"
+        },
+        {
+          "name": "role",
+          "displayName": "role",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "role"
+        }
+      ],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
+    },
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "getForecastHome",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.1.0",
+      "functionName": "getForecastHome",
+      "parameters": [
+        {
+          "name": "persona",
+          "displayName": "persona",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "persona"
+        }
+      ],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
+    },
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "askAnalyst",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.1.0",
+      "functionName": "askAnalyst",
+      "parameters": [
+        {
+          "name": "question",
+          "displayName": "question",
+          "type": "text",
+          "value": null,
+          "nullable": false,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "question"
+        },
+        {
+          "name": "persona",
+          "displayName": "persona",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "persona"
+        },
+        {
+          "name": "conversationHistory",
+          "displayName": "conversationHistory",
+          "type": "object",
+          "value": null,
+          "nullable": true,
+          "isList": true,
+          "children": [],
+          "entitySubType": null,
+          "alias": "conversationHistory"
+        }
+      ],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
+    },
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "describeSemanticView",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.1.0",
+      "functionName": "describeSemanticView",
+      "parameters": [
+        {
+          "name": "view",
+          "displayName": "view",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "view"
+        }
+      ],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
+    },
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "alterSemanticView",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.1.0",
+      "functionName": "alterSemanticView",
+      "parameters": [
+        {
+          "name": "ddl",
+          "displayName": "ddl",
+          "type": "text",
+          "value": null,
+          "nullable": false,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "ddl"
+        }
+      ],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
+    },
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "askCortexAgent",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.1.0",
+      "functionName": "askCortexAgent",
+      "parameters": [
+        {
+          "name": "question",
+          "displayName": "question",
+          "type": "text",
+          "value": null,
+          "nullable": false,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "question"
+        },
+        {
+          "name": "persona",
+          "displayName": "persona",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "persona"
+        }
+      ],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
+    },
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "runModelInference",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.1.0",
+      "functionName": "runModelInference",
+      "parameters": [
+        {
+          "name": "accountId",
+          "displayName": "accountId",
+          "type": "text",
+          "value": null,
+          "nullable": false,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "accountId"
+        }
+      ],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
+    },
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "getOpsState",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.1.0",
+      "functionName": "getOpsState",
+      "parameters": [],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
+    },
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "createScenario",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.1.0",
+      "functionName": "createScenario",
+      "parameters": [
+        {
+          "name": "accountId",
+          "displayName": "accountId",
+          "type": "text",
+          "value": null,
+          "nullable": false,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "accountId"
+        },
+        {
+          "name": "accountName",
+          "displayName": "accountName",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "accountName"
+        },
+        {
+          "name": "region",
+          "displayName": "region",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "region"
+        },
+        {
+          "name": "segment",
+          "displayName": "segment",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "segment"
+        },
+        {
+          "name": "scenarioName",
+          "displayName": "scenarioName",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "scenarioName"
+        },
+        {
+          "name": "predictedRiskProbability",
+          "displayName": "predictedRiskProbability",
+          "type": "number",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "predictedRiskProbability"
+        },
+        {
+          "name": "assumptionNotes",
+          "displayName": "assumptionNotes",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "assumptionNotes"
+        },
+        {
+          "name": "projectedRevenueAtRisk",
+          "displayName": "projectedRevenueAtRisk",
+          "type": "number",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "projectedRevenueAtRisk"
+        },
+        {
+          "name": "status",
+          "displayName": "status",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "status"
+        },
+        {
+          "name": "createdBy",
+          "displayName": "createdBy",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "createdBy"
+        }
+      ],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
+    },
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "updateScenarioStatus",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.1.0",
+      "functionName": "updateScenarioStatus",
+      "parameters": [
+        {
+          "name": "scenarioId",
+          "displayName": "scenarioId",
+          "type": "text",
+          "value": null,
+          "nullable": false,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "scenarioId"
+        },
+        {
+          "name": "status",
+          "displayName": "status",
+          "type": "text",
+          "value": null,
+          "nullable": false,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "status"
+        }
+      ],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
+    },
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "deleteScenario",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.1.0",
+      "functionName": "deleteScenario",
+      "parameters": [
+        {
+          "name": "scenarioId",
+          "displayName": "scenarioId",
+          "type": "text",
+          "value": null,
+          "nullable": false,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "scenarioId"
+        }
+      ],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
+    },
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "createFeedback",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.1.0",
+      "functionName": "createFeedback",
+      "parameters": [
+        {
+          "name": "accountId",
+          "displayName": "accountId",
+          "type": "text",
+          "value": null,
+          "nullable": false,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "accountId"
+        },
+        {
+          "name": "modelVersion",
+          "displayName": "modelVersion",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "modelVersion"
+        },
+        {
+          "name": "predictedRiskProbability",
+          "displayName": "predictedRiskProbability",
+          "type": "number",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "predictedRiskProbability"
+        },
+        {
+          "name": "humanVerdict",
+          "displayName": "humanVerdict",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "humanVerdict"
+        },
+        {
+          "name": "correctedLabel",
+          "displayName": "correctedLabel",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "correctedLabel"
+        },
+        {
+          "name": "comment",
+          "displayName": "comment",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "comment"
+        },
+        {
+          "name": "createdBy",
+          "displayName": "createdBy",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "createdBy"
+        }
+      ],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
+    },
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "getApprovalQueue",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.1.0",
+      "functionName": "getApprovalQueue",
+      "parameters": [
+        {
+          "name": "persona",
+          "displayName": "persona",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "persona"
+        }
+      ],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
+    },
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "writeActionStatus",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.1.0",
+      "functionName": "writeActionStatus",
+      "parameters": [
+        {
+          "name": "actionId",
+          "displayName": "actionId",
+          "type": "text",
+          "value": null,
+          "nullable": false,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "actionId"
+        },
+        {
+          "name": "accountId",
+          "displayName": "accountId",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "accountId"
+        },
+        {
+          "name": "accountName",
+          "displayName": "accountName",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "accountName"
+        },
+        {
+          "name": "region",
+          "displayName": "region",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "region"
+        },
+        {
+          "name": "recommendation",
+          "displayName": "recommendation",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "recommendation"
+        },
+        {
+          "name": "approvalStatus",
+          "displayName": "approvalStatus",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "approvalStatus"
+        },
+        {
+          "name": "approvedBy",
+          "displayName": "approvedBy",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "approvedBy"
+        },
+        {
+          "name": "executionStatus",
+          "displayName": "executionStatus",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "executionStatus"
+        },
+        {
+          "name": "actualRevenueProtected",
+          "displayName": "actualRevenueProtected",
+          "type": "number",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "actualRevenueProtected"
+        }
+      ],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
+    },
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "getGovernance",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.1.0",
+      "functionName": "getGovernance",
+      "parameters": [],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
+    },
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "getSnowflakeIntegrations",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.1.0",
+      "functionName": "getSnowflakeIntegrations",
+      "parameters": [],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
+    },
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "registerCloudAmplifierTable",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.1.0",
+      "functionName": "registerCloudAmplifierTable",
+      "parameters": [
+        {
+          "name": "integrationId",
+          "displayName": "integrationId",
+          "type": "text",
+          "value": null,
+          "nullable": false,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "integrationId"
+        },
+        {
+          "name": "database",
+          "displayName": "database",
+          "type": "text",
+          "value": null,
+          "nullable": false,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "database"
+        },
+        {
+          "name": "schema",
+          "displayName": "schema",
+          "type": "text",
+          "value": null,
+          "nullable": false,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "schema"
+        },
+        {
+          "name": "table",
+          "displayName": "table",
+          "type": "text",
+          "value": null,
+          "nullable": false,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "table"
+        },
+        {
+          "name": "dataProviderKey",
+          "displayName": "dataProviderKey",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "dataProviderKey"
+        }
+      ],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
+    }
+  ],
+  "fileName": "manifest.json",
+  "id": "db8047cf-49ad-4c2b-8665-e0970d5ed874"
+}
