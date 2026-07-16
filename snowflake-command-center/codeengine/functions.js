@@ -235,6 +235,13 @@ function getForecastHome(persona) {
     "FROM fact_revenue_daily WHERE 1=1" + regionFilterRev +
     " GROUP BY fiscal_period ORDER BY fiscal_period DESC LIMIT 14";
 
+  // Materialized Snowflake ML.FORECAST (company-wide) for the hero chart:
+  // 24 mo actual + 6 mo forecast with 95% prediction interval.
+  var qRevForecast =
+    "SELECT TO_VARCHAR(period_month,'YYYY-MM') AS period, kind, actual, forecast, " +
+    "  lower_bound AS lower, upper_bound AS upper " +
+    "FROM gold_revenue_forecast ORDER BY period_month";
+
   var qRegional =
     "SELECT region, segment, ROUND(AVG(renewal_risk_score),1) AS avgrisk, " +
     "  COUNT_IF(risk_tier='High') AS highrisk, SUM(revenue_at_risk) AS rar " +
@@ -264,6 +271,7 @@ function getForecastHome(persona) {
     generatedAt: new Date().toISOString(),
     kpis: {},
     actualVsForecast: [],
+    revenueForecast: null,
     regionalRisk: [],
     actionQueue: {},
     incident: null
@@ -297,7 +305,28 @@ function getForecastHome(persona) {
       out.actualVsForecast = rowsToObjects(rs)
         .map(function (r) { return { period: r.PERIOD, actual: num(r.ACTUAL), forecast: num(r.FORECAST) }; })
         .reverse();
-      return runSql(qRegional);
+      // Resilient: a missing/ungranted forecast table must not break the home payload.
+      return runSql(qRevForecast)
+        .then(function (frs) {
+          var rows = rowsToObjects(frs);
+          if (rows.length) {
+            var history = [], forecast = [];
+            rows.forEach(function (r) {
+              if (String(r.KIND) === "forecast") {
+                forecast.push({ period: r.PERIOD, forecast: num(r.FORECAST), lower: num(r.LOWER), upper: num(r.UPPER) });
+              } else {
+                history.push({ period: r.PERIOD, actual: num(r.ACTUAL) });
+              }
+            });
+            out.revenueForecast = {
+              source: DATABASE + "." + SCHEMA + ".GOLD_REVENUE_FORECAST (SNOWFLAKE.ML.FORECAST)",
+              grain: "month", unit: "USD", predictionInterval: 0.95,
+              history: history, forecast: forecast
+            };
+          }
+        })
+        .catch(function () { out.revenueForecast = null; })
+        .then(function () { return runSql(qRegional); });
     })
     .then(function (rs) {
       out.regionalRisk = rowsToObjects(rs).map(function (r) {
