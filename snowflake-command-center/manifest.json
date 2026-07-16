@@ -7,7 +7,103 @@
     "height": 1
   },
   "proxyId": "snowflakece",
-  "datasetsMapping": [],
+  "datasetsMapping": [
+    {
+      "alias": "gold_executive_revenue_health",
+      "dataSetId": "3cd5a0ac-e059-4dff-bbc2-ad639468dcab",
+      "fields": []
+    },
+    {
+      "alias": "gold_customer_renewal_risk",
+      "dataSetId": "9bba0fc2-9ec9-4ee1-8b1e-491cb8ddef7e",
+      "fields": []
+    },
+    {
+      "alias": "gold_agent_action_queue",
+      "dataSetId": "7715806a-4c6d-42a1-808c-046643ff1435",
+      "fields": []
+    },
+    {
+      "alias": "gold_incident_revenue_impact",
+      "dataSetId": "eadda0cf-8bd1-4ad0-8f9c-c72cc36b7380",
+      "fields": []
+    },
+    {
+      "alias": "gold_protected_revenue_rollup",
+      "dataSetId": "4573b559-76e5-4359-87ec-2582301a52ed",
+      "fields": []
+    },
+    {
+      "alias": "gold_region_saveplay_leaderboard",
+      "dataSetId": "a3fc38e5-8113-4cef-8e8d-92a488d0bc90",
+      "fields": []
+    },
+    {
+      "alias": "gold_portal_user_scope",
+      "dataSetId": "f00f292a-0fc5-41d7-a80d-996f58934859",
+      "fields": []
+    },
+    {
+      "alias": "ml_renewal_risk_training",
+      "dataSetId": "60782217-6ec6-4506-9429-5546eee0e983",
+      "fields": []
+    },
+    {
+      "alias": "gold_revenue_forecast",
+      "dataSetId": "91c9c03e-5a79-49fb-8fd8-23a122ad20a3",
+      "fields": []
+    },
+    {
+      "alias": "fact_revenue_daily",
+      "dataSetId": "d213fc0a-de02-41f3-9cf8-7eabcad077b7",
+      "fields": []
+    },
+    {
+      "alias": "fact_renewal_risk",
+      "dataSetId": "4d0b6c9e-b0fd-45b6-a545-a78d66fd7591",
+      "fields": []
+    },
+    {
+      "alias": "fact_agent_actions",
+      "dataSetId": "3560bd07-6027-4e09-ba13-ba2d0f55a8ca",
+      "fields": []
+    },
+    {
+      "alias": "fact_support_cases",
+      "dataSetId": "a48b1857-7ecd-4ae3-8346-a2ba233f1b19",
+      "fields": []
+    },
+    {
+      "alias": "fact_incidents",
+      "dataSetId": "8a9da0b7-567e-420d-8848-c6b388777a3f",
+      "fields": []
+    },
+    {
+      "alias": "fact_product_usage_daily",
+      "dataSetId": "781ac66f-8271-40b5-80f5-73f1419c45f1",
+      "fields": []
+    },
+    {
+      "alias": "dim_account",
+      "dataSetId": "fa120465-ce34-40c4-8b69-668d65bda338",
+      "fields": []
+    },
+    {
+      "alias": "dim_product",
+      "dataSetId": "c0720a26-f5f9-42c0-a9d7-e8a225bc25b7",
+      "fields": []
+    },
+    {
+      "alias": "dim_tenant",
+      "dataSetId": "4794cade-f783-4e49-8c86-e087fafbcfd3",
+      "fields": []
+    },
+    {
+      "alias": "dim_user_entitlement",
+      "dataSetId": "f5a7bb79-a2c6-40b1-aa35-40dd56383b63",
+      "fields": []
+    }
+  ],
   "workflowMapping": [],
   "collectionsMapping": [
     {
