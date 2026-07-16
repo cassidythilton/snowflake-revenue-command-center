@@ -1,0 +1,27 @@
+{
+  "provider_key": "jira-oauth",
+  "provider_name": "Jira Cloud",
+  "transport_description": "com.domo.connector.jiraREST.cloud",
+  "transport_version": "5",
+  "auth_scheme": "oauth-metadata",
+  "account_id": 162,
+  "account_note": "domoinc-paul.mccusker@domo.com",
+  "cloud_id": "5a22c855-8a4b-4fb4-81b5-4706ccd039c8",
+  "target_database": "PTMCOCO",
+  "target_schema": "PUBLIC",
+  "report_options": ["query", "projects", "boards", "sprints", "worklogs"],
+  "configuration_template": [
+    {"name": "report", "prompt": "Report type (query, projects, boards, sprints, worklogs)", "default": "query", "type": "user_input"},
+    {"name": "jql", "prompt": "JQL query (e.g., assignee=currentUser(), project=MYPROJ)", "default": "", "type": "user_input"},
+    {"name": "reportType", "value": "standard", "type": "fixed"},
+    {"name": "sprintSelectionType", "value": "activeSprint", "type": "fixed"},
+    {"name": "sublistsToFlatten", "value": "", "type": "fixed"},
+    {"name": "flattenAll", "value": "false", "type": "fixed"},
+    {"name": "resetSchema", "value": "false", "type": "fixed"},
+    {"name": "updatemode.mode", "value": "REPLACE", "type": "fixed"},
+    {"name": "updatemode.upsertKeys", "value": "", "type": "fixed"},
+    {"name": "updatemode.mergeChoice", "value": "", "type": "fixed"}
+  ],
+  "tested": true,
+  "last_used": "2026-06-26"
+}

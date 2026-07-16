@@ -1,0 +1,11 @@
+{
+  "name": "domo-data-model-builder",
+  "version": "1.0.0",
+  "description": "Reads a Snowflake semantic view and creates a Domo Data Model with tables wired and relationships defined — one shot.",
+  "skills": [
+    {
+      "name": "domo-data-model-builder",
+      "path": "skills/domo-data-model-builder.md"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "provider_key": "google-sheets",
+  "provider_name": "Google Sheets",
+  "transport_description": "com.domo.connector.googlesheets",
+  "transport_version": "2",
+  "auth_scheme": "oauth",
+  "account_id": 161,
+  "account_note": "paul.mccusker2@gmail.com",
+  "cloud_id": "5a22c855-8a4b-4fb4-81b5-4706ccd039c8",
+  "target_database": "PTMCOCO",
+  "target_schema": "PUBLIC",
+  "configuration_template": [
+    {"name": "spreadsheetIDFileName", "prompt": "Google Sheets URL", "type": "user_input"},
+    {"name": "spreadsheetIDSheetName", "prompt": "Sheet tab name", "default": "Sheet1", "type": "user_input"},
+    {"name": "fileSelection", "value": "spreadsheetID", "type": "fixed"},
+    {"name": "orientation", "value": "COLUMN_HEADERS", "type": "fixed"},
+    {"name": "dateFormatSelector", "value": "mmddyy", "type": "fixed"},
+    {"name": "manuallyEnter", "value": "false", "type": "fixed"}
+  ],
+  "tested": true,
+  "last_used": "2026-06-26"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "domo-ingester",
+  "version": "1.0.0",
+  "description": "Universal data ingestion from any source into Snowflake via Domo connectors. Discovers connector types, caches configs as recipes, automates end-to-end pipelines.",
+  "skills": [
+    {
+      "name": "domo-ingester",
+      "path": "skills/domo-ingester.md"
+    }
+  ]
+}
