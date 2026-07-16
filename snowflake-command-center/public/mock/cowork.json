@@ -1,0 +1,51 @@
+{
+  "generatedAt": "2026-07-15T22:30:00.000Z",
+  "agent": "SNOWFLAKE_REVENUE_CC.CORE.REVENUE_CC_AGENT",
+  "experience": "Snowflake Intelligence / CoWork",
+  "openPath": "Snowsight → AI & ML → Agents → REVENUE_CC_AGENT (or direct URL: https://<account>.snowflakecomputing.com/#/agents/SNOWFLAKE_REVENUE_CC.CORE.REVENUE_CC_AGENT)",
+  "status": "Available",
+  "statusNote": "Snowflake Intelligence is GA. REVENUE_CC_AGENT is deployed on this account; users with REVENUE_CC_READER role can open it in the Intelligence UI. Not verified as live-launched to business users yet (requires org enablement of Intelligence seat).",
+  "scoping": "Reads honor Horizon policies (same governed semantic view + RAP_REGION/MASK_ARR). Row-access policies filter by session role region; dynamic masking hides ARR for non-finance roles.",
+  "sso": "Snowflake Intelligence inherits Snowsight SSO/MFA. External IdP federation (Okta, Azure AD) applies automatically. No additional auth configuration needed beyond the standard Snowflake login.",
+  "deepResearch": {
+    "description": "Deep Research decomposes complex questions into parallel sub-investigations across structured (Analyst) and unstructured (Search) sources, synthesizing a traced report in up to 10 minutes.",
+    "activation": "In Snowflake Intelligence chat, click + → Deep Research, then submit the question.",
+    "question": "Why did West Enterprise renewal risk rise and what should we do?",
+    "artifacts": [
+      {
+        "title": "West Enterprise Risk Driver Breakdown",
+        "source": "REVENUE_CC_ANALYST",
+        "citation": "SQL: SELECT top_risk_driver, COUNT(DISTINCT account_id) AS affected_accounts FROM FACT_RENEWAL_RISK WHERE region='West' AND segment='Enterprise' GROUP BY 1 ORDER BY 2 DESC"
+      },
+      {
+        "title": "INC-0001 Post-Incident Review: West Region Platform Reliability Degradation",
+        "source": "REVENUE_CC_SEARCH",
+        "citation": "DOC-001: 6h47m platform reliability incident on 2026-05-28 affecting 77% of West Enterprise portfolio"
+      },
+      {
+        "title": "Renewal Save Playbook Recommendations",
+        "source": "REVENUE_CC_SEARCH",
+        "citation": "DOC-040, DOC-045: Executive Escalation Protocol + Multi-Year Commitment Incentive for accounts within 30 days of renewal"
+      },
+      {
+        "title": "Revenue at Risk Quantification",
+        "source": "REVENUE_CC_ANALYST",
+        "citation": "SQL: SELECT SUM(revenue_at_risk) AS total_at_risk, AVG(renewal_risk_score) AS avg_score FROM FACT_RENEWAL_RISK WHERE region='West' AND segment='Enterprise' → $63.4M at risk, avg score 83.2"
+      }
+    ]
+  },
+  "skills": [
+    {
+      "name": "Renewal Risk Briefing",
+      "description": "Generates a structured executive briefing on renewal risk for a given region/segment, combining quantitative metrics with root-cause citations and prioritized save plays."
+    },
+    {
+      "name": "Account Deep Dive",
+      "description": "Produces a single-account dossier: ARR history, risk trajectory, support case timeline, and recommended next-best-action from the playbook corpus."
+    },
+    {
+      "name": "Forecast Variance Explainer",
+      "description": "Explains why actual revenue deviated from forecast for a given period, citing contributing accounts and external factors from unstructured sources."
+    }
+  ]
+}

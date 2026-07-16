@@ -1,0 +1,80 @@
+{
+  "generatedAt": "2026-07-15T22:30:00.000Z",
+  "source": "Snowflake docs research + announced MCP capability (Summit 2025); DDL not executed – feature in private preview",
+  "managed": {
+    "status": "Available (target-instance)",
+    "statusReason": "CREATE MCP SERVER DDL is not publicly documented or available on this account. Feature announced at Summit 2025, currently in private preview. DDL template captured for activation once enabled.",
+    "server": "REVENUE_CC_MCP",
+    "fqn": "SNOWFLAKE_REVENUE_CC.CORE.REVENUE_CC_MCP",
+    "endpoint": "https://<account_identifier>.snowflakecomputing.com/api/v2/mcp/servers/SNOWFLAKE_REVENUE_CC.CORE.REVENUE_CC_MCP",
+    "auth": "Programmatic Access Token (PAT)",
+    "tools": [
+      {
+        "name": "revenue_analyst",
+        "type": "cortex_analyst_text_to_sql",
+        "target": "SNOWFLAKE_REVENUE_CC.CORE.REVENUE_CC_ANALYST",
+        "description": "Converts natural-language revenue/risk questions into SQL against the Revenue Command Center semantic view."
+      },
+      {
+        "name": "revenue_search",
+        "type": "cortex_search",
+        "target": "SNOWFLAKE_REVENUE_CC.CORE.REVENUE_CC_SEARCH",
+        "description": "Searches unstructured revenue documents – incident postmortems, support notes, QBR summaries, renewal playbooks."
+      },
+      {
+        "name": "revenue_agent",
+        "type": "cortex_agent",
+        "target": "SNOWFLAKE_REVENUE_CC.CORE.REVENUE_CC_AGENT",
+        "description": "Full reasoning agent combining Analyst + Search for multi-step revenue-retention analysis."
+      },
+      {
+        "name": "revenue_sql",
+        "type": "sql",
+        "target": "SNOWFLAKE_REVENUE_CC.CORE.[DIM_ACCOUNT, FACT_MONTHLY_REVENUE, FACT_RENEWAL_RISK, FACT_USAGE_DAILY, FACT_SUPPORT_CASES, FACT_FORECAST]",
+        "description": "Read-only SQL execution scoped to the gold-layer facts and dimensions."
+      }
+    ],
+    "sampleCall": {
+      "executed": false,
+      "label": "contract captured, not executed",
+      "client": "MCP JSON-RPC over HTTPS (Claude Desktop, Cursor, custom)",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+          "name": "revenue_analyst",
+          "arguments": {
+            "question": "What is total revenue at risk this quarter by region?"
+          }
+        }
+      },
+      "response": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "Generated SQL and results for revenue at risk by region (shape only – not executed)"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "domoEssentials": {
+    "status": "Beta follow-on (gated)",
+    "tools": [
+      {
+        "name": "domo_embed_card",
+        "description": "Embeds a Domo card/dashboard visual into the MCP response for rich executive summaries."
+      },
+      {
+        "name": "domo_dataset_query",
+        "description": "Queries a Domo dataset via the MCP bridge for cross-platform metrics not yet in Snowflake."
+      }
+    ],
+    "note": "Domo MCP connector is a separate beta program (Domo Everywhere + MCP bridge). Requires Domo instance pairing and OAuth federation. Not part of the Snowflake-managed MCP server DDL."
+  }
+}
