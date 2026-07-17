@@ -68,6 +68,25 @@
 .dataset-card .alias .brand-mark { width: 15px; height: 15px; }
 .sf-object { color: var(--sf-blue-deep); font-family: var(--font-mono); font-size: 11px; }
 
+/* ---- Source deep-links (Snowsight + Domo), used across every tab ---- */
+.src-link { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 700; text-decoration: none; border: 1px solid var(--line-strong); border-radius: var(--r-pill); padding: 4px 11px; color: var(--n-700); background: var(--surface); transition: border-color .12s, color .12s; }
+.src-link:hover { border-color: var(--sf-blue); color: var(--sf-blue-deep); }
+.src-link.sf { color: var(--sf-blue-deep); border-color: var(--sf-blue); background: rgba(41,181,232,0.06); }
+.src-link.domo { color: var(--domo-blue-ink, #1c5fd6); border-color: #bcd0f5; background: rgba(41,101,214,0.05); }
+.src-link .src-arrow { font-size: 11px; opacity: .8; }
+
+/* ---- Governed Data Lineage (Forecast Home) ---- */
+.lineage-panel .head-mark { width: 17px; height: 17px; vertical-align: -3px; margin-right: 7px; }
+.lineage-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 4px; }
+@media (max-width: 1200px) { .lineage-grid { grid-template-columns: repeat(2, 1fr); } }
+.lineage-card { border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--n-050); padding: 13px 14px; display: flex; flex-direction: column; gap: 7px; }
+.lineage-card .lin-title { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: var(--ink); }
+.lineage-card .lin-title .brand-mark { width: 15px; height: 15px; }
+.lineage-card .lin-fqn { font-family: var(--font-mono); font-size: 10.5px; color: var(--sf-blue-deep); word-break: break-all; line-height: 1.4; }
+.lineage-card .lin-note { font-size: 11.5px; color: var(--muted); line-height: 1.45; flex: 1; }
+.lineage-card .lin-links { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
+.lineage-card .lin-links .src-link { justify-content: center; }
+
 /* ============================================================================
    Cortex Analyst surface (Sprint 3)
    ============================================================================ */

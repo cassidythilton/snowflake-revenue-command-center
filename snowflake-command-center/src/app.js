@@ -72,6 +72,20 @@
   // model, so the 14-relationship semantic view is represented as three
   // companion models (account / tenant / product hubs).
   var DOMO_INSTANCE = "https://snowflake-demo.domo.com";
+  // Snowsight org/account for deep links into governed Snowflake objects
+  // (org DOMOINC / account DOMOPARTNER on domopartner.us-east-1).
+  var SNOWSIGHT_BASE = "https://app.snowflake.com/domoinc/domopartner";
+
+  // The 5 governed gold views federated into Domo via Cloud Amplifier (the
+  // reference app's "Governed Data Lineage"). dataSetId => manifest datasetsMapping.
+  var LINEAGE_VIEWS = [
+    { title: "Executive Revenue Health", view: "GOLD_EXECUTIVE_REVENUE_HEALTH", dataSetId: "3cd5a0ac-e059-4dff-bbc2-ad639468dcab", note: "Net revenue, forecast, protected + at-risk rollups." },
+    { title: "Customer Renewal Risk", view: "GOLD_CUSTOMER_RENEWAL_RISK", dataSetId: "9bba0fc2-9ec9-4ee1-8b1e-491cb8ddef7e", note: "Per-account renewal-risk scores and drivers." },
+    { title: "Incident Revenue Impact", view: "GOLD_INCIDENT_REVENUE_IMPACT", dataSetId: "eadda0cf-8bd1-4ad0-8f9c-c72cc36b7380", note: "Reliability incidents mapped to revenue at risk." },
+    { title: "Agent Action Queue", view: "GOLD_AGENT_ACTION_QUEUE", dataSetId: "7715806a-4c6d-42a1-808c-046643ff1435", note: "Cortex Agent save plays + approval status." },
+    { title: "Portal User Scope", view: "GOLD_PORTAL_USER_SCOPE", dataSetId: "f00f292a-0fc5-41d7-a80d-996f58934859", note: "Row-scope + entitlement for governed delivery." }
+  ];
+
   var DOMO_MODELS = [
     { name: "Account Model", id: "c14ef7a7-edfb-46ca-8498-cb42b5809902", hub: "DIM_ACCOUNT", join: "ACCOUNT_ID", rels: 4,
       facts: ["FACT_REVENUE_DAILY", "FACT_RENEWAL_RISK", "FACT_SUPPORT_CASES", "FACT_AGENT_ACTIONS"],
@@ -105,6 +119,25 @@
   };
 
   function isLive() { return typeof domo !== "undefined" && domo && typeof domo.post === "function"; }
+
+  /* ---- Source deep-links (both planes): Snowsight + Domo. Everywhere a
+   * governed object is named it should link to its source (reference parity). */
+  function snowsightObjHref(objType, name, db, schema) {
+    db = db || (state.config && state.config.database) || "SNOWFLAKE_REVENUE_CC";
+    schema = schema || (state.config && state.config.schema) || "CORE";
+    var base = SNOWSIGHT_BASE + "/#/data/databases/" + encodeURIComponent(db) + "/schemas/" + encodeURIComponent(schema);
+    if (!name) return base;
+    var seg = objType === "table" ? "/table/" : "/view/"; // views + semantic views both browse as /view/
+    return base + seg + encodeURIComponent(name);
+  }
+  function snowsightAgentHref() { return SNOWSIGHT_BASE + "/#/studio/agents"; }
+  function domoDatasetHref(id) { return DOMO_INSTANCE + "/datasources/" + id + "/details/overview"; }
+  function domoAiReadinessHref(id) { return DOMO_INSTANCE + "/datasources/" + id + "/details/ai-readiness"; }
+  function workflowHref(modelId, version) { return DOMO_INSTANCE + "/workflows/models/" + modelId + "/" + (version || "1.0.0"); }
+  // Small "Open in Snowflake / Open Domo dataset" link element with an out arrow.
+  function srcLink(label, href, cls) {
+    return h("a", { class: "src-link" + (cls ? " " + cls : ""), href: href, target: "_blank", rel: "noopener" }, [label, h("span", { class: "src-arrow" }, ["\u2197"])]);
+  }
 
   /* ------------------------------ helpers -------------------------------- */
   function el(id) { return document.getElementById(id); }
@@ -3426,22 +3459,31 @@
     ]);
   }
 
+  // Governed Data Lineage (reference parity): 5 gold views federated into Domo
+  // via Cloud Amplifier, each linking to BOTH the Snowflake view and the Domo dataset.
   function sourcesPanel() {
-    var grid = h("div", { class: "dataset-grid" }, [
-      h("div", { class: "dataset-card" }, [
-        h("div", { class: "alias" }, [h("img", { class: "brand-mark", src: "./public/brand/snowflake-cortex.svg", alt: "" }), " REVENUE_CC_ANALYST"]),
-        h("div", { class: "object sf-object" }, ["semantic view \u00b7 governed metric layer"]),
-        h("div", { class: "dataset-links" }, [h("button", {}, ["Metrics"]), h("button", {}, ["Synonyms"])])
+    var db = (state.config && state.config.database) || "SNOWFLAKE_REVENUE_CC";
+    var schema = (state.config && state.config.schema) || "CORE";
+    var grid = h("div", { class: "lineage-grid" });
+    LINEAGE_VIEWS.forEach(function (v) {
+      grid.appendChild(h("div", { class: "lineage-card" }, [
+        h("div", { class: "lin-title" }, [h("img", { class: "brand-mark", src: "./public/brand/snowflake-mark.svg", alt: "" }), v.title]),
+        h("div", { class: "lin-fqn" }, [db + "." + schema + "." + v.view]),
+        h("div", { class: "lin-note" }, [v.note]),
+        h("div", { class: "lin-links" }, [
+          srcLink("Open Snowflake view", snowsightObjHref("view", v.view, db, schema), "sf"),
+          srcLink("Open Domo dataset", domoDatasetHref(v.dataSetId), "domo")
+        ])
+      ]));
+    });
+    return h("article", { class: "panel col-12 lineage-panel" }, [
+      h("div", { class: "panel-head" }, [
+        h("div", {}, [
+          h("h2", {}, [h("img", { class: "head-mark", src: "./public/brand/domo-cloud-amplifier.svg", alt: "" }), "Governed Data Lineage"]),
+          h("p", {}, ["Five Snowflake gold views, live-federated into Domo via the Snowflake Cloud Amplifier integration \u2014 no copies."])
+        ]),
+        h("span", { class: "panel-tag" }, ["Cloud Amplifier \u00b7 Horizon-governed"])
       ]),
-      h("div", { class: "dataset-card" }, [
-        h("div", { class: "alias" }, [h("img", { class: "brand-mark", src: "./public/brand/domo-cloud-amplifier.svg", alt: "" }), " gold views \u00d7 5"]),
-        h("div", { class: "object" }, ["SNOWFLAKE_REVENUE_CC.CORE"]),
-        h("div", { class: "dataset-links" }, [h("button", {}, ["Lineage"]), h("button", {}, ["Schema"])])
-      ])
-    ]);
-    return h("article", { class: "panel col-4" }, [
-      h("div", { class: "panel-head" }, [h("div", {}, [h("h2", {}, ["Governed Sources"]), h("p", {}, ["Powered live by Snowflake"])]),
-        h("span", { class: "pill-btn inspect" }, ["Horizon"])]),
       grid
     ]);
   }
