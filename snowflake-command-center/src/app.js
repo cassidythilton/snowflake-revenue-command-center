@@ -1872,7 +1872,8 @@
 
   // Left column: reference "Ad Hoc Inference" — account selector + resolved
   // feature fields (editable for what-if) + Run prediction + inference log.
-  function mlAdHocPanel(res) {
+  function mlAdHocPanel(res, opts) {
+    opts = opts || {};
     var feats = res.features || {};
     var acct = h("input", { class: "mlf-in acct", type: "text", value: res.accountId || "", placeholder: "ACC-00008" });
     var runBtn = h("button", { class: "pill-btn go solid" }, [state.ml.loading ? "Scoring\u2026" : "Run prediction"]);
@@ -1890,12 +1891,39 @@
     fields.forEach(function (row) {
       grid.appendChild(h("label", { class: "mlf-field" }, [h("span", { class: "mlf-lab" }, [row[0]]), h("input", { class: "mlf-in", type: "text", value: String(row[1]), readonly: "true" })]));
     });
-    return h("article", { class: "panel col-5 ml-infer" }, [
+    var children = [
       h("div", { class: "panel-head" }, [h("div", {}, [h("h2", {}, ["Ad Hoc Inference"]), h("p", {}, ["Score an account against the model \u2014 features resolved live from the warehouse."])]), h("span", { class: "panel-tag" }, ["PREDICT_RENEWAL_RISK"])]),
       h("div", { class: "ml-acct-row" }, [acct, runBtn]),
-      grid,
-      mlInferenceLog(res)
+      grid
+    ];
+    if (opts.showLog !== false) children.push(mlInferenceLog(res));
+    return h("article", { class: "panel col-5 ml-infer" }, children);
+  }
+
+  // Empty / loading Prediction panel (reference parity) — the tab lands with the
+  // full layout and a "run a prediction" prompt instead of a bare spinner.
+  function mlPredictionEmpty() {
+    var loading = state.ml.loading;
+    var head = h("div", { class: "panel-head" }, [
+      h("div", {}, [h("h2", {}, ["Prediction"]), h("p", {}, ["Native in-warehouse inference \u00b7 Model Registry \u00b7 Horizon-governed"])]),
+      h("span", { class: "ml-serve seed" }, [loading ? "scoring\u2026" : "ready"])
     ]);
+    var gaugeIco = "<svg viewBox='0 0 120 68' fill='none'><path d='M14 58a46 46 0 0 1 92 0' stroke='#dce4ea' stroke-width='11' stroke-linecap='round'/><path d='M14 58a46 46 0 0 1 20-36' stroke='#b1e5f7' stroke-width='11' stroke-linecap='round'/></svg>";
+    var body = h("div", { class: "ml-pred-empty" }, [
+      loading
+        ? h("span", { class: "spinner lg" })
+        : h("span", { class: "ml-pred-empty-gauge", html: gaugeIco }),
+      h("h3", {}, [loading ? "Scoring the account\u2026" : "Run a prediction"]),
+      h("p", {}, [loading
+        ? "Building the feature vector from the governed FACT_* tables and calling PREDICT_RENEWAL_RISK in-warehouse \u2014 no data leaves Snowflake."
+        : "Enter an account and run the model to see its renewal-risk probability, top drivers, and the recommended save play."])
+    ]);
+    if (!loading) {
+      var runBtn = h("button", { class: "pill-btn go solid" }, ["Run prediction"]);
+      runBtn.addEventListener("click", function () { var el2 = document.querySelector(".mlf-in.acct"); runScore(el2 ? el2.value : (state.ml.accountId || "")); });
+      body.appendChild(runBtn);
+    }
+    return h("article", { class: "panel col-7 ml-pred" }, [head, body]);
   }
 
   function mlResultPanels(res) {
@@ -2014,30 +2042,37 @@
     var banner = connBanner(); if (banner) frag.appendChild(banner);
 
     var seed = state.ml.seed;
-    if (!seed && !state.ml.loading) { loadMLSeed().then(function () { if (state.surface === "ml") { maybeAutoScore(); renderView(); } }); }
+    if (!seed && !state.ml.loading) { loadMLSeed().then(function () { if (state.surface === "ml") renderView(); }); }
 
     // Header (always visible) — model registry facts + model/endpoint pickers.
     frag.appendChild(h("section", { class: "grid" }, [mlStatusHeader(state.ml.result || { model: (seed && seed.model) || {} })]));
 
-    // Land on a scored account (reference parity) rather than an empty state.
-    maybeAutoScore();
-
-    if (state.ml.loading && !state.ml.result) {
-      frag.appendChild(h("div", { class: "analyst-loading" }, [h("span", { class: "spinner" }), "Scoring the account with the native Snowflake ML model\u2026"]));
-    } else if (state.ml.error) {
-      frag.appendChild(h("div", { class: "conn-banner" }, [h("div", {}, [h("span", { class: "cb-title" }, ["Score error \u2014 "]), state.ml.error])]));
-    } else if (state.ml.result) {
+    if (state.ml.result) {
+      // Full scored layout (Ad Hoc + Prediction + payload).
       frag.appendChild(h("section", { class: "grid" }, [mlResultPanels(state.ml.result)]));
+    } else if (seed && (seed.accounts || []).length) {
+      // Reference parity: land on the full layout with a pre-filled Ad Hoc form
+      // and a "run a prediction" Prediction prompt (not a bare spinner).
+      var base = mlBaseFromSeed(seed);
+      frag.appendChild(h("section", { class: "grid" }, [mlAdHocPanel(base, { showLog: false }), mlPredictionEmpty()]));
+    } else {
+      frag.appendChild(h("div", { class: "analyst-loading" }, [h("span", { class: "spinner" }), "Loading the Model Registry\u2026"]));
+    }
+    if (state.ml.error) {
+      frag.appendChild(h("div", { class: "conn-banner" }, [h("div", {}, [h("span", { class: "cb-title" }, ["Score error \u2014 "]), state.ml.error])]));
     }
     return frag;
   }
 
-  // Default a scored account once the seed is available so the tab lands populated.
-  function maybeAutoScore() {
-    if (state.ml.autoScored || state.ml.result || state.ml.loading || state.ml.error) return;
-    var seed = state.ml.seed; if (!seed || !(seed.accounts || []).length) return;
-    state.ml.autoScored = true;
-    runScore(seed.accounts[0].accountId);
+  // A result-shaped object (features + context, no prediction) for the default
+  // Ad Hoc form, seeded from the first sample account.
+  function mlBaseFromSeed(seed) {
+    var acct = (seed.accounts || [])[0] || {};
+    return {
+      base: true, accountId: state.ml.accountId || acct.accountId || "", accountName: acct.accountName || "",
+      region: acct.region, segment: acct.segment, industry: acct.industry || "",
+      arr: acct.arr, features: acct.features || {}, model: seed.model || {}
+    };
   }
 
   /* --------------------------- Snowflake Ops ----------------------------- */

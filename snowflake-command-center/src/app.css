@@ -633,6 +633,15 @@
 .aw-recent-empty code { font-family: var(--font-mono); font-size: 11px; color: var(--sf-blue-deep); }
 @media (max-width: 720px) { .aw-vq-grid { grid-template-columns: 1fr; } .aw-title { font-size: 23px; } }
 .spinner.sm { width: 11px; height: 11px; border-width: 2px; }
+.spinner.lg { width: 34px; height: 34px; border-width: 3px; }
+
+/* Snowflake ML — empty / loading Prediction prompt (reference parity) */
+.ml-pred-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 10px; padding: 34px 24px 40px; min-height: 260px; }
+.ml-pred-empty-gauge { width: 118px; opacity: .9; }
+.ml-pred-empty-gauge svg { width: 118px; height: auto; display: block; }
+.ml-pred-empty h3 { margin: 6px 0 0; font-size: 15px; font-weight: 800; color: var(--text); letter-spacing: -.01em; }
+.ml-pred-empty p { margin: 0; max-width: 380px; font-size: 12.5px; line-height: 1.55; color: var(--muted); }
+.ml-pred-empty .pill-btn { margin-top: 6px; }
 
 /* Slim connection bar (governance provenance strip + inline controls) */
 .conn-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px 8px 16px; border-bottom: 1px solid var(--line); background: var(--n-050); }
