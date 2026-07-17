@@ -97,7 +97,8 @@
     agent: { question: "", loading: false, error: null, result: null, queue: [], seed: null, inspector: false },
     ml: { accountId: "", loading: false, error: null, result: null, inspector: false, seed: null, codeTab: "curl", fbNote: "" },
     ops: { loading: false, loaded: false, error: null, scenarios: [], feedback: [], note: null, tab: "scenarios", selected: null },
-    approvals: { loading: false, loaded: false, error: null, live: false, seed: null, pending: [], writeback: [], history: [], protected: null, byId: {}, active: null, note: null, busy: null },
+    approvals: { loading: false, loaded: false, error: null, live: false, seed: null, pending: [], writeback: [], history: [], protected: null, byId: {}, active: null, note: null, busy: null,
+      tasks: [], tasksLoaded: false, tasksLive: false, busyTask: null, starting: null },
     governance: { loading: false, loaded: false, error: null, live: false, seed: null, parity: null, masking: null, rlSelected: null, synced: {} },
     cowork: { loading: false, loaded: false, error: null, live: false, mcp: null, cowork: null },
     how: { loading: false, loaded: false, error: null, coco: null }
@@ -2131,6 +2132,118 @@
     });
   }
 
+  var APPROVAL_QUEUE_ID = "6383ccfa-54aa-4c23-b855-9f3fe619cad4";
+  function queueConsoleHref(status) {
+    var s = status ? String(status).toUpperCase() : "OPEN";
+    return DOMO_INSTANCE + "/queues/tasks?status=" + encodeURIComponent(s) + "&queueId=" + APPROVAL_QUEUE_ID;
+  }
+  function fmtTaskDate(iso) {
+    if (!iso) return "\u2014";
+    var d = new Date(iso); if (isNaN(d.getTime())) return "\u2014";
+    return d.toLocaleString("en-US", { month: "numeric", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" });
+  }
+
+  // Native Domo Task Center queue: the approval items shown in-app.
+  function loadApprovalTasks() {
+    if (!isLive()) { state.approvals.tasksLoaded = true; return; }
+    domo.post(CE + "listApprovalTasks", { limit: 50 }).then(function (resp) {
+      var d = unwrap(resp);
+      if (d && d.status === "SUCCEEDED") { state.approvals.tasksLive = true; state.approvals.tasks = d.tasks || []; }
+      else { state.approvals.tasksLive = false; }
+      state.approvals.tasksLoaded = true; renderView();
+    }).catch(function (err) {
+      console.warn("[app] listApprovalTasks failed:", err);
+      state.approvals.tasksLive = false; state.approvals.tasksLoaded = true; renderView();
+    });
+  }
+
+  // Approve / Reject a native queue task -> completes the Domo task, resumes the
+  // workflow, and writes status back to Snowflake.
+  function completeTask(taskId, decision, version) {
+    if (!isLive()) { state.approvals.note = "Sample mode \u2014 connect in Domo to complete native queue tasks."; renderView(); return; }
+    state.approvals.busyTask = taskId + ":" + decision; renderView();
+    domo.post(CE + "completeApprovalTask", { taskId: taskId, decision: decision, version: version || "1" }).then(function (resp) {
+      var d = unwrap(resp);
+      state.approvals.busyTask = null;
+      if (!d || d.status !== "SUCCEEDED") { state.approvals.note = "Task " + decision.toLowerCase() + " failed: " + ((d && d.error) || "unknown"); renderView(); return; }
+      state.approvals.note = "Task " + decision.toLowerCase() + " \u2014 workflow resumed; status writing back to Snowflake under REVENUE_CC_WRITER.";
+      loadApprovalTasks(); loadApprovals();
+    }).catch(function (err) { state.approvals.busyTask = null; state.approvals.note = "Complete failed: " + (err && err.message ? err.message : err); renderView(); });
+  }
+
+  // Start the governed Domo Workflow for a Cortex Agent save play -> creates a
+  // human approval task in the native queue.
+  function startWorkflow(a) {
+    if (!isLive()) { state.approvals.note = "Sample mode \u2014 connect in Domo to start the governed workflow."; renderView(); return; }
+    state.approvals.starting = a.actionId; renderView();
+    var payload = { actionId: a.actionId, account: a.accountName || a.accountId, recommendation: a.recommendation || "",
+      persona: state.persona, protectedRevenue: Number(a.expectedRevenueProtected) || 0, sourceQuestion: a.sourceQuestion || "" };
+    domo.post(CE + "startRetentionWorkflow", payload).then(function (resp) {
+      var d = unwrap(resp);
+      state.approvals.starting = null;
+      if (!d || d.status !== "SUCCEEDED") { state.approvals.note = "Could not start workflow: " + ((d && d.error) || "unknown"); renderView(); return; }
+      state.approvals.active = a.actionId;
+      state.approvals.note = "Governed workflow started for " + (a.accountName || a.accountId) + " \u2014 the Cortex Agent is triaging; a human task will land in the queue above shortly.";
+      renderView();
+      setTimeout(function () { loadApprovalTasks(); loadApprovals(); }, 2800);
+    }).catch(function (err) { state.approvals.starting = null; state.approvals.note = "Start failed: " + (err && err.message ? err.message : err); renderView(); });
+  }
+
+  function taskRow(t) {
+    var open = String(t.status || "").toUpperCase() === "OPEN";
+    var link = h("a", { class: "task-link", href: queueConsoleHref(t.status), target: "_blank", rel: "noopener" }, [t.title || "Approve renewal-risk retention"]);
+    var idSpan = h("span", { class: "task-id" }, [String(t.id || "").slice(0, 13)]);
+    var busyA = state.approvals.busyTask === t.id + ":Approved";
+    var busyR = state.approvals.busyTask === t.id + ":Rejected";
+    var action;
+    if (open) {
+      var ap = h("button", { class: "pill-btn go solid xs", disabled: busyA ? "true" : null }, [busyA ? "\u2026" : "Approve"]);
+      ap.addEventListener("click", function () { completeTask(t.id, "Approved", t.version); });
+      var rj = h("button", { class: "pill-btn ghost xs", disabled: busyR ? "true" : null }, [busyR ? "\u2026" : "Reject"]);
+      rj.addEventListener("click", function () { completeTask(t.id, "Rejected", t.version); });
+      action = h("div", { class: "task-actions" }, [ap, rj]);
+    } else {
+      action = h("span", { class: "task-done" }, ["\u2713 " + (t.status ? String(t.status).toLowerCase() : "completed")]);
+    }
+    return h("tr", {}, [
+      h("td", {}, [h("div", { class: "task-cell" }, [link, idSpan])]),
+      h("td", {}, [h("span", { class: "status-pill " + (open ? "warn" : "ok") }, [h("span", { class: "sp-dot" }), t.status || "\u2014"])]),
+      h("td", {}, [fmtTaskDate(t.createdOn)]),
+      h("td", {}, [fmtTaskDate(t.completedOn)]),
+      h("td", {}, [action])
+    ]);
+  }
+
+  function actionCenter() {
+    var tasks = state.approvals.tasks || [];
+    var table = h("table", { class: "result-table task-table" });
+    var thead = h("thead"), htr = h("tr");
+    ["Task", "Status", "Created", "Completed", "Action"].forEach(function (c) { htr.appendChild(h("th", {}, [c])); });
+    thead.appendChild(htr); table.appendChild(thead);
+    var tb = h("tbody");
+    if (!tasks.length) {
+      tb.appendChild(h("tr", {}, [h("td", { colspan: "5", class: "task-empty" }, [
+        state.approvals.tasksLive
+          ? "No tasks in the queue yet. Send a Cortex Agent save play to the queue below \u2014 it routes through the governed workflow and lands here for approval."
+          : "Connect in Domo to load the native approval queue."
+      ])]));
+    } else {
+      tasks.forEach(function (t) { tb.appendChild(taskRow(t)); });
+    }
+    table.appendChild(tb);
+    var openCount = tasks.filter(function (t) { return String(t.status || "").toUpperCase() === "OPEN"; }).length;
+    return h("section", { class: "rec-section" }, [
+      h("div", { class: "rec-head" }, [
+        h("div", {}, [h("h2", {}, ["Approvals \u00b7 Action Center"]),
+          h("p", {}, ["Human-in-the-loop approvals for the governed Renewal Risk Retention workflow \u2014 fed by the native Domo ",
+            h("a", { class: "inline-link", href: queueConsoleHref("OPEN"), target: "_blank", rel: "noopener" }, ["Task Center queue"]),
+            ". Approve or reject here \u2014 the decision completes the Domo task, resumes the workflow, and writes status back to Snowflake."])]),
+        h("span", { class: "panel-tag" }, [num(openCount) + " open \u00b7 " + num(tasks.length) + " total"])
+      ]),
+      h("div", { class: "table-wrap" }, [table])
+    ]);
+  }
+
   // kind: 'approve' | 'execute' | 'reject'
   function actOn(actionId, kind) {
     var info = state.approvals.byId[actionId] || {};
@@ -2218,13 +2331,16 @@
   }
 
   function pendingCard(a) {
-    var wb = wbStatusFor(a.actionId);
-    var busyApprove = state.approvals.busy === a.actionId + ":approve";
-    var busyReject = state.approvals.busy === a.actionId + ":reject";
-    var approveBtn = h("button", { class: "pill-btn go solid", disabled: busyApprove ? "true" : null }, [busyApprove ? "Approving\u2026" : "Approve"]);
-    approveBtn.addEventListener("click", function () { actOn(a.actionId, "approve"); });
-    var rejectBtn = h("button", { class: "pill-btn ghost", disabled: busyReject ? "true" : null }, ["Reject"]);
-    rejectBtn.addEventListener("click", function () { actOn(a.actionId, "reject"); });
+    // Is there already a live queue task for this action? (matched loosely by account name in the title/attributes)
+    var starting = state.approvals.starting === a.actionId;
+    var acct = (a.accountName || a.accountId || "").toLowerCase();
+    var queued = (state.approvals.tasks || []).some(function (t) {
+      var hay = ((t.title || "") + " " + (t.attributes || []).join(" ")).toLowerCase();
+      return acct && hay.indexOf(acct) !== -1;
+    });
+    var startBtn = h("button", { class: "pill-btn go solid", disabled: (starting || queued) ? "true" : null },
+      [starting ? "Starting workflow\u2026" : queued ? "In queue \u2713" : "Send to approval queue"]);
+    if (!starting && !queued) startBtn.addEventListener("click", function () { startWorkflow(a); });
     var hot = Number(a.riskScore) >= 85;
     return h("article", { class: "rec-card" }, [
       h("div", { class: "rec-top" }, [
@@ -2236,7 +2352,7 @@
       h("div", { class: "rec-foot" }, [
         h("span", { class: "rec-risk" }, [h("span", { class: "rr-val" }, [money(a.expectedRevenueProtected)]), " protectable"])
       ]),
-      h("div", { class: "rec-actions" }, [approveBtn, rejectBtn])
+      h("div", { class: "rec-actions" }, [startBtn])
     ]);
   }
 
@@ -2273,36 +2389,29 @@
     if (!state.approvals.loaded && !state.approvals.loading) { loadApprovals(); }
     if (state.approvals.loading && !state.approvals.loaded) { frag.appendChild(h("div", { class: "analyst-loading" }, [h("span", { class: "spinner" }), "Loading the approval queue + protected-revenue rollup\u2026"])); return frag; }
 
+    if (!state.approvals.tasksLoaded && isLive()) { loadApprovalTasks(); }
+
     if (state.approvals.note) frag.appendChild(h("div", { class: "ops-note" }, [state.approvals.note]));
 
     frag.appendChild(protectedHero());
 
-    // Approved-awaiting-execution lane
-    var inflight = (state.approvals.writeback || []).filter(function (r) { return r.approvalStatus === "Approved" && r.executionStatus !== "Executed"; });
-    if (inflight.length) {
-      var ig = h("div", { class: "rec-grid" });
-      inflight.forEach(function (r) { ig.appendChild(inFlightCard(r)); });
-      frag.appendChild(h("section", { class: "rec-section" }, [
-        h("div", { class: "rec-head" }, [h("div", {}, [h("h2", {}, ["Approved \u2014 awaiting writeback"]), h("p", {}, ["Execution runs under ", h("code", {}, ["REVENUE_CC_WRITER"]), " \u2014 a distinct privilege from the read that built the queue"])]),
-          h("span", { class: "panel-tag" }, [num(inflight.length) + " ready"])]),
-        ig
-      ]));
-    }
-
-    // Pending queue
-    var doneIds = {}; (state.approvals.writeback || []).forEach(function (r) { doneIds[r.actionId] = true; });
-    var pending = (state.approvals.pending || []).filter(function (a) { return !doneIds[a.actionId]; });
-    var pg = h("div", { class: "rec-grid" });
-    if (!pending.length) pg.appendChild(h("p", { class: "analyst-note" }, ["No pending actions in scope. Switch persona or approve/execute above."]));
-    pending.forEach(function (a) { pg.appendChild(pendingCard(a)); });
-    frag.appendChild(h("section", { class: "rec-section" }, [
-      h("div", { class: "rec-head" }, [h("div", {}, [h("h2", {}, ["Pending approval"]), h("p", {}, ["Cortex Agent save plays awaiting a human decision \u00b7 read as ", h("code", {}, ["REVENUE_CC_READER"])])]),
-        h("span", { class: "panel-tag" }, [num(pending.length) + " pending"])]),
-      pg
-    ]));
+    // Primary: native Domo Task Center queue (the approval items).
+    frag.appendChild(actionCenter());
 
     // Action journey (reflects the active action's real state)
     frag.appendChild(h("section", { class: "grid" }, [actionJourney()]));
+
+    // Cortex Agent save plays -> start a governed approval (creates a native task).
+    var doneIds = {}; (state.approvals.writeback || []).forEach(function (r) { doneIds[r.actionId] = true; });
+    var pending = (state.approvals.pending || []).filter(function (a) { return !doneIds[a.actionId]; });
+    var pg = h("div", { class: "rec-grid" });
+    if (!pending.length) pg.appendChild(h("p", { class: "analyst-note" }, ["No open save plays in scope. Switch persona, or approve tasks above."]));
+    pending.forEach(function (a) { pg.appendChild(pendingCard(a)); });
+    frag.appendChild(h("section", { class: "rec-section" }, [
+      h("div", { class: "rec-head" }, [h("div", {}, [h("h2", {}, ["Start a governed approval"]), h("p", {}, ["Cortex Agent save plays (read as ", h("code", {}, ["REVENUE_CC_READER"]), ") \u2014 send one into the Domo Workflow: the AI-agent tile triages via Cortex, then a human task lands in the queue above"])]),
+        h("span", { class: "panel-tag" }, [num(pending.length) + " plays"])]),
+      pg
+    ]));
 
     // Completed lane
     var sessionExecuted = (state.approvals.writeback || []).filter(function (r) { return r.executionStatus === "Executed"; });

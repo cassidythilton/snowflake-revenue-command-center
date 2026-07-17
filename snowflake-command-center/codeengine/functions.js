@@ -941,6 +941,125 @@ function alterSemanticView(ddl) {
     .catch(function (err) { return { response: { status: "FAILED", executed: false, error: detail(err), ddl: stmt } }; });
 }
 
+/* --------- Native Domo Task Center + agentic Workflow bridge (Approvals) --------- */
+/* Full-parity agentic approval loop (mirrors the Databricks Pattern 4 reference,
+ * Snowflake-native):
+ *   startRetentionWorkflow -> live Domo Workflow. Inside the workflow a Domo AI
+ *   agent tile calls askRetentionAgent (-> the Cortex Agent, REVENUE_CC_AGENT:
+ *   the Snowflake agentic process) to reason a retention play, then a human
+ *   userTask lands in the native Task Center Queue. Approve/Reject completes the
+ *   task, the workflow gateway routes on the decision, and a service task calls
+ *   writeActionStatus to write the outcome back into Snowflake.
+ * All Domo Product API calls use the Code Engine SESSION IDENTITY via
+ * codeengine.sendRequest (the same tokenless pattern as BYOS) — no developer
+ * token is minted, stored, or injected. */
+var APPROVAL_QUEUE_ID = "6383ccfa-54aa-4c23-b855-9f3fe619cad4";
+var WORKFLOW_MODEL_NAME = "Snowflake Revenue CC - Renewal Risk Retention";
+var WORKFLOW_START_MESSAGE = "Start " + WORKFLOW_MODEL_NAME; // must equal the rootNode start title
+var APPROVAL_ASSIGNEE = "1614187674";
+
+function domoGet(path) { return Promise.resolve(codeengine.sendRequest("get", path)); }
+function domoPost(path, body) { return Promise.resolve(codeengine.sendRequest("post", path, body === undefined ? {} : body)); }
+
+/* The Snowflake agentic process the Domo workflow (and the app's inspector)
+ * invoke as a tool: the Cortex Agent reasons a retention recommendation. */
+function askRetentionAgent(prompt) {
+  var p = String(prompt || "").trim();
+  if (!p) return Promise.resolve({ response: { status: "FAILED", error: "Empty prompt." } });
+  return askCortexAgent(p, "Executive Sponsor").then(function (wrapped) {
+    var d = (wrapped && wrapped.response) || {};
+    return { response: {
+      status: d.status || "SUCCEEDED",
+      recommendation: d.answer || "",
+      agent: d.agent || (DATABASE + "." + SCHEMA + "." + AGENT_NAME),
+      source: "cortex_agent",
+      elapsedMs: d.elapsedMs || null,
+      requestId: d.requestId || null,
+      error: d.error || null
+    } };
+  }).catch(function (err) { return { response: { status: "FAILED", error: detail(err) } }; });
+}
+
+/* Resolve the workflow model id by name (avoids hardcoding an id that differs
+ * per environment / re-provision). */
+function resolveWorkflowModelId() {
+  return domoGet("/api/workflow/v2/models?limit=200").then(function (models) {
+    var list = Array.isArray(models) ? models : (models && models.models ? models.models : []);
+    for (var i = 0; i < list.length; i++) {
+      var m = list[i]; var nm = m && (m.name || m.modelName || m.title);
+      if (nm === WORKFLOW_MODEL_NAME) return m.id;
+    }
+    return null;
+  });
+}
+
+/* Start the governed Domo Workflow instance for one approval, and seed a Pending
+ * writeback row so the protected-revenue rollup reflects the in-flight action. */
+function startRetentionWorkflow(actionId, account, recommendation, persona, protectedRevenue, sourceQuestion) {
+  var id = String(actionId || "").trim();
+  if (!id) return Promise.resolve({ response: { status: "FAILED", error: "Missing actionId." } });
+  return resolveWorkflowModelId().then(function (modelId) {
+    if (!modelId) return { response: { status: "FAILED", error: "Workflow model '" + WORKFLOW_MODEL_NAME + "' not found or not deployed." } };
+    var startBody = {
+      messageName: WORKFLOW_START_MESSAGE,
+      modelId: modelId,
+      data: {
+        actionId: id,
+        account: account || "",
+        recommendation: recommendation || "",
+        persona: persona || "",
+        protectedRevenue: Number(protectedRevenue) || 0,
+        sourceQuestion: sourceQuestion || ""
+      }
+    };
+    return domoPost("/api/workflow/v1/instances/message", startBody).then(function (instance) {
+      var instanceId = (instance && (instance.id || instance.instanceId)) || null;
+      return writeActionStatus(id, "", account || "", "", recommendation || "", "Pending", persona || "Domo App", "Pending", null)
+        .then(function () {
+          return { response: { status: "SUCCEEDED", actionId: id, instanceId: instanceId, modelId: modelId, workflow: WORKFLOW_MODEL_NAME } };
+        });
+    });
+  }).catch(function (err) { return { response: { status: "FAILED", error: detail(err), actionId: id } }; });
+}
+
+/* List the native Task Center queue tasks (the approval items shown in-app). */
+function listApprovalTasks(limit) {
+  return domoGet("/api/queues/v1/" + APPROVAL_QUEUE_ID + "/tasks").then(function (data) {
+    var rows = Array.isArray(data) ? data : (data && data.tasks ? data.tasks : []);
+    var tasks = rows.map(function (t) {
+      var attrs = t.attributes || [];
+      var src = t.sourceInfo || {};
+      return {
+        id: t.id,
+        title: (Array.isArray(attrs) && attrs.length && typeof attrs[0] === "string") ? attrs[0] : "Approve renewal-risk retention",
+        status: t.status,
+        version: t.version,
+        assignedTo: t.assignedTo,
+        createdOn: t.createdOn,
+        completedOn: t.completedOn,
+        completedBy: t.completedBy,
+        instanceId: src.instanceId || null,
+        attributes: attrs
+      };
+    });
+    var n = Number(limit); if (n && n > 0) tasks = tasks.slice(0, n);
+    return { response: { status: "SUCCEEDED", tasks: tasks, queueId: APPROVAL_QUEUE_ID } };
+  }).catch(function (err) { return { response: { status: "FAILED", error: detail(err), tasks: [] } }; });
+}
+
+/* Complete a queue task (Approve/Reject). The Decision form output drives the
+ * workflow gateway, which resumes the workflow and writes back to Snowflake. */
+function completeApprovalTask(taskId, decision, version) {
+  var tid = String(taskId || "").trim();
+  if (!tid) return Promise.resolve({ response: { status: "FAILED", error: "Missing taskId." } });
+  var dec = (decision === "Approved" || decision === "Rejected") ? decision : "Approved";
+  var ver = (version === null || version === undefined || version === "") ? "1" : String(version);
+  var path = "/api/queues/v1/" + APPROVAL_QUEUE_ID + "/tasks/" + encodeURIComponent(tid) + "/complete?version=" + encodeURIComponent(ver);
+  return domoPost(path, { Decision: dec }).then(function (data) {
+    return { response: { status: "SUCCEEDED", taskId: tid, decision: dec, task: data || null } };
+  }).catch(function (err) { return { response: { status: "FAILED", error: detail(err), taskId: tid } }; });
+}
+
 /* --------------------- Domo Cloud Amplifier (BYOS) ------------------------ */
 /* Register SNOWFLAKE_REVENUE_CC views/tables as Cloud Amplifier–backed Domo
  * datasets (no data copy — Domo queries Snowflake in place). These calls use
@@ -1023,5 +1142,9 @@ module.exports = {
   describeSemanticView: describeSemanticView,
   alterSemanticView: alterSemanticView,
   getSnowflakeIntegrations: getSnowflakeIntegrations,
-  registerCloudAmplifierTable: registerCloudAmplifierTable
+  registerCloudAmplifierTable: registerCloudAmplifierTable,
+  askRetentionAgent: askRetentionAgent,
+  startRetentionWorkflow: startRetentionWorkflow,
+  listApprovalTasks: listApprovalTasks,
+  completeApprovalTask: completeApprovalTask
 };

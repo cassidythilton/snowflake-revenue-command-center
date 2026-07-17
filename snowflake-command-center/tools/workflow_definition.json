@@ -1,0 +1,1526 @@
+{
+  "version": 2,
+  "designElements": [
+    {
+      "id": "rootNode",
+      "position": {
+        "x": 320,
+        "y": 40
+      },
+      "data": {
+        "dimensions": {
+          "width": 200,
+          "height": 60
+        },
+        "title": "Start Snowflake Revenue CC - Renewal Risk Retention",
+        "description": "",
+        "type": "Start",
+        "_designNode": "rootNode",
+        "isFormStart": false,
+        "formId": null,
+        "input": [
+          {
+            "aiDescription": null,
+            "children": [],
+            "configType": null,
+            "customMappingType": null,
+            "dataType": "text",
+            "displayName": "actionId",
+            "entitySubType": null,
+            "flag": "input",
+            "id": "YHZ4r3xZDCNbLkP",
+            "isList": false,
+            "mappedTo": "var_hB0XjFp6jFl",
+            "paramName": "actionId",
+            "required": true,
+            "value": null,
+            "visible": true
+          },
+          {
+            "aiDescription": null,
+            "children": [],
+            "configType": null,
+            "customMappingType": null,
+            "dataType": "text",
+            "displayName": "account",
+            "entitySubType": null,
+            "flag": "input",
+            "id": "HcjNm9BrG4UgUMT",
+            "isList": false,
+            "mappedTo": "var_KC3NpP4x89S",
+            "paramName": "account",
+            "required": false,
+            "value": null,
+            "visible": true
+          },
+          {
+            "aiDescription": null,
+            "children": [],
+            "configType": null,
+            "customMappingType": null,
+            "dataType": "text",
+            "displayName": "recommendation",
+            "entitySubType": null,
+            "flag": "input",
+            "id": "kT6FETsA4xiXhoZ",
+            "isList": false,
+            "mappedTo": "var_qjEHorzGcrH",
+            "paramName": "recommendation",
+            "required": false,
+            "value": null,
+            "visible": true
+          },
+          {
+            "aiDescription": null,
+            "children": [],
+            "configType": null,
+            "customMappingType": null,
+            "dataType": "text",
+            "displayName": "persona",
+            "entitySubType": null,
+            "flag": "input",
+            "id": "TzYJrETJXWn1eaN",
+            "isList": false,
+            "mappedTo": "var_rAnpmyNdzrp",
+            "paramName": "persona",
+            "required": false,
+            "value": null,
+            "visible": true
+          },
+          {
+            "aiDescription": null,
+            "children": [],
+            "configType": null,
+            "customMappingType": null,
+            "dataType": "decimal",
+            "displayName": "protectedRevenue",
+            "entitySubType": null,
+            "flag": "input",
+            "id": "Mdm6r2ubvWocG5s",
+            "isList": false,
+            "mappedTo": "var_Nf3NhRY8RcX",
+            "paramName": "protectedRevenue",
+            "required": false,
+            "value": null,
+            "visible": true
+          },
+          {
+            "aiDescription": null,
+            "children": [],
+            "configType": null,
+            "customMappingType": null,
+            "dataType": "text",
+            "displayName": "sourceQuestion",
+            "entitySubType": null,
+            "flag": "input",
+            "id": "K5tEbL5sy0VrlFw",
+            "isList": false,
+            "mappedTo": "var_xZkqAUevaDK",
+            "paramName": "sourceQuestion",
+            "required": false,
+            "value": null,
+            "visible": true
+          }
+        ]
+      },
+      "style": {
+        "zIndex": 3,
+        "outline": "none"
+      },
+      "index": 0,
+      "type": "rootNode"
+    },
+    {
+      "id": "ckPOS3wqV2hdIku",
+      "position": {
+        "x": 320,
+        "y": 200
+      },
+      "data": {
+        "dimensions": {
+          "width": 200,
+          "height": 60
+        },
+        "title": "Retention triage agent",
+        "description": "",
+        "prompt": {
+          "id": "dB3uLlXvOfAHnir",
+          "paramName": "prompt",
+          "dataType": "text",
+          "mappedTo": null,
+          "value": [
+            {
+              "type": "paragraph",
+              "children": [
+                {
+                  "text": "At-risk account: ",
+                  "bold": false,
+                  "italic": false,
+                  "underlined": false,
+                  "sql": false
+                },
+                {
+                  "type": "variable",
+                  "children": [
+                    {
+                      "text": "",
+                      "bold": false,
+                      "italic": false,
+                      "underlined": false,
+                      "sql": false
+                    }
+                  ],
+                  "dataType": "text",
+                  "id": "var_KC3NpP4x89S",
+                  "name": "account",
+                  "isList": false
+                },
+                {
+                  "text": ". Risk context: ",
+                  "bold": false,
+                  "italic": false,
+                  "underlined": false,
+                  "sql": false
+                },
+                {
+                  "type": "variable",
+                  "children": [
+                    {
+                      "text": "",
+                      "bold": false,
+                      "italic": false,
+                      "underlined": false,
+                      "sql": false
+                    }
+                  ],
+                  "dataType": "text",
+                  "id": "var_xZkqAUevaDK",
+                  "name": "sourceQuestion",
+                  "isList": false
+                },
+                {
+                  "text": ". Seed recommendation: ",
+                  "bold": false,
+                  "italic": false,
+                  "underlined": false,
+                  "sql": false
+                },
+                {
+                  "type": "variable",
+                  "children": [
+                    {
+                      "text": "",
+                      "bold": false,
+                      "italic": false,
+                      "underlined": false,
+                      "sql": false
+                    }
+                  ],
+                  "dataType": "text",
+                  "id": "var_qjEHorzGcrH",
+                  "name": "recommendation",
+                  "isList": false
+                },
+                {
+                  "text": ". Call the Ask Retention Agent tool (the Snowflake Cortex Agent, which reasons over the governed REVENUE_CC_ANALYST semantic view and Cortex Search) with this account and context, then return ONE concrete recommended retention action plus a one-sentence rationale.",
+                  "bold": false,
+                  "italic": false,
+                  "underlined": false,
+                  "sql": false
+                }
+              ]
+            }
+          ],
+          "required": true,
+          "isList": false,
+          "children": [],
+          "displayName": "Prompt",
+          "visible": true,
+          "flag": "input",
+          "customMappingType": null,
+          "configType": null,
+          "entitySubType": null,
+          "aiDescription": null
+        },
+        "result": {
+          "id": "EV4CfrTdBW7d5zS",
+          "paramName": "result",
+          "dataType": "object",
+          "mappedTo": "var_zFOhkyi79NB",
+          "value": null,
+          "required": true,
+          "isList": false,
+          "children": [
+            {
+              "id": "EV4CfrTdBW7d5zS.recommendation",
+              "paramName": "recommendation",
+              "dataType": "text",
+              "mappedTo": "var_zFOhkyi79NB.recommendation",
+              "value": null,
+              "required": true,
+              "isList": false,
+              "children": [],
+              "displayName": "",
+              "visible": true,
+              "flag": "output",
+              "customMappingType": null,
+              "configType": null,
+              "entitySubType": null,
+              "aiDescription": null
+            }
+          ],
+          "displayName": "Result",
+          "visible": true,
+          "flag": "output",
+          "customMappingType": null,
+          "configType": null,
+          "entitySubType": null,
+          "aiDescription": null
+        },
+        "agent": {
+          "instructions": "You are a renewal-risk retention analyst for a B2B revenue command center. Use the Ask Retention Agent tool \u2014 the Snowflake Cortex Agent (REVENUE_CC_AGENT, which reasons over the governed REVENUE_CC_ANALYST semantic view via Cortex Analyst and grounds on Cortex Search) \u2014 passing the account name and risk context from the prompt. Based on its governed response, return ONE concrete recommended retention action with a one-sentence rationale and what to watch after executing. Put the final text in result.recommendation.",
+          "tools": [
+            {
+              "functionName": "askRetentionAgent",
+              "functionDescription": "Ask the Snowflake Cortex Agent for a governed retention recommendation for an at-risk account.",
+              "inputs": [
+                {
+                  "id": "V4H6iJT4oOmMhuf",
+                  "paramName": "prompt",
+                  "dataType": "text",
+                  "mappedTo": null,
+                  "value": null,
+                  "required": false,
+                  "isList": false,
+                  "children": [],
+                  "displayName": "prompt",
+                  "visible": true,
+                  "flag": "input",
+                  "customMappingType": null,
+                  "configType": null,
+                  "entitySubType": null,
+                  "aiDescription": null
+                }
+              ],
+              "inputDescriptions": {
+                "V4H6iJT4oOmMhuf": "The account name and risk context to analyze."
+              },
+              "id": "jFnxdpH59m9JagA",
+              "name": "Ask Retention Agent",
+              "description": "Snowflake Cortex Agent (REVENUE_CC_AGENT) over the governed semantic view + Cortex Search.",
+              "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+              "packageVersion": "1.4.0",
+              "output": {
+                "id": "wyd1YBUOghHLGtZ",
+                "paramName": "result",
+                "dataType": "object",
+                "mappedTo": null,
+                "value": null,
+                "required": false,
+                "isList": false,
+                "children": [],
+                "displayName": "result",
+                "visible": true,
+                "flag": "output",
+                "customMappingType": null,
+                "configType": null,
+                "entitySubType": null,
+                "aiDescription": null
+              },
+              "type": "FUNCTION"
+            }
+          ],
+          "context": {
+            "datasets": [],
+            "directories": [],
+            "files": [],
+            "isEmpty": true
+          },
+          "outputDescriptions": {}
+        },
+        "_designNode": "AI_AGENT"
+      },
+      "style": {
+        "zIndex": 3,
+        "outline": "none"
+      },
+      "index": 1,
+      "type": "AI_AGENT"
+    },
+    {
+      "id": "PambMr5cELLzx7s",
+      "position": {
+        "x": 320,
+        "y": 360
+      },
+      "data": {
+        "dimensions": {
+          "width": 200,
+          "height": 60
+        },
+        "title": "Approve retention action",
+        "description": "",
+        "_designNode": "userTaskNode",
+        "configType": "form",
+        "selectedUserTaskTitle": "Approve renewal-risk retention",
+        "selectedUserTaskDescription": "",
+        "input": [
+          {
+            "acceptsInput": true,
+            "children": [],
+            "customMappingType": "form",
+            "dataType": "text",
+            "datasetMapping": null,
+            "displayName": "Account",
+            "entitySubType": null,
+            "fieldOptionsMappedTo": null,
+            "fieldOptionsValue": null,
+            "flag": "input",
+            "formFieldId": "8f8acd8b-dbb1-4af2-a751-319d4060e83d",
+            "formFieldType": "SHORT_ANSWER",
+            "id": "fjbjk3xwaTzwoOm",
+            "isList": false,
+            "mappedTo": "var_KC3NpP4x89S",
+            "paramName": "Account",
+            "required": false,
+            "value": null,
+            "visible": true,
+            "configType": "forms",
+            "useExternalValues": false
+          },
+          {
+            "acceptsInput": true,
+            "children": [],
+            "customMappingType": "form",
+            "dataType": "text",
+            "datasetMapping": null,
+            "displayName": "Recommended action",
+            "entitySubType": null,
+            "fieldOptionsMappedTo": null,
+            "fieldOptionsValue": null,
+            "flag": "input",
+            "formFieldId": "2d519674-2038-4d8f-88f1-f92638f03dda",
+            "formFieldType": "PARAGRAPH",
+            "id": "ensY3LhCosTwxIr",
+            "isList": false,
+            "mappedTo": "var_qjEHorzGcrH",
+            "paramName": "Recommendation",
+            "required": false,
+            "value": null,
+            "visible": true,
+            "configType": "forms",
+            "useExternalValues": false
+          },
+          {
+            "acceptsInput": true,
+            "children": [],
+            "customMappingType": "form",
+            "dataType": "text",
+            "datasetMapping": null,
+            "displayName": "Cortex Agent recommendation",
+            "entitySubType": null,
+            "fieldOptionsMappedTo": null,
+            "fieldOptionsValue": null,
+            "flag": "input",
+            "formFieldId": "78eda922-0e70-47c6-9370-0f38f2282e85",
+            "formFieldType": "PARAGRAPH",
+            "id": "bD01uQf3Cb2vhdh",
+            "isList": false,
+            "mappedTo": "var_zFOhkyi79NB.recommendation",
+            "paramName": "Agent_Recommendation",
+            "required": false,
+            "value": null,
+            "visible": true,
+            "configType": "forms",
+            "useExternalValues": false
+          },
+          {
+            "acceptsInput": true,
+            "children": [],
+            "customMappingType": "form",
+            "dataType": "decimal",
+            "datasetMapping": null,
+            "displayName": "Protected revenue ($)",
+            "entitySubType": null,
+            "fieldOptionsMappedTo": null,
+            "fieldOptionsValue": null,
+            "flag": "input",
+            "formFieldId": "f7aca0f3-d765-4c2e-8833-4e164a9aedf6",
+            "formFieldType": "SHORT_ANSWER",
+            "id": "ZV9vBBANyIKdPV1",
+            "isList": false,
+            "mappedTo": "var_Nf3NhRY8RcX",
+            "paramName": "Protected_Revenue",
+            "required": false,
+            "value": null,
+            "visible": true,
+            "configType": "forms",
+            "useExternalValues": false
+          },
+          {
+            "acceptsInput": true,
+            "children": [],
+            "customMappingType": "form",
+            "dataType": "text",
+            "datasetMapping": null,
+            "displayName": "Source question / context",
+            "entitySubType": null,
+            "fieldOptionsMappedTo": null,
+            "fieldOptionsValue": null,
+            "flag": "input",
+            "formFieldId": "7ece7d54-e74c-4438-9df5-4cfd89fdca0f",
+            "formFieldType": "PARAGRAPH",
+            "id": "Za6kcZwqS7MKM5m",
+            "isList": false,
+            "mappedTo": "var_xZkqAUevaDK",
+            "paramName": "Source_Question",
+            "required": false,
+            "value": null,
+            "visible": true,
+            "configType": "forms",
+            "useExternalValues": false
+          },
+          {
+            "acceptsInput": true,
+            "children": [],
+            "customMappingType": "form",
+            "dataType": "text",
+            "datasetMapping": null,
+            "displayName": "Decision",
+            "entitySubType": null,
+            "fieldOptionsMappedTo": null,
+            "fieldOptionsValue": null,
+            "flag": "input",
+            "formFieldId": "542b8c91-d1d9-4a2f-97cb-a205e844aa7b",
+            "formFieldType": "SINGLE_CHOICE",
+            "id": "ukjnujoETznV9DC",
+            "isList": false,
+            "mappedTo": null,
+            "paramName": "Decision",
+            "required": true,
+            "value": "Rejected",
+            "visible": true,
+            "configType": "forms",
+            "useExternalValues": false
+          }
+        ],
+        "output": [
+          {
+            "acceptsInput": true,
+            "children": [],
+            "customMappingType": "form",
+            "dataType": "text",
+            "datasetMapping": null,
+            "displayName": "Account",
+            "entitySubType": null,
+            "fieldOptionsMappedTo": null,
+            "fieldOptionsValue": null,
+            "flag": "output",
+            "formFieldId": "8f8acd8b-dbb1-4af2-a751-319d4060e83d",
+            "formFieldType": "SHORT_ANSWER",
+            "id": "IrUbOR68ZYIUJjm",
+            "isList": false,
+            "mappedTo": "var_KC3NpP4x89S",
+            "paramName": "Account",
+            "required": false,
+            "value": null,
+            "visible": true,
+            "configType": "form",
+            "useExternalValues": false
+          },
+          {
+            "acceptsInput": true,
+            "children": [],
+            "customMappingType": "form",
+            "dataType": "text",
+            "datasetMapping": null,
+            "displayName": "Recommended action",
+            "entitySubType": null,
+            "fieldOptionsMappedTo": null,
+            "fieldOptionsValue": null,
+            "flag": "output",
+            "formFieldId": "2d519674-2038-4d8f-88f1-f92638f03dda",
+            "formFieldType": "PARAGRAPH",
+            "id": "JivqhrdCP6nUV3G",
+            "isList": false,
+            "mappedTo": "var_qjEHorzGcrH",
+            "paramName": "Recommendation",
+            "required": false,
+            "value": null,
+            "visible": true,
+            "configType": "form",
+            "useExternalValues": false
+          },
+          {
+            "acceptsInput": true,
+            "children": [],
+            "customMappingType": "form",
+            "dataType": "text",
+            "datasetMapping": null,
+            "displayName": "Cortex Agent recommendation",
+            "entitySubType": null,
+            "fieldOptionsMappedTo": null,
+            "fieldOptionsValue": null,
+            "flag": "output",
+            "formFieldId": "78eda922-0e70-47c6-9370-0f38f2282e85",
+            "formFieldType": "PARAGRAPH",
+            "id": "E8wrpqCjeDsZJhp",
+            "isList": false,
+            "mappedTo": "var_zFOhkyi79NB.recommendation",
+            "paramName": "Agent_Recommendation",
+            "required": false,
+            "value": null,
+            "visible": true,
+            "configType": "form",
+            "useExternalValues": false
+          },
+          {
+            "acceptsInput": true,
+            "children": [],
+            "customMappingType": "form",
+            "dataType": "decimal",
+            "datasetMapping": null,
+            "displayName": "Protected revenue ($)",
+            "entitySubType": null,
+            "fieldOptionsMappedTo": null,
+            "fieldOptionsValue": null,
+            "flag": "output",
+            "formFieldId": "f7aca0f3-d765-4c2e-8833-4e164a9aedf6",
+            "formFieldType": "SHORT_ANSWER",
+            "id": "Gf57xT3XBEuuKcl",
+            "isList": false,
+            "mappedTo": "var_Nf3NhRY8RcX",
+            "paramName": "Protected_Revenue",
+            "required": false,
+            "value": null,
+            "visible": true,
+            "configType": "form",
+            "useExternalValues": false
+          },
+          {
+            "acceptsInput": true,
+            "children": [],
+            "customMappingType": "form",
+            "dataType": "text",
+            "datasetMapping": null,
+            "displayName": "Source question / context",
+            "entitySubType": null,
+            "fieldOptionsMappedTo": null,
+            "fieldOptionsValue": null,
+            "flag": "output",
+            "formFieldId": "7ece7d54-e74c-4438-9df5-4cfd89fdca0f",
+            "formFieldType": "PARAGRAPH",
+            "id": "yrV6a4Hf1PdYLPV",
+            "isList": false,
+            "mappedTo": "var_xZkqAUevaDK",
+            "paramName": "Source_Question",
+            "required": false,
+            "value": null,
+            "visible": true,
+            "configType": "form",
+            "useExternalValues": false
+          },
+          {
+            "acceptsInput": true,
+            "children": [],
+            "customMappingType": "form",
+            "dataType": "text",
+            "datasetMapping": null,
+            "displayName": "Decision",
+            "entitySubType": null,
+            "fieldOptionsMappedTo": null,
+            "fieldOptionsValue": null,
+            "flag": "output",
+            "formFieldId": "542b8c91-d1d9-4a2f-97cb-a205e844aa7b",
+            "formFieldType": "SINGLE_CHOICE",
+            "id": "SzHplw8TVfu6YNa",
+            "isList": false,
+            "mappedTo": "var_UbGhdZmqtju",
+            "paramName": "Decision",
+            "required": true,
+            "value": null,
+            "visible": true,
+            "configType": "form",
+            "useExternalValues": false
+          }
+        ],
+        "fieldOptions": [],
+        "formId": "01ba04c2-6152-4fb1-be93-ff4d57d4f1e8",
+        "selectedQueue": "6383ccfa-54aa-4c23-b855-9f3fe619cad4",
+        "assignedTo": {
+          "aiDescription": null,
+          "children": [],
+          "configType": null,
+          "customMappingType": null,
+          "dataType": "person",
+          "displayName": "Assigned To",
+          "entitySubType": null,
+          "flag": "input",
+          "id": "zfybkAPMPmu9gQK",
+          "isList": false,
+          "mappedTo": null,
+          "paramName": "DOMO_ASSIGNED_TO_",
+          "required": true,
+          "value": "1614187674",
+          "visible": true
+        }
+      },
+      "style": {
+        "zIndex": 4,
+        "outline": "none"
+      },
+      "index": 2,
+      "type": "userTaskNode"
+    },
+    {
+      "id": "BwT096y5vgMu68d",
+      "position": {
+        "x": 320,
+        "y": 520
+      },
+      "data": {
+        "dimensions": {
+          "width": 200,
+          "height": 60
+        },
+        "title": "Approved?",
+        "description": "Route on the approval decision.",
+        "_designNode": "conditionalGatewayNode",
+        "inclusive": false
+      },
+      "style": {
+        "zIndex": 3,
+        "outline": "none"
+      },
+      "index": 3,
+      "type": "conditionalGatewayNode"
+    },
+    {
+      "id": "mdFzTTgdWVkNaVv",
+      "position": {
+        "x": 180,
+        "y": 700
+      },
+      "data": {
+        "dimensions": {
+          "width": 200,
+          "height": 60
+        },
+        "title": "Write Approved status",
+        "description": "",
+        "_designNode": "serviceTaskNode",
+        "input": [
+          {
+            "aiDescription": null,
+            "children": [],
+            "configType": null,
+            "customMappingType": null,
+            "dataType": "text",
+            "displayName": "actionId",
+            "entitySubType": null,
+            "flag": "input",
+            "id": "dXXMQ5JCZdBn00j",
+            "isList": false,
+            "mappedTo": "var_hB0XjFp6jFl",
+            "paramName": "actionId",
+            "required": true,
+            "value": null,
+            "visible": true
+          },
+          {
+            "aiDescription": null,
+            "children": [],
+            "configType": null,
+            "customMappingType": null,
+            "dataType": "text",
+            "displayName": "accountId",
+            "entitySubType": null,
+            "flag": "input",
+            "id": "zqxeGIcxvfSWfzJ",
+            "isList": false,
+            "mappedTo": null,
+            "paramName": "accountId",
+            "required": false,
+            "value": "",
+            "visible": true
+          },
+          {
+            "aiDescription": null,
+            "children": [],
+            "configType": null,
+            "customMappingType": null,
+            "dataType": "text",
+            "displayName": "accountName",
+            "entitySubType": null,
+            "flag": "input",
+            "id": "UQzymxpA7wxATYo",
+            "isList": false,
+            "mappedTo": "var_KC3NpP4x89S",
+            "paramName": "accountName",
+            "required": false,
+            "value": null,
+            "visible": true
+          },
+          {
+            "aiDescription": null,
+            "children": [],
+            "configType": null,
+            "customMappingType": null,
+            "dataType": "text",
+            "displayName": "region",
+            "entitySubType": null,
+            "flag": "input",
+            "id": "NHEXBmxmc1SgLXW",
+            "isList": false,
+            "mappedTo": null,
+            "paramName": "region",
+            "required": false,
+            "value": "",
+            "visible": true
+          },
+          {
+            "aiDescription": null,
+            "children": [],
+            "configType": null,
+            "customMappingType": null,
+            "dataType": "text",
+            "displayName": "recommendation",
+            "entitySubType": null,
+            "flag": "input",
+            "id": "oJ7M5nP9jwS1inF",
+            "isList": false,
+            "mappedTo": "var_qjEHorzGcrH",
+            "paramName": "recommendation",
+            "required": false,
+            "value": null,
+            "visible": true
+          },
+          {
+            "aiDescription": null,
+            "children": [],
+            "configType": null,
+            "customMappingType": null,
+            "dataType": "text",
+            "displayName": "approvalStatus",
+            "entitySubType": null,
+            "flag": "input",
+            "id": "nZ13KTI2OEOrrEP",
+            "isList": false,
+            "mappedTo": null,
+            "paramName": "approvalStatus",
+            "required": false,
+            "value": "Approved",
+            "visible": true
+          },
+          {
+            "aiDescription": null,
+            "children": [],
+            "configType": null,
+            "customMappingType": null,
+            "dataType": "text",
+            "displayName": "approvedBy",
+            "entitySubType": null,
+            "flag": "input",
+            "id": "p0ysYm7GHPKnDLR",
+            "isList": false,
+            "mappedTo": null,
+            "paramName": "approvedBy",
+            "required": false,
+            "value": "cassidy.hilton@domo.com",
+            "visible": true
+          },
+          {
+            "aiDescription": null,
+            "children": [],
+            "configType": null,
+            "customMappingType": null,
+            "dataType": "text",
+            "displayName": "executionStatus",
+            "entitySubType": null,
+            "flag": "input",
+            "id": "ZpKQ9HTsfZs8FLt",
+            "isList": false,
+            "mappedTo": null,
+            "paramName": "executionStatus",
+            "required": false,
+            "value": "Executed",
+            "visible": true
+          },
+          {
+            "aiDescription": null,
+            "children": [],
+            "configType": null,
+            "customMappingType": null,
+            "dataType": "decimal",
+            "displayName": "actualRevenueProtected",
+            "entitySubType": null,
+            "flag": "input",
+            "id": "EMiMWsg7bynyjB0",
+            "isList": false,
+            "mappedTo": "var_Nf3NhRY8RcX",
+            "paramName": "actualRevenueProtected",
+            "required": false,
+            "value": null,
+            "visible": true
+          }
+        ],
+        "output": [],
+        "taskType": "nebulaFunction",
+        "metadata": {
+          "version": "1.4.0",
+          "settings": {},
+          "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+          "packageName": "snowflakece",
+          "functionName": "writeActionStatus"
+        },
+        "usesStructuredOutputs": false,
+        "selectedTaskTitle": "writeActionStatus",
+        "selectedTaskDescription": "Write Action Status"
+      },
+      "style": {
+        "zIndex": 3,
+        "outline": "none"
+      },
+      "index": 4,
+      "type": "serviceTaskNode"
+    },
+    {
+      "id": "apnYNHXtMQxyd4a",
+      "position": {
+        "x": 460,
+        "y": 700
+      },
+      "data": {
+        "dimensions": {
+          "width": 200,
+          "height": 60
+        },
+        "title": "Write Rejected status",
+        "description": "",
+        "_designNode": "serviceTaskNode",
+        "input": [
+          {
+            "aiDescription": null,
+            "children": [],
+            "configType": null,
+            "customMappingType": null,
+            "dataType": "text",
+            "displayName": "actionId",
+            "entitySubType": null,
+            "flag": "input",
+            "id": "hys3SYvSonQgXot",
+            "isList": false,
+            "mappedTo": "var_hB0XjFp6jFl",
+            "paramName": "actionId",
+            "required": true,
+            "value": null,
+            "visible": true
+          },
+          {
+            "aiDescription": null,
+            "children": [],
+            "configType": null,
+            "customMappingType": null,
+            "dataType": "text",
+            "displayName": "accountId",
+            "entitySubType": null,
+            "flag": "input",
+            "id": "q5fFB0GcffC6mI7",
+            "isList": false,
+            "mappedTo": null,
+            "paramName": "accountId",
+            "required": false,
+            "value": "",
+            "visible": true
+          },
+          {
+            "aiDescription": null,
+            "children": [],
+            "configType": null,
+            "customMappingType": null,
+            "dataType": "text",
+            "displayName": "accountName",
+            "entitySubType": null,
+            "flag": "input",
+            "id": "Lu3iTbZKJJWXJNk",
+            "isList": false,
+            "mappedTo": "var_KC3NpP4x89S",
+            "paramName": "accountName",
+            "required": false,
+            "value": null,
+            "visible": true
+          },
+          {
+            "aiDescription": null,
+            "children": [],
+            "configType": null,
+            "customMappingType": null,
+            "dataType": "text",
+            "displayName": "region",
+            "entitySubType": null,
+            "flag": "input",
+            "id": "W08p9NtKKmgBAXh",
+            "isList": false,
+            "mappedTo": null,
+            "paramName": "region",
+            "required": false,
+            "value": "",
+            "visible": true
+          },
+          {
+            "aiDescription": null,
+            "children": [],
+            "configType": null,
+            "customMappingType": null,
+            "dataType": "text",
+            "displayName": "recommendation",
+            "entitySubType": null,
+            "flag": "input",
+            "id": "lATBjdQ2PcXFLRA",
+            "isList": false,
+            "mappedTo": "var_qjEHorzGcrH",
+            "paramName": "recommendation",
+            "required": false,
+            "value": null,
+            "visible": true
+          },
+          {
+            "aiDescription": null,
+            "children": [],
+            "configType": null,
+            "customMappingType": null,
+            "dataType": "text",
+            "displayName": "approvalStatus",
+            "entitySubType": null,
+            "flag": "input",
+            "id": "AnWCHgJc4nkh16s",
+            "isList": false,
+            "mappedTo": null,
+            "paramName": "approvalStatus",
+            "required": false,
+            "value": "Rejected",
+            "visible": true
+          },
+          {
+            "aiDescription": null,
+            "children": [],
+            "configType": null,
+            "customMappingType": null,
+            "dataType": "text",
+            "displayName": "approvedBy",
+            "entitySubType": null,
+            "flag": "input",
+            "id": "pWzTBWkrMsmXBIq",
+            "isList": false,
+            "mappedTo": null,
+            "paramName": "approvedBy",
+            "required": false,
+            "value": "cassidy.hilton@domo.com",
+            "visible": true
+          },
+          {
+            "aiDescription": null,
+            "children": [],
+            "configType": null,
+            "customMappingType": null,
+            "dataType": "text",
+            "displayName": "executionStatus",
+            "entitySubType": null,
+            "flag": "input",
+            "id": "X84nLKSLONIsR1Y",
+            "isList": false,
+            "mappedTo": null,
+            "paramName": "executionStatus",
+            "required": false,
+            "value": "Voided",
+            "visible": true
+          },
+          {
+            "aiDescription": null,
+            "children": [],
+            "configType": null,
+            "customMappingType": null,
+            "dataType": "decimal",
+            "displayName": "actualRevenueProtected",
+            "entitySubType": null,
+            "flag": "input",
+            "id": "Qdwo7Mzn5G3sZC7",
+            "isList": false,
+            "mappedTo": null,
+            "paramName": "actualRevenueProtected",
+            "required": false,
+            "value": "0",
+            "visible": true
+          }
+        ],
+        "output": [],
+        "taskType": "nebulaFunction",
+        "metadata": {
+          "version": "1.4.0",
+          "settings": {},
+          "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+          "packageName": "snowflakece",
+          "functionName": "writeActionStatus"
+        },
+        "usesStructuredOutputs": false,
+        "selectedTaskTitle": "writeActionStatus",
+        "selectedTaskDescription": "Write Action Status"
+      },
+      "style": {
+        "zIndex": 3,
+        "outline": "none"
+      },
+      "index": 5,
+      "type": "serviceTaskNode"
+    },
+    {
+      "id": "dmpiOoDd055t6MG",
+      "position": {
+        "x": 180,
+        "y": 860
+      },
+      "data": {
+        "dimensions": {
+          "width": 200,
+          "height": 60
+        },
+        "title": "Done (approved)",
+        "description": "",
+        "_designNode": "endNode",
+        "terminating": false
+      },
+      "style": {
+        "zIndex": 4,
+        "outline": "none"
+      },
+      "index": 6,
+      "type": "endNode"
+    },
+    {
+      "id": "Sfu8cHABn4m5jdI",
+      "position": {
+        "x": 460,
+        "y": 860
+      },
+      "data": {
+        "dimensions": {
+          "width": 200,
+          "height": 60
+        },
+        "title": "Done (rejected)",
+        "description": "",
+        "_designNode": "endNode",
+        "terminating": false
+      },
+      "style": {
+        "zIndex": 4,
+        "outline": "none"
+      },
+      "index": 7,
+      "type": "endNode"
+    },
+    {
+      "id": "edge-rootNode-ckPOS3wqV2hdIku-VyaJPP65zFv",
+      "source": "rootNode",
+      "target": "ckPOS3wqV2hdIku",
+      "data": {
+        "sourcePosition": "bottom",
+        "targetPosition": "top",
+        "path": [
+          [
+            420,
+            100
+          ],
+          [
+            420,
+            199
+          ]
+        ],
+        "title": ""
+      },
+      "style": {
+        "zIndex": 5
+      },
+      "index": 8,
+      "arrowHeadType": "arrow",
+      "type": "defaultEdge"
+    },
+    {
+      "id": "edge-ckPOS3wqV2hdIku-PambMr5cELLzx7s-EqLHvadHJh7",
+      "source": "ckPOS3wqV2hdIku",
+      "target": "PambMr5cELLzx7s",
+      "data": {
+        "sourcePosition": "bottom",
+        "targetPosition": "top",
+        "path": [
+          [
+            420,
+            260
+          ],
+          [
+            420,
+            359
+          ]
+        ],
+        "title": ""
+      },
+      "style": {
+        "zIndex": 5
+      },
+      "index": 9,
+      "arrowHeadType": "arrow",
+      "type": "defaultEdge"
+    },
+    {
+      "id": "edge-PambMr5cELLzx7s-BwT096y5vgMu68d-bWzb6mPsSlK",
+      "source": "PambMr5cELLzx7s",
+      "target": "BwT096y5vgMu68d",
+      "data": {
+        "sourcePosition": "bottom",
+        "targetPosition": "top",
+        "path": [
+          [
+            420,
+            420
+          ],
+          [
+            420,
+            519
+          ]
+        ],
+        "title": ""
+      },
+      "style": {
+        "zIndex": 5
+      },
+      "index": 10,
+      "arrowHeadType": "arrow",
+      "type": "defaultEdge"
+    },
+    {
+      "id": "edge-BwT096y5vgMu68d-mdFzTTgdWVkNaVv-BfzspUXn1h7",
+      "source": "BwT096y5vgMu68d",
+      "target": "mdFzTTgdWVkNaVv",
+      "data": {
+        "sourcePosition": "bottom",
+        "targetPosition": "top",
+        "path": [
+          [
+            420,
+            580
+          ],
+          [
+            280,
+            640
+          ],
+          [
+            280,
+            699
+          ]
+        ],
+        "entryPosition": "top",
+        "exitPosition": "bottom",
+        "description": "",
+        "title": "Approved",
+        "type": "Basic",
+        "nodeId": "hDdpGKWltbUBOMz",
+        "position": {
+          "x": 280,
+          "y": 620
+        },
+        "dimensions": {
+          "width": 200,
+          "height": 40
+        },
+        "splitIndex": 2,
+        "_designNode": "condition",
+        "rules": [
+          [
+            {
+              "variable": {
+                "id": "var_UbGhdZmqtju",
+                "paramName": "decision",
+                "dataType": "text",
+                "isList": false,
+                "children": [],
+                "showChildren": false,
+                "entitySubType": null,
+                "value": null,
+                "isOutput": true
+              },
+              "operator": "Equals",
+              "valueType": "Custom",
+              "value": "Approved"
+            }
+          ]
+        ]
+      },
+      "style": {},
+      "index": 11,
+      "arrowHeadType": "arrow",
+      "type": "conditionEdge"
+    },
+    {
+      "id": "edge-BwT096y5vgMu68d-apnYNHXtMQxyd4a-ubIKHkH1WqV",
+      "source": "BwT096y5vgMu68d",
+      "target": "apnYNHXtMQxyd4a",
+      "data": {
+        "sourcePosition": "bottom",
+        "targetPosition": "top",
+        "path": [
+          [
+            420,
+            580
+          ],
+          [
+            560,
+            640
+          ],
+          [
+            560,
+            699
+          ]
+        ],
+        "entryPosition": "top",
+        "exitPosition": "bottom",
+        "description": "",
+        "title": "Rejected",
+        "type": "Default",
+        "nodeId": "WqVTR9ba1FT4vpo",
+        "position": {
+          "x": 560,
+          "y": 620
+        },
+        "dimensions": {
+          "width": 200,
+          "height": 40
+        },
+        "splitIndex": 2,
+        "_designNode": "condition"
+      },
+      "style": {},
+      "index": 12,
+      "arrowHeadType": "arrow",
+      "type": "conditionEdge"
+    },
+    {
+      "id": "edge-mdFzTTgdWVkNaVv-dmpiOoDd055t6MG-zF05JRWXpzu",
+      "source": "mdFzTTgdWVkNaVv",
+      "target": "dmpiOoDd055t6MG",
+      "data": {
+        "sourcePosition": "bottom",
+        "targetPosition": "top",
+        "path": [
+          [
+            280,
+            760
+          ],
+          [
+            280,
+            859
+          ]
+        ],
+        "title": ""
+      },
+      "style": {
+        "zIndex": 5
+      },
+      "index": 13,
+      "arrowHeadType": "arrow",
+      "type": "defaultEdge"
+    },
+    {
+      "id": "edge-apnYNHXtMQxyd4a-Sfu8cHABn4m5jdI-Sz9UvpeBVYE",
+      "source": "apnYNHXtMQxyd4a",
+      "target": "Sfu8cHABn4m5jdI",
+      "data": {
+        "sourcePosition": "bottom",
+        "targetPosition": "top",
+        "path": [
+          [
+            560,
+            760
+          ],
+          [
+            560,
+            859
+          ]
+        ],
+        "title": ""
+      },
+      "style": {
+        "zIndex": 5
+      },
+      "index": 14,
+      "arrowHeadType": "arrow",
+      "type": "defaultEdge"
+    }
+  ],
+  "dataList": [
+    {
+      "id": "var_hB0XjFp6jFl",
+      "paramName": "actionId",
+      "dataType": "text",
+      "isList": false,
+      "children": [],
+      "showChildren": false,
+      "entitySubType": null,
+      "value": null,
+      "isOutput": false
+    },
+    {
+      "id": "var_KC3NpP4x89S",
+      "paramName": "account",
+      "dataType": "text",
+      "isList": false,
+      "children": [],
+      "showChildren": false,
+      "entitySubType": null,
+      "value": null,
+      "isOutput": false
+    },
+    {
+      "id": "var_qjEHorzGcrH",
+      "paramName": "recommendation",
+      "dataType": "text",
+      "isList": false,
+      "children": [],
+      "showChildren": false,
+      "entitySubType": null,
+      "value": null,
+      "isOutput": false
+    },
+    {
+      "id": "var_rAnpmyNdzrp",
+      "paramName": "persona",
+      "dataType": "text",
+      "isList": false,
+      "children": [],
+      "showChildren": false,
+      "entitySubType": null,
+      "value": null,
+      "isOutput": false
+    },
+    {
+      "id": "var_Nf3NhRY8RcX",
+      "paramName": "protectedRevenue",
+      "dataType": "decimal",
+      "isList": false,
+      "children": [],
+      "showChildren": false,
+      "entitySubType": null,
+      "value": null,
+      "isOutput": false
+    },
+    {
+      "id": "var_xZkqAUevaDK",
+      "paramName": "sourceQuestion",
+      "dataType": "text",
+      "isList": false,
+      "children": [],
+      "showChildren": false,
+      "entitySubType": null,
+      "value": null,
+      "isOutput": false
+    },
+    {
+      "id": "var_UbGhdZmqtju",
+      "paramName": "decision",
+      "dataType": "text",
+      "isList": false,
+      "children": [],
+      "showChildren": false,
+      "entitySubType": null,
+      "value": "Rejected",
+      "isOutput": true
+    },
+    {
+      "id": "var_zFOhkyi79NB",
+      "paramName": "agentRecommendation",
+      "dataType": "object",
+      "isList": false,
+      "children": [
+        {
+          "id": "var_zFOhkyi79NB.recommendation",
+          "paramName": "recommendation",
+          "dataType": "text",
+          "isList": false,
+          "children": [],
+          "showChildren": false,
+          "entitySubType": null,
+          "value": null,
+          "isOutput": true
+        }
+      ],
+      "showChildren": true,
+      "entitySubType": null,
+      "value": null,
+      "isOutput": true
+    }
+  ],
+  "schema": {
+    "inputs": {
+      "YHZ4r3xZDCNbLkP": {
+        "name": "actionId",
+        "type": "text",
+        "subType": null,
+        "isList": false,
+        "isNullable": false,
+        "id": "YHZ4r3xZDCNbLkP",
+        "parent": null,
+        "isChild": false
+      },
+      "HcjNm9BrG4UgUMT": {
+        "name": "account",
+        "type": "text",
+        "subType": null,
+        "isList": false,
+        "isNullable": true,
+        "id": "HcjNm9BrG4UgUMT",
+        "parent": null,
+        "isChild": false
+      },
+      "kT6FETsA4xiXhoZ": {
+        "name": "recommendation",
+        "type": "text",
+        "subType": null,
+        "isList": false,
+        "isNullable": true,
+        "id": "kT6FETsA4xiXhoZ",
+        "parent": null,
+        "isChild": false
+      },
+      "TzYJrETJXWn1eaN": {
+        "name": "persona",
+        "type": "text",
+        "subType": null,
+        "isList": false,
+        "isNullable": true,
+        "id": "TzYJrETJXWn1eaN",
+        "parent": null,
+        "isChild": false
+      },
+      "Mdm6r2ubvWocG5s": {
+        "name": "protectedRevenue",
+        "type": "decimal",
+        "subType": null,
+        "isList": false,
+        "isNullable": true,
+        "id": "Mdm6r2ubvWocG5s",
+        "parent": null,
+        "isChild": false
+      },
+      "K5tEbL5sy0VrlFw": {
+        "name": "sourceQuestion",
+        "type": "text",
+        "subType": null,
+        "isList": false,
+        "isNullable": true,
+        "id": "K5tEbL5sy0VrlFw",
+        "parent": null,
+        "isChild": false
+      }
+    },
+    "outputs": {}
+  }
+}

@@ -943,3 +943,25 @@
   .ddl-forms { grid-template-columns: 1fr; }
   .chat-rail, .sem-detail { position: static; }
 }
+
+/* ---------- Approvals: native Domo Task Center queue table ---------- */
+.task-table th:last-child, .task-table td:last-child { text-align: right; }
+.task-table td { vertical-align: middle; }
+.task-cell { display: flex; flex-direction: column; gap: 2px; }
+.task-link { color: var(--sf-blue-deep); font-weight: 700; text-decoration: none; }
+.task-link:hover { text-decoration: underline; }
+.task-id { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); letter-spacing: .02em; text-transform: uppercase; }
+.inline-link { color: var(--sf-blue-deep); text-decoration: none; font-weight: 600; }
+.inline-link:hover { text-decoration: underline; }
+.status-pill {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+  border: 1px solid var(--line-strong); color: var(--muted); background: var(--n-050);
+}
+.status-pill .sp-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.status-pill.ok { color: var(--status-ok, #1e874b); border-color: #b6e0c6; background: var(--status-ok-bg, rgba(30,135,75,0.08)); }
+.status-pill.warn { color: var(--status-warn, #b5730f); border-color: #e7c9a0; background: var(--status-warn-bg, rgba(181,115,15,0.08)); }
+.task-actions { display: inline-flex; gap: 8px; justify-content: flex-end; }
+.task-done { color: var(--status-ok, #1e874b); font-weight: 700; font-size: 12px; }
+.task-empty { color: var(--muted); text-align: center; padding: 22px 12px; font-style: italic; }
+.pill-btn.go.solid.xs { padding: 5px 12px; }

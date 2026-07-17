@@ -1,0 +1,18 @@
+{
+  "queue_id": "6383ccfa-54aa-4c23-b855-9f3fe619cad4",
+  "model_id": "9cf41b05-6fe5-4582-9299-dd9442196512",
+  "form_id": "01ba04c2-6152-4fb1-be93-ff4d57d4f1e8",
+  "form_field_ids": {
+    "Account": "8f8acd8b-dbb1-4af2-a751-319d4060e83d",
+    "Recommendation": "2d519674-2038-4d8f-88f1-f92638f03dda",
+    "Agent_Recommendation": "78eda922-0e70-47c6-9370-0f38f2282e85",
+    "Protected_Revenue": "f7aca0f3-d765-4c2e-8833-4e164a9aedf6",
+    "Source_Question": "7ece7d54-e74c-4438-9df5-4cfd89fdca0f",
+    "Decision": "542b8c91-d1d9-4a2f-97cb-a205e844aa7b"
+  },
+  "form_version": 1,
+  "version": "1.0.0",
+  "start_message_name": "Start Snowflake Revenue CC - Renewal Risk Retention",
+  "start_endpoint": "/api/workflow/v1/instances/message",
+  "assignee_user_id": "1614187674"
+}
