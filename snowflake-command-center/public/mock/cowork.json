@@ -2,9 +2,9 @@
   "generatedAt": "2026-07-15T22:30:00.000Z",
   "agent": "SNOWFLAKE_REVENUE_CC.CORE.REVENUE_CC_AGENT",
   "experience": "Snowflake Intelligence / CoWork",
-  "openPath": "Snowsight → AI & ML → Agents → REVENUE_CC_AGENT (or direct URL: https://<account>.snowflakecomputing.com/#/agents/SNOWFLAKE_REVENUE_CC.CORE.REVENUE_CC_AGENT)",
-  "status": "Available",
-  "statusNote": "Snowflake Intelligence is GA. REVENUE_CC_AGENT is deployed on this account; users with REVENUE_CC_READER role can open it in the Intelligence UI. Not verified as live-launched to business users yet (requires org enablement of Intelligence seat).",
+  "openPath": "https://ai.snowflake.com/domoinc/domopartner/#/ai → select \"Revenue Command Center Agent\" (Snowsight path: AI & ML → Agents → REVENUE_CC_AGENT)",
+  "status": "Deployed",
+  "statusNote": "REVENUE_CC_AGENT is deployed on DOMOINC-DOMOPARTNER and callable via the Agent API (proven with cortex agents run — Score_Renewal_Risk + Search + Propose_Retention_Action fired end-to-end). USAGE granted to REVENUE_CC_READER, so it appears in CoWork for authorized users. Not yet confirmed launched to a business user in the CoWork UI.",
   "scoping": "Reads honor Horizon policies (same governed semantic view + RAP_REGION/MASK_ARR). Row-access policies filter by session role region; dynamic masking hides ARR for non-finance roles.",
   "sso": "Snowflake Intelligence inherits Snowsight SSO/MFA. External IdP federation (Okta, Azure AD) applies automatically. No additional auth configuration needed beyond the standard Snowflake login.",
   "deepResearch": {
@@ -31,6 +31,11 @@
         "title": "Revenue at Risk Quantification",
         "source": "REVENUE_CC_ANALYST",
         "citation": "SQL: SELECT SUM(revenue_at_risk) AS total_at_risk, AVG(renewal_risk_score) AS avg_score FROM FACT_RENEWAL_RISK WHERE region='West' AND segment='Enterprise' → $63.4M at risk, avg score 83.2"
+      },
+      {
+        "title": "Live Renewal-Risk Score — ACC-00008",
+        "source": "Score_Renewal_Risk",
+        "citation": "SCORE_RENEWAL_RISK('ACC-00008') → 99.9% High Risk, model v10.0, ARR $624,829 — top driver: 125 SLA breaches (90d). Native Model Registry inference, no data movement."
       }
     ]
   },
@@ -46,6 +51,10 @@
     {
       "name": "Forecast Variance Explainer",
       "description": "Explains why actual revenue deviated from forecast for a given period, citing contributing accounts and external factors from unstructured sources."
+    },
+    {
+      "name": "Save-Play Proposer",
+      "description": "Grounds a retention play in the playbook corpus (Search) and stages it with Propose_Retention_Action as a governed Proposed/Pending action — recommendation only, routed into the REVENUE_CC_WRITER approval path, never auto-executed."
     }
   ]
 }

@@ -114,8 +114,12 @@
       tasks: [], tasksLoaded: false, tasksLive: false, busyTask: null, starting: null },
     governance: { loading: false, loaded: false, error: null, live: false, seed: null, parity: null, masking: null, rlSelected: null, synced: {}, wiped: {}, showDetail: false },
     cowork: { loading: false, loaded: false, error: null, live: false, mcp: null, cowork: null },
+    cw: { threads: [], activeId: null, thinking: false, sending: false, draft: "", showWiring: false },
     how: { loading: false, loaded: false, error: null, coco: null }
   };
+
+  // Monotonic id source for CoWork chat threads + messages.
+  var cwSeq = 0;
 
   function isLive() { return typeof domo !== "undefined" && domo && typeof domo.post === "function"; }
 
@@ -3114,7 +3118,7 @@
         h("h2", {}, [c.experience || "Snowflake Intelligence / CoWork"]),
         h("p", { class: "cw-lead" }, ["The ", h("code", {}, [c.agent || "REVENUE_CC_AGENT"]), " conversation, embedded in Domo through the ", h("strong", {}, ["snowflakece"]), " Code Engine bridge (key-pair JWT \u2192 Cortex Agents REST API). Same governed agent, same Horizon policies \u2014 delivered in the flow of work, with a one-click launch into the native Snowflake Intelligence surface."])
       ]),
-      h("div", { class: "cw-launch-side" }, [statChip(c.status || "Available"), srcLink("Open in Snowflake Intelligence", snowsightAgentHref(), "sf")])
+      h("div", { class: "cw-launch-side" }, [statChip(c.status || "Available"), srcLink("Open in CoWork", coworkHomeHref(), "sf")])
     ]);
     var meta = h("div", { class: "cw-meta" }, [
       c.scoping ? h("div", { class: "cw-meta-row" }, [h("span", { class: "gi-lab" }, ["Governance"]), h("span", {}, [c.scoping])]) : null,
@@ -3200,26 +3204,426 @@
 
   function renderCoWork() {
     var frag = document.createDocumentFragment();
-    var banner = connBanner(); if (banner) frag.appendChild(banner);
     if (!state.cowork.loaded && !state.cowork.loading) { loadCoWork(); }
-    if (state.cowork.loading && !state.cowork.loaded) {
-      frag.appendChild(h("div", { class: "analyst-loading" }, [h("span", { class: "spinner" }), "Loading the CoWork agent + MCP tool inventory\u2026"]));
-      return frag;
-    }
-    // Focal point: the embedded CoWork agent conversation (Genie analog).
-    frag.appendChild(h("section", { class: "grid" }, [coworkLaunchpad()]));
     if (!state.agent.seed && !state.agent.loading) {
-      loadAgentSeed().then(function (seed) {
-        if (!state.agent.result) state.agent.result = seedFeatured(seed);
-        if (state.surface === "cowork") renderView();
-      });
+      loadAgentSeed().then(function () { if (state.surface === "cowork") renderView(); });
     }
-    agentConsole(frag);
-    // Supporting wiring: Deep Research, managed MCP outward, Domo Essentials MCP.
-    var dr = coworkDeepResearch(); if (dr) frag.appendChild(h("section", { class: "grid" }, [dr]));
-    frag.appendChild(h("section", { class: "grid" }, [mcpManagedPanel()]));
-    frag.appendChild(h("section", { class: "grid" }, [mcpDomoPanel()]));
+    frag.appendChild(cwConsole());
+    frag.appendChild(cwWiring());
     return frag;
+  }
+
+  /* ============================ Cortex Workspace ============================
+   * A faithful reproduction of the native Snowflake Intelligence / CoWork chat:
+   * left thread rail, agent header, streamed answer with a status line, tool
+   * chips, result cards, and numbered citations. Behavior is driven by the real
+   * agent output through the snowflakece bridge (askCortexAgent); the status
+   * line + typewriter reproduce CoWork's streaming feel over the consolidated
+   * response. Clearly a Domo surface, with an "Open in CoWork" affordance for
+   * the native experience. */
+  function coworkHomeHref() { return "https://ai.snowflake.com/domoinc/domopartner/#/ai"; }
+
+  function cwActiveThread() {
+    var st = state.cw;
+    if (!st.activeId || !st.threads.some(function (t) { return t.id === st.activeId; })) {
+      if (!st.threads.length) cwNewThread(true);
+      else st.activeId = st.threads[0].id;
+    }
+    return st.threads.filter(function (t) { return t.id === st.activeId; })[0];
+  }
+  function cwNewThread(silent) {
+    var t = { id: "t" + (cwSeq++), title: "New chat", messages: [] };
+    state.cw.threads.unshift(t);
+    state.cw.activeId = t.id;
+    if (!silent) { state.cw.draft = ""; renderView(); }
+    return t;
+  }
+  function cwScrollBottom() {
+    var s = el("cwStream"); if (s) s.scrollTop = s.scrollHeight;
+  }
+
+  // Normalize toolsFired (object of booleans, or array of tool names) into a map.
+  function cwTools(res) {
+    var out = { analyst: false, search: false, score: false, propose: false, chart: false };
+    var tf = res && res.toolsFired;
+    if (Array.isArray(tf)) {
+      tf.forEach(function (n) {
+        var k = String(n || "").toLowerCase();
+        if (k.indexOf("analyst") > -1 || k.indexOf("text_to_sql") > -1) out.analyst = true;
+        else if (k.indexOf("search") > -1) out.search = true;
+        else if (k.indexOf("score") > -1) out.score = true;
+        else if (k.indexOf("propose") > -1) out.propose = true;
+        else if (k.indexOf("chart") > -1) out.chart = true;
+      });
+    } else if (tf && typeof tf === "object") {
+      out.analyst = !!tf.analyst; out.search = !!tf.search;
+      out.score = !!(tf.score || tf.scoreRenewalRisk);
+      out.propose = !!(tf.propose || tf.proposeRetentionAction);
+      out.chart = !!(tf.chart || tf.dataToChart);
+    }
+    if (res && res.sql) out.analyst = true;
+    if (res && (res.citations || []).length) out.search = true;
+    return out;
+  }
+  var CW_TOOL_META = {
+    analyst: { name: "Analyst", type: "cortex_analyst_text_to_sql", label: "Analyst \u00b7 text\u2192SQL" },
+    search: { name: "Search", type: "cortex_search", label: "Search \u00b7 grounding" },
+    score: { name: "Score_Renewal_Risk", type: "generic", label: "Score_Renewal_Risk" },
+    propose: { name: "Propose_Retention_Action", type: "generic", label: "Propose_Retention_Action" },
+    chart: { name: "data_to_chart", type: "data_to_chart", label: "data_to_chart" }
+  };
+  function cwStatusSteps(res) {
+    var t = cwTools(res);
+    var steps = ["Reviewed conversation context"];
+    if (t.analyst) steps.push("Queried the governed semantic view \u2014 Analyst");
+    if (t.search) steps.push("Searched incidents & playbooks \u2014 Search");
+    if (t.score) steps.push("Scored renewal risk \u2014 Score_Renewal_Risk");
+    if (t.propose) steps.push("Staged a governed proposal \u2014 Propose_Retention_Action");
+    if (t.chart) steps.push("Built a chart \u2014 data_to_chart");
+    if (res && res.metrics) steps.push("Assembled the result set");
+    steps.push("Composed the answer");
+    return steps;
+  }
+
+  function cwFetchAgent(question) {
+    if (isLive()) {
+      return domo.post(CE + "askCortexAgent", { question: question, persona: state.persona, extendedThinking: !!state.cw.thinking })
+        .then(function (resp) {
+          var d = unwrap(resp);
+          if (d && d.status === "SUCCEEDED") {
+            return { live: true, question: d.question || question, answer: d.answer, metrics: d.metrics || null,
+              sql: d.sql, searchQuery: d.searchQuery, citations: d.citations || [], toolsFired: d.toolsFired || {},
+              api: d.api, elapsedMs: d.elapsedMs, requestId: d.requestId, agent: d.agent, mode: d.mode };
+          }
+          throw new Error(d && d.error ? d.error : "Agent call failed");
+        })
+        .catch(function (err) { console.warn("[cw] live agent failed, using sample seed:", err); return sampleAgent(question); });
+    }
+    return sampleAgent(question);
+  }
+
+  function cwAsk(q) {
+    q = String(q || "").trim();
+    if (!q || state.cw.sending) return;
+    var t = cwActiveThread();
+    if (!t.messages.length) t.title = q.length > 46 ? q.slice(0, 46) + "\u2026" : q;
+    t.messages.push({ id: "u" + (cwSeq++), role: "user", text: q });
+    var amsg = { id: "a" + (cwSeq++), role: "assistant", status: "thinking", text: "", typed: "", steps: [], stepShown: 0, res: null, thinking: !!state.cw.thinking };
+    t.messages.push(amsg);
+    state.cw.sending = true; state.cw.draft = "";
+    renderView(); cwScrollBottom();
+    cwFetchAgent(q).then(function (res) {
+      amsg.res = res; amsg.text = res.answer || "\u2014"; amsg.steps = cwStatusSteps(res); amsg.status = "answering";
+      renderView();
+      requestAnimationFrame(function () { cwAnimate(amsg); });
+    }).catch(function (err) {
+      amsg.status = "error"; amsg.text = "Agent error \u2014 " + (err && err.message ? err.message : err);
+      state.cw.sending = false; renderView(); cwScrollBottom();
+    });
+  }
+
+  // Reveal status steps in sequence, then typewriter the answer, then re-render
+  // the completed message (tool chips, result cards, citations) in one pass.
+  function cwAnimate(amsg) {
+    var host = el("cwmsg-" + amsg.id);
+    if (!host) { amsg.status = "done"; amsg.typed = amsg.text; state.cw.sending = false; renderView(); return; }
+    var stepEls = host.querySelectorAll(".cw-step");
+    var i = 0;
+    function revealStep() {
+      if (i < amsg.steps.length) {
+        amsg.stepShown = i + 1;
+        if (stepEls[i]) stepEls[i].classList.add("show");
+        cwScrollBottom(); i++;
+        setTimeout(revealStep, 240);
+      } else { typeAnswer(); }
+    }
+    function typeAnswer() {
+      var ansEl = host.querySelector(".cw-answer");
+      var full = amsg.text || ""; var n = 0;
+      var step = Math.max(2, Math.round(full.length / 80));
+      (function tick() {
+        n = Math.min(full.length, n + step);
+        amsg.typed = full.slice(0, n);
+        if (ansEl) ansEl.textContent = amsg.typed;
+        cwScrollBottom();
+        if (n < full.length) setTimeout(tick, 16);
+        else { amsg.status = "done"; amsg.typed = full; state.cw.sending = false; renderView(); cwScrollBottom(); cwFocusComposer(); }
+      })();
+    }
+    revealStep();
+  }
+  function cwFocusComposer() {
+    if (state.surface !== "cowork") return;
+    var ta = el("cwInput"); if (ta) { try { ta.focus(); } catch (e) {} }
+  }
+
+  /* ------------------------------- console ------------------------------- */
+  function cwConsole() {
+    var shell = h("div", { class: "cw-shell" + (state.mode === "sample" ? " sample" : "") });
+    shell.appendChild(cwThreadRail());
+    shell.appendChild(cwMain());
+    return shell;
+  }
+
+  function cwThreadRail() {
+    var st = state.cw;
+    var rail = h("div", { class: "cw-threads" });
+    var newBtn = h("button", { class: "cw-new" }, [
+      h("span", { class: "cw-new-ico", html: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round'><path d='M12 5v14M5 12h14'/></svg>" }),
+      h("span", {}, ["New chat"])
+    ]);
+    newBtn.addEventListener("click", function () { cwNewThread(); });
+    rail.appendChild(h("div", { class: "cw-threads-head" }, [
+      h("span", { class: "cw-threads-lab" }, ["Threads"]), newBtn
+    ]));
+    var list = h("div", { class: "cw-thread-list" });
+    if (!st.threads.length) cwNewThread(true);
+    st.threads.forEach(function (t) {
+      var active = t.id === st.activeId;
+      var last = t.messages.length ? (t.messages.length + " message" + (t.messages.length === 1 ? "" : "s")) : "Empty";
+      var item = h("button", { class: "cw-thread" + (active ? " active" : "") }, [
+        h("span", { class: "cw-thread-ico", html: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6'><path d='M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z'/></svg>" }),
+        h("span", { class: "cw-thread-meta" }, [h("span", { class: "cw-thread-title" }, [t.title || "New chat"]), h("span", { class: "cw-thread-sub" }, [last])])
+      ]);
+      item.addEventListener("click", function () { st.activeId = t.id; renderView(); });
+      list.appendChild(item);
+    });
+    rail.appendChild(list);
+    rail.appendChild(h("div", { class: "cw-threads-foot" }, [
+      h("span", { class: "cw-env-dot" }), "Governed by Horizon \u00b7 ", h("code", {}, ["REVENUE_CC_READER"])
+    ]));
+    return rail;
+  }
+
+  function cwMain() {
+    var c = state.cowork.cowork || {};
+    var main = h("div", { class: "cw-main" });
+
+    // Header — agent identity + open-in-CoWork + status.
+    var head = h("div", { class: "cw-head" }, [
+      h("div", { class: "cw-head-l" }, [
+        h("span", { class: "cw-avatar" }, [h("img", { src: "./public/brand/snowflake-cortex.svg", alt: "" })]),
+        h("div", {}, [
+          h("div", { class: "cw-head-title" }, ["Revenue Command Center Agent", h("span", { class: "cw-native" }, ["Snowflake Intelligence"])]),
+          h("div", { class: "cw-head-sub" }, ["CoWork chat, reproduced in Domo \u2014 same governed agent (", h("code", {}, [(c.agent || "REVENUE_CC_AGENT").split(".").pop()]), "), Analyst + Search + tools, over the ", h("code", {}, ["snowflakece"]), " bridge."])
+        ])
+      ]),
+      h("div", { class: "cw-head-r" }, [
+        state.mode === "live" ? h("span", { class: "cw-live" }, [h("span", { class: "cw-live-dot" }), "Live agent"]) : h("span", { class: "cw-seed" }, ["Sample run"]),
+        srcLink("Open in CoWork", coworkHomeHref(), "sf")
+      ])
+    ]);
+    main.appendChild(head);
+
+    // Stream — empty hero or the transcript.
+    var stream = h("div", { class: "cw-stream", id: "cwStream" });
+    var t = cwActiveThread();
+    if (!t.messages.length) stream.appendChild(cwHero());
+    else t.messages.forEach(function (m) { stream.appendChild(cwRenderMessage(m)); });
+    main.appendChild(stream);
+
+    main.appendChild(cwComposer());
+    return main;
+  }
+
+  function cwHero() {
+    var hero = h("div", { class: "cw-hero" });
+    hero.appendChild(h("span", { class: "cw-hero-mark" }, [h("img", { src: "./public/brand/snowflake-cortex.svg", alt: "" })]));
+    hero.appendChild(h("h2", {}, ["Revenue Command Center Agent"]));
+    hero.appendChild(h("p", { class: "cw-hero-lead" }, ["Ask about renewal risk, incidents, revenue at risk, or save plays. The agent reasons over the governed semantic view and the search corpus, cites its evidence, and can stage a governed save-play proposal \u2014 recommendation, never execution."]));
+    var chips = h("div", { class: "cw-starters" });
+    AGENT_SUGGESTED.forEach(function (s) {
+      var row = h("button", { class: "cw-starter" }, [
+        h("span", { class: "cw-starter-ico", html: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round'><path d='M5 12h14M13 6l6 6-6 6'/></svg>" }),
+        h("span", {}, [s])
+      ]);
+      row.addEventListener("click", function () { cwAsk(s); });
+      chips.appendChild(row);
+    });
+    hero.appendChild(chips);
+    hero.appendChild(h("p", { class: "cw-hero-note" }, ["Always review the accuracy of responses."]));
+    return hero;
+  }
+
+  function cwRenderMessage(m) {
+    if (m.role === "user") {
+      return h("div", { class: "cw-msg user", id: "cwmsg-" + m.id }, [h("div", { class: "cw-bubble" }, [m.text])]);
+    }
+    var wrap = h("div", { class: "cw-msg assistant", id: "cwmsg-" + m.id });
+    wrap.appendChild(h("span", { class: "cw-msg-avatar" }, [h("img", { src: "./public/brand/snowflake-cortex.svg", alt: "" })]));
+    var body = h("div", { class: "cw-msg-body" });
+
+    if (m.status === "thinking") {
+      body.appendChild(h("div", { class: "cw-thinking" }, [
+        h("span", { class: "cw-dots" }, [h("span", {}), h("span", {}), h("span", {})]),
+        m.thinking ? "Extended thinking \u2014 reasoning over the governed model\u2026" : "Reasoning over the governed model\u2026"
+      ]));
+      wrap.appendChild(body);
+      return wrap;
+    }
+    if (m.status === "error") {
+      body.appendChild(h("div", { class: "cw-error" }, [m.text]));
+      wrap.appendChild(body);
+      return wrap;
+    }
+
+    var res = m.res || {};
+    var tools = cwTools(res);
+    var done = m.status === "done";
+
+    // Status line — steps (revealed sequentially during "answering").
+    var status = h("div", { class: "cw-status" });
+    m.steps.forEach(function (s, idx) {
+      var shown = done || idx < m.stepShown;
+      status.appendChild(h("div", { class: "cw-step" + (shown ? " show" : "") }, [
+        h("span", { class: "cw-step-check", html: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='M20 6L9 17l-5-5'/></svg>" }),
+        h("span", {}, [s])
+      ]));
+    });
+    body.appendChild(status);
+
+    // Tool chips.
+    if (done) {
+      var firedKeys = Object.keys(CW_TOOL_META).filter(function (k) { return tools[k]; });
+      if (firedKeys.length) {
+        var chipRow = h("div", { class: "cw-toolchips" });
+        firedKeys.forEach(function (k) {
+          var meta = CW_TOOL_META[k];
+          chipRow.appendChild(h("span", { class: "cw-toolchip" + (k === "propose" ? " gov" : "") }, [
+            h("span", { class: "cw-toolchip-dot" }), meta.label
+          ]));
+        });
+        body.appendChild(chipRow);
+      }
+    }
+
+    // Answer (typed during animation; full text when done).
+    body.appendChild(h("div", { class: "cw-answer" }, [done ? m.text : (m.typed || "")]));
+
+    if (done) {
+      // Governed proposal beat.
+      if (tools.propose) {
+        var pcard = h("div", { class: "cw-propose" }, [
+          h("div", { class: "cw-propose-l" }, [
+            h("span", { class: "cw-propose-tag" }, ["Proposed \u2014 awaiting approval"]),
+            h("p", {}, ["The agent staged a save play as ", h("code", {}, ["Proposed"]), "/", h("code", {}, ["Pending"]), ". It cannot approve, execute, or move protected revenue \u2014 that stays on the governed ", h("code", {}, ["REVENUE_CC_WRITER"]), " approval path."])
+          ]),
+          (function () { var b = h("button", { class: "pill-btn go solid xs" }, ["Review in Approvals \u2197"]); b.addEventListener("click", function () { goto("approvals"); }); return b; })()
+        ]);
+        body.appendChild(pcard);
+      }
+      // Result card (metrics).
+      if (res.metrics) {
+        var m2 = res.metrics;
+        body.appendChild(h("div", { class: "cw-result" }, [
+          h("div", { class: "cw-result-head" }, [h("span", { class: "cw-result-ico", html: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7'><path d='M3 3v18h18'/><path d='M7 15l3-4 3 2 4-6'/></svg>" }), "Result \u00b7 governed semantic view"]),
+          h("div", { class: "cw-metrics" }, [
+            cwMetric("Revenue at risk", money(m2.revenueAtRisk)),
+            cwMetric("Avg risk score", (Number(m2.avgRiskScore) || 0).toFixed(1)),
+            cwMetric("High-risk accounts", num(m2.highRiskAccounts))
+          ])
+        ]));
+      }
+      // Citations.
+      var cites = res.citations || [];
+      if (cites.length) {
+        var cl = h("div", { class: "cw-cites" }, [h("div", { class: "cw-cites-head" }, ["Sources \u00b7 Cortex Search"])]);
+        cites.slice(0, 5).forEach(function (c, idx) {
+          cl.appendChild(h("div", { class: "cw-cite" }, [
+            h("span", { class: "cw-cite-n" }, [String(idx + 1)]),
+            h("div", {}, [
+              h("div", { class: "cw-cite-title" }, [c.title || c.docId || "Document"]),
+              (c.account || c.region) ? h("div", { class: "cw-cite-meta" }, [[c.account, c.region].filter(Boolean).join(" \u00b7 ")]) : null,
+              c.snippet ? h("p", { class: "cw-cite-snippet" }, [c.snippet]) : null
+            ])
+          ]));
+        });
+        body.appendChild(cl);
+      }
+      // Generated SQL (collapsible).
+      if (res.sql) {
+        var open = false;
+        var pre = h("pre", { class: "cw-sql-block" }, [h("code", {}, [res.sql])]);
+        pre.style.display = "none";
+        var tog = h("button", { class: "cw-sql-toggle" }, [
+          h("span", { class: "cw-sql-caret" }, ["\u25b8"]), "View generated SQL \u00b7 ", h("code", {}, ["cortex_analyst"])
+        ]);
+        tog.addEventListener("click", function () {
+          open = !open; pre.style.display = open ? "block" : "none";
+          tog.querySelector(".cw-sql-caret").textContent = open ? "\u25be" : "\u25b8";
+        });
+        body.appendChild(h("div", { class: "cw-sql" }, [tog, pre]));
+      }
+      // Footer telemetry.
+      var foot = h("div", { class: "cw-msg-foot" });
+      if (res.live && res.elapsedMs != null) foot.appendChild(h("span", {}, [(res.elapsedMs / 1000).toFixed(1) + "s"]));
+      foot.appendChild(h("span", {}, [res.live ? "Live \u00b7 " + ((res.agent ? String(res.agent).split(".").pop() : "REVENUE_CC_AGENT")) : "Sample \u00b7 cached run"]));
+      if (res.live && res.requestId) foot.appendChild(h("span", { class: "req" }, ["request_id " + String(res.requestId).slice(0, 8)]));
+      body.appendChild(foot);
+    }
+
+    wrap.appendChild(body);
+    return wrap;
+  }
+  function cwMetric(label, value) {
+    return h("div", { class: "cw-metric" }, [h("span", { class: "cw-metric-val" }, [value]), h("span", { class: "cw-metric-lab" }, [label])]);
+  }
+
+  function cwComposer() {
+    var st = state.cw;
+    var ta = h("textarea", { class: "cw-input", id: "cwInput", rows: "1", placeholder: "Ask the Revenue Command Center agent\u2026" });
+    ta.value = st.draft || "";
+    if (st.sending) ta.setAttribute("disabled", "true");
+    ta.addEventListener("input", function () {
+      st.draft = ta.value;
+      ta.style.height = "auto"; ta.style.height = Math.min(140, ta.scrollHeight) + "px";
+    });
+    ta.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); cwAsk(ta.value); }
+    });
+    var think = h("button", { class: "cw-think" + (st.thinking ? " on" : ""), title: "Extended thinking \u2014 stream the agent's reasoning" }, [
+      h("span", { class: "cw-think-ico", html: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M9.5 3a6.5 6.5 0 0 0-3 12.2V18a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-2.8A6.5 6.5 0 0 0 9.5 3z'/><path d='M8 21h3'/></svg>" }),
+      "Extended thinking"
+    ]);
+    think.addEventListener("click", function () { st.thinking = !st.thinking; renderView(); cwFocusComposer(); });
+    var send = h("button", { class: "cw-send", title: "Send", disabled: st.sending ? "true" : null }, [
+      st.sending
+        ? h("span", { class: "spinner sm" })
+        : h("span", { html: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M7 11l5-5 5 5'/><path d='M12 6v13'/></svg>" })
+    ]);
+    send.addEventListener("click", function () { cwAsk(ta.value); });
+    return h("div", { class: "cw-composer-wrap" }, [
+      h("div", { class: "cw-composer" }, [
+        h("span", { class: "cw-agent-pill" }, [h("img", { src: "./public/brand/snowflake-cortex.svg", alt: "" }), "Agent"]),
+        ta,
+        h("div", { class: "cw-composer-r" }, [think, send])
+      ]),
+      h("p", { class: "cw-composer-note" }, ["Answers honor Horizon row-access + masking. Always review the accuracy of responses."])
+    ]);
+  }
+
+  /* --------------------- under-the-hood (honest wiring) ------------------- */
+  function cwWiring() {
+    var st = state.cw;
+    var head = h("button", { class: "cw-wire-toggle" + (st.showWiring ? " open" : "") }, [
+      h("span", { class: "cw-wire-caret" }, [st.showWiring ? "\u25be" : "\u25b8"]),
+      h("span", {}, ["Under the hood \u2014 embed contract, managed MCP & Deep Research"]),
+      h("span", { class: "cw-wire-hint" }, [st.showWiring ? "hide" : "show"])
+    ]);
+    head.addEventListener("click", function () { st.showWiring = !st.showWiring; renderView(); });
+    var wrap = h("section", { class: "cw-wire" }, [head]);
+    if (!st.showWiring) return wrap;
+    if (state.cowork.loading && !state.cowork.loaded) {
+      wrap.appendChild(h("div", { class: "analyst-loading" }, [h("span", { class: "spinner" }), "Loading MCP tool inventory\u2026"]));
+      return wrap;
+    }
+    var body = h("div", { class: "cw-wire-body" });
+    body.appendChild(h("section", { class: "grid" }, [coworkLaunchpad()]));
+    var dr = coworkDeepResearch(); if (dr) body.appendChild(h("section", { class: "grid" }, [dr]));
+    body.appendChild(h("section", { class: "grid" }, [mcpManagedPanel()]));
+    body.appendChild(h("section", { class: "grid" }, [mcpDomoPanel()]));
+    wrap.appendChild(body);
+    return wrap;
   }
 
   // Domo-registered agent embed for the Chat v2 surface.
