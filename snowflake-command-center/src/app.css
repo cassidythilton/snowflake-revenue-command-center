@@ -648,6 +648,22 @@
 .cbar-icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: var(--r-sm); border: 1px solid transparent; background: transparent; color: var(--muted); font-size: 14px; line-height: 1; cursor: pointer; transition: background .12s, color .12s, border-color .12s; }
 .cbar-icon:hover, .cbar-icon.open { background: var(--surface); border-color: var(--line-strong); color: var(--sf-blue-deep); }
 
+/* Semantic-model picker trigger, inline in the connection bar */
+.cc-picker {
+  display: inline-flex; align-items: center; gap: 7px; padding: 3px 7px 3px 9px;
+  border: 1px solid var(--line-strong); border-radius: var(--r-pill);
+  background: var(--surface); font: inherit; font-size: 11px; cursor: pointer;
+  transition: border-color .12s ease, box-shadow .12s ease, background .12s ease;
+}
+.cc-picker:hover { border-color: var(--sf-blue); background: #fbfdff; }
+.cc-picker.open { border-color: var(--sf-blue); box-shadow: 0 0 0 3px rgba(41,181,232,.14); }
+.cc-picker .cc-lab { color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-size: 9.5px; }
+.cc-picker .cc-val { color: var(--sf-blue-deep); font-family: var(--font-mono); font-weight: 600; }
+.cc-more { font-size: 9px; font-weight: 800; color: #fff; background: var(--sf-blue); border-radius: var(--r-pill); padding: 1px 6px; }
+.cc-caret { display: inline-flex; color: var(--muted); transition: transform .15s ease; }
+.cc-caret svg { width: 13px; height: 13px; display: block; }
+.cc-picker.open .cc-caret { transform: rotate(180deg); color: var(--sf-blue-deep); }
+
 /* Semantic-view picker (checkable dropdown, live from listSemanticViews) */
 .view-picker { position: relative; }
 .vp-btn { display: flex; align-items: center; gap: 8px; padding: 7px 11px; border: 1px solid var(--line-strong); border-radius: var(--r-md); background: var(--surface); cursor: pointer; font-size: 12px; color: var(--n-700); transition: border-color .15s, box-shadow .15s; }
@@ -656,7 +672,7 @@
 .vp-btn .vp-lab { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
 .vp-btn .vp-val { font-family: var(--font-mono); font-weight: 600; color: var(--sf-blue-deep); }
 .vp-btn .vp-caret { color: var(--muted); font-size: 10px; }
-.vp-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; width: 340px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-md); box-shadow: var(--shadow-lg, 0 12px 32px rgba(0,0,0,0.14)); overflow: hidden; }
+.vp-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; width: 360px; max-width: 78vw; background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-md); box-shadow: var(--shadow-lg, 0 12px 32px rgba(0,0,0,0.14)); overflow: hidden; }
 .vp-menu-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 13px; border-bottom: 1px solid var(--line); font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .vp-menu-head .vp-count { color: var(--sf-blue-deep); font-weight: 700; }
 .vp-loading { display: inline-flex; align-items: center; gap: 6px; text-transform: none; letter-spacing: 0; }
@@ -664,7 +680,10 @@
 .vp-opt:hover { background: var(--n-050); }
 .vp-opt.on { background: rgba(41,181,232,0.06); }
 .vp-opt .vp-check { width: 16px; color: var(--sf-blue); font-weight: 700; flex: none; margin-top: 1px; }
-.vp-opt-body { display: flex; flex-direction: column; gap: 2px; }
+.vp-opt-body { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.vp-open { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: var(--r-sm); color: var(--muted); text-decoration: none; margin-top: -1px; }
+.vp-open:hover { color: var(--sf-blue-deep); background: var(--surface); }
+.vp-open .src-arrow { font-size: 12px; }
 .vp-opt-name { font-family: var(--font-mono); font-size: 12.5px; font-weight: 600; color: var(--n-700); display: flex; align-items: center; gap: 7px; }
 .vp-primary { font-family: var(--font-sans); font-size: 9px; font-weight: 700; letter-spacing: 0.05em; color: #fff; background: var(--sf-blue); border-radius: var(--r-pill); padding: 1px 7px; }
 .vp-opt-desc { font-size: 11px; color: var(--muted); line-height: 1.4; }

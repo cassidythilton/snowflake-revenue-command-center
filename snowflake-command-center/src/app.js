@@ -823,7 +823,6 @@
   // on the left, compact icon controls (view picker + new chat) on the right.
   function analystConnBar() {
     var cfg = state.config || {};
-    var view = (state.analyst.selectedViews && state.analyst.selectedViews[0]) || cfg.view || "REVENUE_CC_ANALYST";
     var facts = h("div", { class: "cbar-facts" }, [
       h("span", { class: "cc-dot live" }),
       h("span", { class: "cc-lab" }, ["Connected"]),
@@ -832,40 +831,55 @@
       h("span", { class: "cc-lab" }, ["Role"]),
       h("span", { class: "cc-val" }, [cfg.role || "REVENUE_CC_READER"]),
       h("span", { class: "cc-sep" }, ["\u00b7"]),
-      h("span", { class: "cc-lab" }, ["View"]),
-      h("a", { class: "cc-val link", href: snowsightObjHref("semantic-view", view), target: "_blank", rel: "noopener", title: "Open semantic view in Snowsight" }, [view])
+      viewPicker()
     ]);
     var newBtn = h("button", { class: "cbar-icon", title: "New chat" }, ["\u21bb"]);
     newBtn.addEventListener("click", newChat);
-    return h("div", { class: "conn-bar" }, [facts, h("div", { class: "cbar-tools" }, [viewPicker(), newBtn])]);
+    return h("div", { class: "conn-bar" }, [facts, h("div", { class: "cbar-tools" }, [newBtn])]);
   }
 
-  // Semantic-view picker: a checkable dropdown populated live from
-  // listSemanticViews. Cortex Analyst queries one model per call, so the first
-  // selected view is the active model; extra selections are kept as quick-switch
-  // context. Replaces the previously hardcoded REVENUE_CC_ANALYST.
+  // Semantic-model picker, folded into the connection bar as a labeled
+  // "Semantic model: <view> \u25be" dropdown so it's self-explanatory (not a bare
+  // gear). Populated live from listSemanticViews. Cortex Analyst queries one
+  // model per call: the first selected view is ACTIVE; extra selections are kept
+  // as quick-switch context.
   function viewPicker() {
     var a = state.analyst;
     var sel = a.selectedViews || [];
-    var btn = h("button", { class: "cbar-icon" + (a.pickerOpen ? " open" : ""), title: "Semantic views" + (sel.length > 1 ? " (" + sel.length + " selected)" : "") }, ["\u2699"]);
-    btn.addEventListener("click", function (e) { e.stopPropagation(); a.pickerOpen = !a.pickerOpen; if (a.pickerOpen && !a.viewsLoaded) loadViews().then(function () { renderView(); }); renderView(); });
-    var wrap = h("div", { class: "view-picker" }, [btn]);
+    var active = sel[0] || (state.config && state.config.view) || "REVENUE_CC_ANALYST";
+    var extra = sel.length > 1 ? sel.length - 1 : 0;
+    var caret = "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>";
+    var trigger = h("button", {
+      class: "cc-picker" + (a.pickerOpen ? " open" : ""),
+      title: "Change the governed semantic model Cortex Analyst queries",
+      "aria-haspopup": "listbox", "aria-expanded": a.pickerOpen ? "true" : "false"
+    }, [
+      h("span", { class: "cc-lab" }, ["Semantic model"]),
+      h("span", { class: "cc-val" }, [active]),
+      extra ? h("span", { class: "cc-more" }, ["+" + extra]) : null,
+      h("span", { class: "cc-caret", html: caret })
+    ]);
+    trigger.addEventListener("click", function (e) { e.stopPropagation(); a.pickerOpen = !a.pickerOpen; if (a.pickerOpen && !a.viewsLoaded) loadViews().then(function () { renderView(); }); renderView(); });
+    var wrap = h("div", { class: "view-picker" }, [trigger]);
     if (a.pickerOpen) {
       var menu = h("div", { class: "vp-menu" });
       menu.addEventListener("click", function (e) { e.stopPropagation(); });
       menu.appendChild(h("div", { class: "vp-menu-head" }, [
-        h("span", {}, ["Governed semantic views"]),
+        h("span", {}, ["Governed semantic models"]),
         (a.viewsLoading ? h("span", { class: "vp-loading" }, [h("span", { class: "spinner sm" }), "discovering\u2026"]) : h("span", { class: "vp-count" }, [String((a.views || []).length) + " live"]))
       ]));
       (a.views || []).forEach(function (v) {
         var on = sel.indexOf(v.name) > -1;
         var isPrimary = sel[0] === v.name;
-        var row = h("button", { class: "vp-opt" + (on ? " on" : "") }, [
+        var link = h("a", { class: "vp-open", href: snowsightObjHref("semantic-view", v.name), target: "_blank", rel: "noopener", title: "Open in Snowsight" }, [h("span", { class: "src-arrow" }, ["\u2197"])]);
+        link.addEventListener("click", function (e) { e.stopPropagation(); });
+        var row = h("button", { class: "vp-opt" + (on ? " on" : ""), role: "option", "aria-selected": on ? "true" : "false" }, [
           h("span", { class: "vp-check" }, [on ? "\u2713" : ""]),
           h("span", { class: "vp-opt-body" }, [
             h("span", { class: "vp-opt-name" }, [v.name, isPrimary ? h("span", { class: "vp-primary" }, ["ACTIVE"]) : null]),
             v.comment ? h("span", { class: "vp-opt-desc" }, [String(v.comment).slice(0, 96)]) : null
-          ])
+          ]),
+          link
         ]);
         row.addEventListener("click", function (e) {
           e.stopPropagation();
@@ -876,7 +890,7 @@
         });
         menu.appendChild(row);
       });
-      menu.appendChild(h("div", { class: "vp-menu-foot" }, ["Cortex Analyst queries the ", h("b", {}, ["ACTIVE"]), " view. Click a view to set/add it; the first selected is active."]));
+      menu.appendChild(h("div", { class: "vp-menu-foot" }, ["Cortex Analyst queries the ", h("b", {}, ["ACTIVE"]), " model. Click to set it active; select more to keep them one click away."]));
       wrap.appendChild(menu);
     }
     return wrap;
