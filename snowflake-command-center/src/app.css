@@ -603,9 +603,9 @@
 /* Single clean input frame — one border, borderless field, understated send */
 .aw-inputwrap { width: 100%; max-width: 600px; display: flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-md); padding: 5px 6px 5px 16px; transition: border-color .12s, box-shadow .12s; }
 .aw-inputwrap:focus-within { border-color: var(--sf-blue); box-shadow: 0 0 0 3px rgba(41,181,232,0.12); }
-.aw-input { flex: 1; border: none; background: transparent; font-family: var(--font-sans); font-size: 14px; color: var(--ink); padding: 9px 0; }
-.aw-input:focus { outline: none; }
-.aw-input::placeholder { color: var(--muted); }
+.aw-inputwrap .aw-input { flex: 1; border: none; border-radius: 0; background: transparent; font-family: var(--font-sans); font-size: 14px; color: var(--ink); padding: 9px 0; }
+.aw-inputwrap .aw-input:focus { outline: none; border: none; box-shadow: none; }
+.aw-inputwrap .aw-input::placeholder { color: var(--muted); }
 .aw-send { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--r-sm); border: none; background: transparent; color: var(--muted); cursor: pointer; transition: background .12s, color .12s; }
 .aw-send:hover { background: rgba(41,181,232,0.10); color: var(--sf-blue-deep); }
 .aw-send-ico { display: inline-flex; }
