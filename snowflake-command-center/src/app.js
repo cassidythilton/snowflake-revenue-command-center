@@ -206,16 +206,26 @@
   function ymOf(d) { return d.getFullYear() + "-" + pad2(d.getMonth() + 1); }
   function ymdOf(d) { return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }
 
+  function lowerKeys(o) { var r = {}; if (o) Object.keys(o).forEach(function (k) { r[String(k).toLowerCase()] = o[k]; }); return r; }
+
   // Run a SQL statement against a federated (Cloud Amplifier) dataset alias and
-  // return row objects keyed by column name. Domo SQL API returns {columns, rows}.
+  // return row objects keyed by lower-cased column name. Domo's SQL API may
+  // return { columns:[...], rows:[[...]] } (columns as strings or metadata
+  // objects) or an array of row objects; handle all shapes and normalize casing.
   function amplifierQuery(alias, sql) {
     return domo.post("/sql/v1/" + alias, sql, { contentType: "text/plain" })
       .then(function (res) {
-        var cols = (res && res.columns) || [];
-        var rows = (res && res.rows) || (Array.isArray(res) ? res : []);
+        if (!res) return [];
+        if (Array.isArray(res)) return res.map(lowerKeys);
+        var rows = res.rows || res.data || [];
+        var rawCols = res.columns || res.metadata || res.rowType || [];
+        var cols = rawCols.map(function (c) {
+          var name = (c && typeof c === "object") ? (c.name || c.alias || c.label || c.columnName) : c;
+          return String(name).toLowerCase();
+        });
         return rows.map(function (row) {
           if (Array.isArray(row)) { var o = {}; cols.forEach(function (c, i) { o[c] = row[i]; }); return o; }
-          return row;
+          return lowerKeys(row);
         });
       });
   }
@@ -275,16 +285,16 @@
       if (rows && rows.length) {
         var history = [], forecast = [];
         rows.forEach(function (r) {
-          var period = String(r.PERIOD_MONTH || "").slice(0, 7);
-          if (String(r.KIND) === "forecast") forecast.push({ period: period, forecast: num(r.FORECAST), lower: num(r.LOWER_BOUND), upper: num(r.UPPER_BOUND) });
-          else history.push({ period: period, actual: num(r.ACTUAL) });
+          var period = String(r.period_month || "").slice(0, 7);
+          if (String(r.kind) === "forecast") forecast.push({ period: period, forecast: num(r.forecast), lower: num(r.lower_bound), upper: num(r.upper_bound) });
+          else history.push({ period: period, actual: num(r.actual) });
         });
         out.revenueForecast = { source: "SNOWFLAKE_REVENUE_CC.CORE.GOLD_REVENUE_FORECAST via Cloud Amplifier (SNOWFLAKE.ML.FORECAST)",
           grain: "month", unit: "USD", predictionInterval: 0.95, history: history, forecast: forecast };
       }
       return amplifierQuery(CA.risk, qRegional);
     }).then(function (rows) {
-      out.regionalRisk = rows.map(function (r) { return { region: r.REGION, segment: r.SEGMENT, avgRisk: num(r.avgrisk), highRiskAccounts: num(r.highrisk), revenueAtRisk: num(r.rar) }; });
+      out.regionalRisk = rows.map(function (r) { return { region: r.region, segment: r.segment, avgRisk: num(r.avgrisk), highRiskAccounts: num(r.highrisk), revenueAtRisk: num(r.rar) }; });
       return amplifierQuery(CA.actions, qQueue);
     }).then(function (rows) {
       var r = rows[0] || {};
@@ -292,6 +302,11 @@
       return amplifierQuery(CA.actions, qTop);
     }).then(function (rows) {
       out.actionQueue.topActions = rows.map(function (r) { return { action: r.action, count: num(r.cnt), revenueAtRisk: num(r.rar) }; });
+      // Guard: if the federation read parsed to empty/zero (e.g. an unexpected
+      // response shape), reject so loadData falls back to the Code Engine bridge
+      // rather than rendering a $0 / NaN dashboard.
+      var nr = out.kpis.netRevenue ? num(out.kpis.netRevenue.value) : 0;
+      if (!(nr > 0)) throw new Error("Cloud Amplifier returned empty/zero data");
       return out;
     });
   }
