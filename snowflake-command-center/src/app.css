@@ -1390,10 +1390,10 @@
 .cw-shell {
   display: grid; grid-template-columns: 236px 1fr; gap: 16px;
   height: calc(100vh - 268px); min-height: 560px;
-  --cw-ink: #111827;      /* gray-900 */
-  --cw-muted: #6b7280;    /* gray-500 */
-  --cw-faint: #9ca3af;    /* gray-400 */
-  --cw-line: #e5e7eb;     /* gray-200 */
+  --cw-ink: #1e252f;      /* Snowflake Intelligence primary text */
+  --cw-muted: #5d6a85;    /* SI subtitle / muted */
+  --cw-faint: #9aa7bd;    /* faint icon/label */
+  --cw-line: #e6e8ec;     /* hairline */
   --cw-surface: #ffffff;
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   letter-spacing: -0.006em;
@@ -1445,10 +1445,11 @@
 .cw-seed { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--muted); }
 
 /* Home / empty state — greeting \u2192 composer \u2192 suggested questions (CoWork parity) */
-.cw-home { flex: 1 1 auto; overflow-y: auto; display: flex; flex-direction: column; justify-content: center; padding: 24px clamp(20px, 8%, 96px) 40px; }
-.cw-greet { margin-bottom: 20px; }
-.cw-greet h1 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -.025em; line-height: 1.15; color: var(--text); }
-.cw-greet h1.cw-greet-sub { color: #9db8d2; }
+.cw-home { flex: 1 1 auto; overflow-y: auto; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 24px 24px 48px; }
+.cw-home > * { width: 100%; max-width: 680px; }
+.cw-greet { margin-bottom: 22px; }
+.cw-greet h1 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -.02em; line-height: 1.22; color: var(--cw-ink); font-family: "Inter", sans-serif; }
+.cw-greet h1.cw-greet-sub { color: #9db8d2; font-weight: 700; }
 .cw-starters { margin: 20px 0 0; display: flex; flex-direction: column; }
 .cw-starter { display: flex; align-items: center; gap: 13px; width: 100%; padding: 14px 6px; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--text); text-align: left; font: inherit; font-size: 13.5px; cursor: pointer; transition: color .14s ease; }
 .cw-starter:first-child { border-top: 0; }
