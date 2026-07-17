@@ -1232,31 +1232,28 @@
   position: fixed; left: 0; top: 0; bottom: 0; width: var(--rail-w);
   z-index: 60; overflow: hidden;
   display: flex; flex-direction: column;
-  background: var(--surface);
-  border-right: 1px solid var(--line);
+  background: #dae3ef;
+  border-right: 1px solid rgba(31, 93, 134, 0.10);
   box-shadow: none;
   transition: width .26s cubic-bezier(.4,0,.2,1), box-shadow .26s ease;
 }
 .nav-rail:hover, .app-root.rail-pinned .nav-rail { width: var(--rail-w-open); }
 .nav-rail:hover { box-shadow: var(--shadow-lg); }
 
-/* Header */
+/* Header — Snowflake mark + typographic Domo wordmark (minimal co-brand) */
 .rail-head {
-  height: 66px; flex: none; display: flex; align-items: center; gap: 8px;
-  padding: 0 16px; border-bottom: 1px solid var(--line);
+  height: 64px; flex: none; display: flex; align-items: center; gap: 8px;
+  padding: 0 20px; border-bottom: 1px solid rgba(31, 93, 134, 0.10);
 }
-.rail-logo { position: relative; flex: 1; min-width: 0; height: 34px; }
-.rail-logo-mark {
-  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
-  width: 30px; height: 30px; object-fit: contain; opacity: 1; transition: opacity .2s ease;
+.rail-logo { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; }
+.rl-mark { width: 26px; height: 26px; object-fit: contain; flex: none; display: block; }
+.rl-word {
+  display: flex; align-items: center; gap: 12px; min-width: 0;
+  opacity: 0; transform: translateX(-6px); transition: opacity .2s ease, transform .2s ease;
 }
-.rail-logo-full {
-  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
-  height: 26px; width: auto; max-width: 186px; object-fit: contain;
-  opacity: 0; transition: opacity .2s ease .04s;
-}
-.nav-rail:hover .rail-logo-mark, .app-root.rail-pinned .rail-logo-mark { opacity: 0; }
-.nav-rail:hover .rail-logo-full, .app-root.rail-pinned .rail-logo-full { opacity: 1; }
+.nav-rail:hover .rl-word, .app-root.rail-pinned .rl-word { opacity: 1; transform: translateX(0); }
+.rl-div { width: 1px; height: 19px; background: rgba(31, 93, 134, 0.22); flex: none; }
+.rl-domo { font-size: 19px; font-weight: 800; letter-spacing: -0.022em; color: var(--domo-blue-ink); white-space: nowrap; }
 
 .rail-pin {
   flex: none; width: 30px; height: 30px; border-radius: 8px;
@@ -1266,38 +1263,33 @@
 }
 .rail-pin svg { width: 16px; height: 16px; }
 .nav-rail:hover .rail-pin, .app-root.rail-pinned .rail-pin { opacity: 1; transform: scale(1); }
-.rail-pin:hover { color: var(--domo-blue-ink); background: var(--n-050); }
-.rail-pin[aria-pressed="true"] { color: var(--domo-blue-deep); background: rgba(74,144,194,.12); }
+.rail-pin:hover { color: var(--domo-blue-ink); background: rgba(255,255,255,.6); }
+.rail-pin[aria-pressed="true"] { color: var(--domo-blue-deep); background: rgba(255,255,255,.85); }
 
 /* Nav list */
 .rail-nav { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 3px; }
 .rail-nav::-webkit-scrollbar { width: 6px; }
-.rail-nav::-webkit-scrollbar-thumb { background: var(--n-100); border-radius: 3px; }
+.rail-nav::-webkit-scrollbar-thumb { background: rgba(31,93,134,.16); border-radius: 3px; }
 
 .rail-item {
   position: relative; display: flex; align-items: center; gap: 13px;
-  width: 100%; padding: 9px 10px; border: 0; border-radius: 9px;
+  width: 100%; padding: 9px 10px; border: 0; border-radius: 10px;
   background: transparent; color: var(--n-700); cursor: pointer; text-align: left;
-  font: inherit; transition: background .16s ease, color .16s ease;
+  font: inherit; transition: background .16s ease, color .16s ease, box-shadow .16s ease;
 }
-.rail-item:hover { background: var(--n-050); }
-.rail-item.active { background: linear-gradient(90deg, rgba(74,144,194,.16), rgba(74,144,194,.05)); color: var(--domo-blue-ink); }
+.rail-item:hover { background: rgba(255,255,255,.55); }
+.rail-item.active { background: #fff; color: var(--domo-blue-ink); box-shadow: 0 1px 2px rgba(31,93,134,.10), 0 6px 16px -6px rgba(31,93,134,.22); }
 .rail-item.meta { margin-top: auto; }
 .rail-item.meta::before {
   content: ""; position: absolute; left: 10px; right: 10px; top: -5px; height: 1px;
-  background: var(--line);
+  background: rgba(31, 93, 134, 0.12);
 }
 
-.rail-ind {
-  position: absolute; left: -12px; top: 50%; transform: translateY(-50%);
-  width: 3px; height: 0; border-radius: 0 3px 3px 0;
-  background: var(--domo-blue-deep); transition: height .2s ease;
-}
-.rail-item.active .rail-ind { height: 24px; }
+.rail-ind { display: none; }
 
 .rail-ico { flex: none; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; color: var(--n-500); }
 .rail-ico svg { width: 21px; height: 21px; }
-.rail-item:hover .rail-ico { color: var(--n-700); }
+.rail-item:hover .rail-ico { color: var(--domo-blue-deep); }
 .rail-item.active .rail-ico { color: var(--domo-blue-deep); }
 
 .rail-meta {
@@ -1317,7 +1309,7 @@
 
 /* Footer */
 .rail-foot {
-  flex: none; padding: 12px 16px; border-top: 1px solid var(--line);
+  flex: none; padding: 12px 16px; border-top: 1px solid rgba(31, 93, 134, 0.10);
   display: flex; align-items: center;
 }
 .rail-env { display: inline-flex; align-items: center; gap: 8px; min-width: 0; color: var(--muted); font-size: 11px; font-weight: 600; }

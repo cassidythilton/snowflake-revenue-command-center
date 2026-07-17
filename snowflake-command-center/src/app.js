@@ -121,15 +121,31 @@
 
   /* ---- Source deep-links (both planes): Snowsight + Domo. Everywhere a
    * governed object is named it should link to its source (reference parity). */
+  // Verified object types (via Cortex CLI: SHOW TABLES/VIEWS/SEMANTIC VIEWS in
+  // SNOWFLAKE_REVENUE_CC.CORE). Snowsight deep-links use a different path
+  // segment per type, so guessing "view" for everything produces dead links
+  // (e.g. GOLD_REVENUE_FORECAST is a TABLE, REVENUE_CC_ANALYST a SEMANTIC VIEW).
+  var SNOWSIGHT_OBJTYPE = {
+    REVENUE_CC_ANALYST: "semantic-view",
+    GOLD_AGENT_ACTION_QUEUE: "view", GOLD_CUSTOMER_RENEWAL_RISK: "view",
+    GOLD_EXECUTIVE_REVENUE_HEALTH: "view", GOLD_INCIDENT_REVENUE_IMPACT: "view",
+    GOLD_PORTAL_USER_SCOPE: "view", GOLD_PROTECTED_REVENUE_ROLLUP: "view",
+    GOLD_REGION_SAVEPLAY_LEADERBOARD: "view", ML_RENEWAL_RISK_TRAINING: "view",
+    GOLD_REVENUE_FORECAST: "table", ML_RENEWAL_RISK_FEATURES: "table",
+    DIM_ACCOUNT: "table", DIM_PRODUCT: "table", DIM_TENANT: "table", DIM_USER_ENTITLEMENT: "table",
+    FACT_AGENT_ACTIONS: "table", FACT_INCIDENTS: "table", FACT_PRODUCT_USAGE_DAILY: "table",
+    FACT_RENEWAL_RISK: "table", FACT_REVENUE_DAILY: "table", FACT_SUPPORT_CASES: "table",
+    AGENT_ACTION_WRITEBACK: "table", GOV_ROLE_REGION_MAP: "table", KNOWLEDGE_DOCS: "table",
+    PREDICTION_FEEDBACK: "table", SCENARIO_RUNS: "table"
+  };
   function snowsightObjHref(objType, name, db, schema) {
     db = db || (state.config && state.config.database) || "SNOWFLAKE_REVENUE_CC";
     schema = schema || (state.config && state.config.schema) || "CORE";
     var base = SNOWSIGHT_BASE + "/#/data/databases/" + encodeURIComponent(db) + "/schemas/" + encodeURIComponent(schema);
     if (!name) return base;
-    // Snowsight browses each object kind under its own path segment.
-    var seg = objType === "table" ? "/table/"
-      : objType === "semantic-view" || objType === "semantic" ? "/semantic-view/"
-      : "/view/";
+    // The verified type is authoritative; the caller's objType is only a fallback.
+    var t = SNOWSIGHT_OBJTYPE[String(name).toUpperCase()] || objType || "view";
+    var seg = t === "table" ? "/table/" : (t === "semantic-view" || t === "semantic") ? "/semantic-view/" : "/view/";
     return base + seg + encodeURIComponent(name);
   }
   function snowsightAgentHref() { return SNOWSIGHT_BASE + "/#/studio/agents"; }
