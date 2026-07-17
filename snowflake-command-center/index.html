@@ -13,48 +13,58 @@
 <link rel="stylesheet" href="./src/app.css" />
 </head>
 <body>
-<div class="app-shell">
+<div class="app-root" id="appRoot">
 
-  <header class="app-header">
-    <div class="brand-row">
-      <span class="brand-lockup">
-        <img class="cobrand" src="./public/brand/domo-snowflake-logo.svg" alt="Domo + Snowflake" />
-      </span>
-      <span class="brand-divider"></span>
-      <span class="panel-tag">Revenue Command Center</span>
-      <span class="brand-spacer"></span>
-      <span class="env-chip"><span class="env-dot"></span> <span id="envLabel">Synthetic data · Horizon-governed</span></span>
-    </div>
-
-    <div class="header-titles">
-      <p class="eyebrow">Build with Snowflake · Deliver with Domo</p>
-      <h1>Revenue Command Center</h1>
-      <p class="subtitle">One governed brain, many governed surfaces. Snowflake Horizon + semantic views + Cortex are the intelligence plane; Domo is the delivery and action plane. Metrics never fork out of Snowflake.</p>
-    </div>
-
-    <div class="header-controls">
-      <div class="control-group">
-        <span class="label">Persona</span>
-        <div class="select" id="personaSelect">
-          <button class="select-trigger" aria-expanded="false" aria-haspopup="listbox">
-            <span class="select-value">Executive Sponsor</span>
-            <span class="select-caret"></span>
-          </button>
-          <div class="select-menu" role="listbox" id="personaMenu"></div>
-        </div>
+  <aside class="nav-rail" id="navRail" aria-label="Primary navigation">
+    <div class="rail-head">
+      <div class="rail-logo">
+        <img class="rail-logo-mark" src="./public/brand/snowflake-mark.svg" alt="" />
+        <img class="rail-logo-full" src="./public/brand/domo-snowflake-logo.svg" alt="Domo + Snowflake" />
       </div>
-      <span class="mode-pill" id="modePill">Loading</span>
+      <button class="rail-pin" id="railPin" type="button" aria-pressed="false" title="Pin navigation open">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6z"/><path d="M12 15v5"/></svg>
+      </button>
     </div>
-  </header>
+    <nav class="rail-nav" role="tablist" id="viewTabs"></nav>
+    <div class="rail-foot">
+      <span class="rail-env"><span class="env-dot"></span> <span class="rail-env-lab" id="railEnvLab">Horizon-governed</span></span>
+    </div>
+  </aside>
 
-  <nav class="view-tabs" role="tablist" id="viewTabs"></nav>
+  <div class="app-scroll" id="appScroll">
+    <div class="app-shell">
 
-  <main id="view"></main>
+      <header class="app-header">
+        <div class="header-titles">
+          <p class="eyebrow">Build with Snowflake · Deliver with Domo</p>
+          <h1>Revenue Command Center</h1>
+          <p class="subtitle">One governed brain, many governed surfaces. Snowflake Horizon + semantic views + Cortex are the intelligence plane; Domo is the delivery and action plane. Metrics never fork out of Snowflake.</p>
+        </div>
 
-  <footer class="app-footer">
-    <span class="powered">Snowflake AI Data Cloud + Domo · Open Sans + Roboto Mono · synthetic data</span>
-    <span class="tag-chip"><span class="env-dot"></span> <span id="sourceLabel">SNOWFLAKE_REVENUE_CC.CORE</span></span>
-  </footer>
+        <div class="header-controls">
+          <span class="env-chip"><span class="env-dot"></span> <span id="envLabel">Synthetic data · Horizon-governed</span></span>
+          <div class="control-group">
+            <span class="label">Persona</span>
+            <div class="select" id="personaSelect">
+              <button class="select-trigger" aria-expanded="false" aria-haspopup="listbox">
+                <span class="select-value">Executive Sponsor</span>
+                <span class="select-caret"></span>
+              </button>
+              <div class="select-menu" role="listbox" id="personaMenu"></div>
+            </div>
+          </div>
+          <span class="mode-pill" id="modePill">Loading</span>
+        </div>
+      </header>
+
+      <main id="view"></main>
+
+      <footer class="app-footer">
+        <span class="powered">Snowflake AI Data Cloud + Domo · Open Sans + Roboto Mono · synthetic data</span>
+        <span class="tag-chip"><span class="env-dot"></span> <span id="sourceLabel">SNOWFLAKE_REVENUE_CC.CORE</span></span>
+      </footer>
+    </div>
+  </div>
 </div>
 
 <!-- Domo runtime (ryuu.js SDK from CDN; the platform-injected /domo.js route is unreliable in some embeds). -->

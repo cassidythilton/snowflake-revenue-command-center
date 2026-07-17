@@ -29,7 +29,9 @@
     { id: "ops", label: "Snowflake Ops", sprint: 5, mark: "snowflake-mark.svg",
       items: ["Hybrid Tables workspace", "Browse / add / edit / delete scenario runs", "Prediction feedback CRUD (operational memory)"] },
     { id: "readiness", label: "Horizon AI Readiness", sprint: 7, mark: "domo-pdp.svg",
-      items: ["Two-persona parity test \u2014 same question, different governed rows", "Row-access + column-masking policies enforced at the query engine", "Governed semantic model \u2014 entity graph, verified queries, DDL builder"] },
+      items: ["AI Readiness control plane \u2014 Horizon prepared \u2192 Domo AI Readiness synced, column-level", "Two-persona parity test \u2014 same question, different governed rows", "Row-access + column-masking policies enforced at the query engine"] },
+    { id: "semantic", label: "Semantic Model", sprint: 4, mark: "snowflake-cortex.svg",
+      items: ["Governed semantic view \u2014 entities, relationships, and metrics", "Verified queries Cortex trusts", "DESCRIBE SEMANTIC VIEW introspection + DDL builder"] },
     { id: "cowork", label: "Cortex Workspace", sprint: 8, mark: "snowflake-cortex.svg",
       items: ["Embedded CoWork agent conversation (Genie analog) via the snowflakece bridge", "Deep Research + Skills scoped by Horizon", "Snowflake-managed MCP + Domo Essentials MCP outward"] },
     { id: "chat", label: "Domo Chat v2", sprint: 9, mark: "domo-ai-agent.svg", gated: true,
@@ -1341,7 +1343,7 @@
   }
 
   // Governed semantic-model surface (entity graph, verified queries, DDL builder).
-  // Rendered standalone historically; now embedded inside Horizon AI Readiness.
+  // Its own top-level tab (Semantic Model).
   function semanticSection(frag) {
     if (!state.semantic.loaded && !state.semantic.loading) loadSemantic();
 
@@ -3006,7 +3008,7 @@
     var toggle = h("button", { class: "gov-detail-toggle" }, [
       h("span", { class: "gdt-ico" }, [open ? "\u2212" : "+"]),
       open ? "Hide governance detail" : "Show governance detail",
-      h("span", { class: "gdt-sub" }, ["parity test \u00b7 masking \u00b7 policies \u00b7 guardrails \u00b7 semantic model"])
+      h("span", { class: "gdt-sub" }, ["parity test \u00b7 masking \u00b7 policies \u00b7 guardrails"])
     ]);
     toggle.addEventListener("click", function () { state.governance.showDetail = !state.governance.showDetail; renderView(); });
     frag.appendChild(toggle);
@@ -3016,13 +3018,6 @@
       frag.appendChild(h("section", { class: "grid" }, [govMaskingPanel(), govPolicyPanel()]));
       frag.appendChild(h("section", { class: "grid" }, [govGuardPanel()]));
       frag.appendChild(h("section", { class: "grid" }, [govReadinessPanel()]));
-      frag.appendChild(sectionDivider(
-        "Governed semantic model",
-        "The business vocabulary behind every answer \u2014 entities, relationships, and the verified queries Cortex trusts. This is the Snowflake analog of Unity Catalog's governed model.",
-        "snowflake-cortex.svg",
-        srcLink("Open REVENUE_CC_ANALYST", snowsightObjHref("view", "REVENUE_CC_ANALYST"), "sf")
-      ));
-      semanticSection(frag);
     }
     return frag;
   }
@@ -3290,18 +3285,70 @@
 
   /* ------------------------------- render -------------------------------- */
   function setMode() {
-    var pill = el("modePill");
-    if (state.mode === "live") { pill.className = "mode-pill sf-live"; pill.textContent = "Live \u00b7 Snowflake"; el("envLabel").textContent = state.dataSource === "amplifier" ? "Live \u00b7 Cloud Amplifier federation (data stays in Snowflake)" : "Live Snowflake read \u00b7 Horizon-governed"; }
-    else if (state.mode === "sample") { pill.className = "mode-pill sample"; pill.textContent = "Sample data"; el("envLabel").textContent = "Sample seed \u00b7 connect Code Engine for live"; }
-    else { pill.className = "mode-pill"; pill.textContent = "Loading"; }
+    var pill = el("modePill"), railLab = el("railEnvLab");
+    if (state.mode === "live") { pill.className = "mode-pill sf-live"; pill.textContent = "Live \u00b7 Snowflake"; el("envLabel").textContent = state.dataSource === "amplifier" ? "Live \u00b7 Cloud Amplifier federation (data stays in Snowflake)" : "Live Snowflake read \u00b7 Horizon-governed"; if (railLab) railLab.textContent = "Live \u00b7 Horizon-governed"; }
+    else if (state.mode === "sample") { pill.className = "mode-pill sample"; pill.textContent = "Sample data"; el("envLabel").textContent = "Sample seed \u00b7 connect Code Engine for live"; if (railLab) railLab.textContent = "Sample \u00b7 Horizon-governed"; }
+    else { pill.className = "mode-pill"; pill.textContent = "Loading"; if (railLab) railLab.textContent = "Loading\u2026"; }
   }
+
+  // Inline line-icons per surface (24x24, currentColor stroke).
+  var ICO = "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'>";
+  var SURFACE_ICONS = {
+    home: ICO + "<path d='M3 3v18h18'/><path d='M6 15l4-5 3 3 5-7'/></svg>",
+    analyst: ICO + "<path d='M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/><path d='M7 9h10M7 13h6'/></svg>",
+    ml: ICO + "<rect x='6' y='6' width='12' height='12' rx='2'/><rect x='10' y='10' width='4' height='4'/><path d='M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3'/></svg>",
+    approvals: ICO + "<path d='M22 11.1V12a10 10 0 1 1-5.9-9.1'/><path d='M22 4L12 14.02l-3-3'/></svg>",
+    ops: ICO + "<ellipse cx='12' cy='5' rx='8' ry='3'/><path d='M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5'/><path d='M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6'/></svg>",
+    readiness: ICO + "<path d='M12 2l8 4v6c0 5-3.4 8.5-8 10-4.6-1.5-8-5-8-10V6z'/><path d='M9 12l2 2 4-4'/></svg>",
+    semantic: ICO + "<circle cx='5' cy='6' r='2.4'/><circle cx='19' cy='6' r='2.4'/><circle cx='12' cy='18' r='2.4'/><path d='M7 7.4l4 8.4M17 7.4l-4 8.4M7.4 6h9.2'/></svg>",
+    cowork: ICO + "<rect x='4' y='8' width='16' height='11' rx='2.5'/><path d='M12 8V4.5M9.5 4.5h5'/><circle cx='9' cy='13.5' r='1'/><circle cx='15' cy='13.5' r='1'/><path d='M9.5 16.5h5'/></svg>",
+    chat: ICO + "<path d='M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z'/><path d='M8 11.5h.01M12 11.5h.01M16 11.5h.01'/></svg>",
+    how: ICO + "<path d='M12 2L2 7l10 5 10-5-10-5z'/><path d='M2 12l10 5 10-5'/><path d='M2 17l10 5 10-5'/></svg>",
+    _default: ICO + "<circle cx='12' cy='12' r='9'/></svg>"
+  };
+  var SURFACE_DESC = {
+    home: "Forecast & KPIs", analyst: "Ask in natural language", ml: "Score renewal risk",
+    approvals: "Human-in-the-loop queue", ops: "Hybrid Tables workspace", readiness: "Horizon \u2194 Domo AI",
+    semantic: "Governed vocabulary", cowork: "Embedded CoWork agent", chat: "Domo Chat v2 agent", how: "Architecture & lineage"
+  };
+  // Surfaces rendered in the meta group (rail footer separator above).
+  var META_SURFACES = { how: true };
 
   function renderTabs() {
     var nav = el("viewTabs"); nav.innerHTML = "";
     SURFACES.forEach(function (s) {
-      var tab = h("button", { class: "view-tab" + (s.id === state.surface ? " active" : ""), role: "tab", "aria-selected": s.id === state.surface ? "true" : "false" }, [s.label]);
-      tab.addEventListener("click", function () { state.surface = s.id; renderTabs(); renderView(); });
-      nav.appendChild(tab);
+      var active = s.id === state.surface;
+      var label = h("span", { class: "rail-label" }, [s.label]);
+      if (s.gated) label.appendChild(h("span", { class: "rail-badge" }, ["Beta"]));
+      var item = h("button", {
+        class: "rail-item" + (active ? " active" : "") + (META_SURFACES[s.id] ? " meta" : ""),
+        role: "tab", "aria-selected": active ? "true" : "false", title: s.label
+      }, [
+        h("span", { class: "rail-ind" }),
+        h("span", { class: "rail-ico", html: SURFACE_ICONS[s.id] || SURFACE_ICONS._default }),
+        h("span", { class: "rail-meta" }, [label, h("span", { class: "rail-desc" }, [SURFACE_DESC[s.id] || ""])])
+      ]);
+      item.addEventListener("click", function () { state.surface = s.id; renderTabs(); renderView(); window.scrollTo({ top: 0, behavior: "smooth" }); });
+      nav.appendChild(item);
+    });
+  }
+
+  // Collapsing left rail: hover-to-expand + pin-to-lock (persisted).
+  function initRail() {
+    var root = el("appRoot"), pin = el("railPin");
+    if (!root || !pin) return;
+    var pinned = false;
+    try { pinned = localStorage.getItem("railPinned") === "true"; } catch (e) {}
+    function apply() {
+      root.classList.toggle("rail-pinned", pinned);
+      pin.setAttribute("aria-pressed", String(pinned));
+      pin.setAttribute("title", pinned ? "Unpin navigation" : "Pin navigation open");
+    }
+    apply();
+    pin.addEventListener("click", function () {
+      pinned = !pinned;
+      try { localStorage.setItem("railPinned", String(pinned)); } catch (e) {}
+      apply();
     });
   }
 
@@ -3923,6 +3970,7 @@
 
   function init() {
     buildPersonaSelect();
+    initRail();
     renderTabs();
     refresh();
     // Close the semantic-view picker on any outside click.
