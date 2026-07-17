@@ -32,8 +32,8 @@
       items: ["AI Readiness control plane \u2014 Horizon prepared \u2192 Domo AI Readiness synced, column-level", "Two-persona parity test \u2014 same question, different governed rows", "Row-access + column-masking policies enforced at the query engine"] },
     { id: "semantic", label: "Semantic Model", sprint: 4, mark: "snowflake-cortex.svg",
       items: ["Governed semantic view \u2014 entities, relationships, and metrics", "Verified queries Cortex trusts", "DESCRIBE SEMANTIC VIEW introspection + DDL builder"] },
-    { id: "cowork", label: "Cortex Workspace", sprint: 8, mark: "snowflake-cortex.svg",
-      items: ["Embedded CoWork agent conversation (Genie analog) via the snowflakece bridge", "Deep Research + Skills scoped by Horizon", "Snowflake-managed MCP + Domo Essentials MCP outward"] },
+    { id: "cowork", label: "Snowflake Intelligence", sprint: 8, mark: "snowflake-cortex.svg",
+      items: ["The CoWork agent chat, reproduced in-app via the snowflakece bridge", "Deep Research + Skills scoped by Horizon", "Snowflake-managed MCP + Domo Essentials MCP outward"] },
     { id: "chat", label: "Domo Chat v2", sprint: 9, mark: "domo-ai-agent.svg", gated: true,
       items: ["Embedded native Domo Chat v2 agent", "MCP client \u2192 the Snowflake-managed MCP server (same Agent/Analyst/Search tools)", "Answers inherit REVENUE_CC_ANALYST semantics + Horizon policies"] },
     { id: "how", label: "How it works", sprint: 9, mark: "domo-pro-code.svg",
@@ -61,6 +61,15 @@
     "Why did renewal risk increase for West Enterprise accounts this month and what should we do?",
     "Summarize recent incidents affecting high-ARR accounts and recommend save plays.",
     "Which Enterprise accounts in the West region have the highest renewal risk and why?"
+  ];
+
+  // Starter questions for the Snowflake Intelligence (CoWork) home, mirroring
+  // the native CoWork suggested-question rows.
+  var CW_STARTERS = [
+    "What is our total revenue at risk this quarter, by region?",
+    "Which Enterprise accounts in the West region have the highest renewal risk and why?",
+    "Score renewal risk for account ACC-00008 and explain the top drivers.",
+    "Summarize recent incidents affecting high-ARR West accounts, recommend a save play, and stage it for approval."
   ];
 
   // Domo instance + Cloud Amplifier data models. These mirror the Snowflake
@@ -3299,54 +3308,66 @@
     return rail;
   }
 
+  function cwGreeting() {
+    var hh = new Date().getHours();
+    return hh < 12 ? "Good morning" : hh < 18 ? "Good afternoon" : "Good evening";
+  }
+  function cwUserName() {
+    try {
+      if (typeof domo !== "undefined" && domo.env) {
+        var n = domo.env.userName || domo.env.USER_NAME || domo.env.user || domo.env.fullName || "";
+        if (n) return String(n).trim().split(/\s+/)[0];
+      }
+    } catch (e) {}
+    return "";
+  }
+  var CW_BUBBLE_ICO = "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z'/></svg>";
+
   function cwMain() {
-    var c = state.cowork.cowork || {};
     var main = h("div", { class: "cw-main" });
 
-    // Header — agent identity + open-in-CoWork + status.
-    var head = h("div", { class: "cw-head" }, [
+    // Slim header: attribution + open-in-CoWork (the agent name lives in the
+    // composer pill, matching native CoWork).
+    main.appendChild(h("div", { class: "cw-head" }, [
       h("div", { class: "cw-head-l" }, [
-        h("span", { class: "cw-avatar" }, [h("img", { src: "./public/brand/snowflake-cortex.svg", alt: "" })]),
-        h("div", {}, [
-          h("div", { class: "cw-head-title" }, ["Revenue Command Center Agent", h("span", { class: "cw-native" }, ["Snowflake Intelligence"])]),
-          h("div", { class: "cw-head-sub" }, ["CoWork chat, reproduced in Domo \u2014 same governed agent (", h("code", {}, [(c.agent || "REVENUE_CC_AGENT").split(".").pop()]), "), Analyst + Search + tools, over the ", h("code", {}, ["snowflakece"]), " bridge."])
-        ])
+        state.mode === "live" ? h("span", { class: "cw-live" }, [h("span", { class: "cw-live-dot" }), "Live agent"]) : h("span", { class: "cw-seed" }, [h("span", { class: "cw-live-dot seed" }), "Sample run"]),
+        h("span", { class: "cw-head-native" }, ["Snowflake Intelligence \u00b7 CoWork"])
       ]),
-      h("div", { class: "cw-head-r" }, [
-        state.mode === "live" ? h("span", { class: "cw-live" }, [h("span", { class: "cw-live-dot" }), "Live agent"]) : h("span", { class: "cw-seed" }, ["Sample run"]),
-        srcLink("Open in CoWork", coworkHomeHref(), "sf")
-      ])
-    ]);
-    main.appendChild(head);
+      srcLink("Open in CoWork", coworkHomeHref(), "sf")
+    ]));
 
-    // Stream — empty hero or the transcript.
-    var stream = h("div", { class: "cw-stream", id: "cwStream" });
     var t = cwActiveThread();
-    if (!t.messages.length) stream.appendChild(cwHero());
-    else t.messages.forEach(function (m) { stream.appendChild(cwRenderMessage(m)); });
-    main.appendChild(stream);
-
-    main.appendChild(cwComposer());
+    if (!t.messages.length) {
+      // Home / empty state: greeting \u2192 composer \u2192 suggested questions (CoWork parity).
+      main.appendChild(cwHome());
+    } else {
+      var stream = h("div", { class: "cw-stream", id: "cwStream" });
+      t.messages.forEach(function (m) { stream.appendChild(cwRenderMessage(m)); });
+      main.appendChild(stream);
+      main.appendChild(cwComposer());
+    }
     return main;
   }
 
-  function cwHero() {
-    var hero = h("div", { class: "cw-hero" });
-    hero.appendChild(h("span", { class: "cw-hero-mark" }, [h("img", { src: "./public/brand/snowflake-cortex.svg", alt: "" })]));
-    hero.appendChild(h("h2", {}, ["Revenue Command Center Agent"]));
-    hero.appendChild(h("p", { class: "cw-hero-lead" }, ["Ask about renewal risk, incidents, revenue at risk, or save plays. The agent reasons over the governed semantic view and the search corpus, cites its evidence, and can stage a governed save-play proposal \u2014 recommendation, never execution."]));
+  function cwHome() {
+    var name = cwUserName();
+    var home = h("div", { class: "cw-home" });
+    home.appendChild(h("div", { class: "cw-greet" }, [
+      h("h1", {}, [cwGreeting() + (name ? ", " + name : "")]),
+      h("h1", { class: "cw-greet-sub" }, ["What insights can I help with?"])
+    ]));
+    home.appendChild(cwComposer());
     var chips = h("div", { class: "cw-starters" });
-    AGENT_SUGGESTED.forEach(function (s) {
+    CW_STARTERS.forEach(function (s) {
       var row = h("button", { class: "cw-starter" }, [
-        h("span", { class: "cw-starter-ico", html: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round'><path d='M5 12h14M13 6l6 6-6 6'/></svg>" }),
+        h("span", { class: "cw-starter-ico", html: CW_BUBBLE_ICO }),
         h("span", {}, [s])
       ]);
       row.addEventListener("click", function () { cwAsk(s); });
       chips.appendChild(row);
     });
-    hero.appendChild(chips);
-    hero.appendChild(h("p", { class: "cw-hero-note" }, ["Always review the accuracy of responses."]));
-    return hero;
+    home.appendChild(chips);
+    return home;
   }
 
   function cwRenderMessage(m) {
@@ -3475,34 +3496,45 @@
 
   function cwComposer() {
     var st = state.cw;
-    var ta = h("textarea", { class: "cw-input", id: "cwInput", rows: "1", placeholder: "Ask the Revenue Command Center agent\u2026" });
+    var ta = h("textarea", { class: "cw-input", id: "cwInput", rows: "1", placeholder: "Ask a question to get started\u2026" });
     ta.value = st.draft || "";
     if (st.sending) ta.setAttribute("disabled", "true");
     ta.addEventListener("input", function () {
       st.draft = ta.value;
-      ta.style.height = "auto"; ta.style.height = Math.min(140, ta.scrollHeight) + "px";
+      ta.style.height = "auto"; ta.style.height = Math.min(160, ta.scrollHeight) + "px";
+      var btn = document.querySelector(".cw-send"); if (btn) btn.classList.toggle("ready", !!ta.value.trim());
     });
     ta.addEventListener("keydown", function (e) {
       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); cwAsk(ta.value); }
     });
+
+    var plus = h("button", { class: "cw-plus", title: "Attachments & context (native CoWork)" }, [
+      h("span", { html: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round'><path d='M12 5v14M5 12h14'/></svg>" })
+    ]);
+    var agentPill = h("span", { class: "cw-agent-pill" }, [
+      h("img", { src: "./public/brand/snowflake-cortex.svg", alt: "" }), "Revenue Command Center Agent"
+    ]);
     var think = h("button", { class: "cw-think" + (st.thinking ? " on" : ""), title: "Extended thinking \u2014 stream the agent's reasoning" }, [
-      h("span", { class: "cw-think-ico", html: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M9.5 3a6.5 6.5 0 0 0-3 12.2V18a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-2.8A6.5 6.5 0 0 0 9.5 3z'/><path d='M8 21h3'/></svg>" }),
+      h("span", { class: "cw-think-ico", html: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><path d='M22 10L12 5 2 10l10 5 10-5z'/><path d='M6 12v5c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5'/></svg>" }),
       "Extended thinking"
     ]);
     think.addEventListener("click", function () { st.thinking = !st.thinking; renderView(); cwFocusComposer(); });
-    var send = h("button", { class: "cw-send", title: "Send", disabled: st.sending ? "true" : null }, [
+    var ready = !!(st.draft && st.draft.trim());
+    var send = h("button", { class: "cw-send" + (ready ? " ready" : ""), title: st.sending ? "Working\u2026" : "Send", disabled: st.sending ? "true" : null }, [
       st.sending
         ? h("span", { class: "spinner sm" })
-        : h("span", { html: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M7 11l5-5 5 5'/><path d='M12 6v13'/></svg>" })
+        : h("span", { class: "cw-send-arrow", html: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 19V5M6 11l6-6 6 6'/></svg>" })
     ]);
     send.addEventListener("click", function () { cwAsk(ta.value); });
+
     return h("div", { class: "cw-composer-wrap" }, [
       h("div", { class: "cw-composer" }, [
-        h("span", { class: "cw-agent-pill" }, [h("img", { src: "./public/brand/snowflake-cortex.svg", alt: "" }), "Agent"]),
-        ta,
-        h("div", { class: "cw-composer-r" }, [think, send])
-      ]),
-      h("p", { class: "cw-composer-note" }, ["Answers honor Horizon row-access + masking. Always review the accuracy of responses."])
+        h("div", { class: "cw-composer-top" }, [ta]),
+        h("div", { class: "cw-composer-bar" }, [
+          h("div", { class: "cw-composer-l" }, [plus, agentPill]),
+          h("div", { class: "cw-composer-r" }, [think, send])
+        ])
+      ])
     ]);
   }
 
@@ -3660,7 +3692,7 @@
   var SURFACE_DESC = {
     home: "Forecast & KPIs", analyst: "Ask in natural language", ml: "Score renewal risk",
     approvals: "Human-in-the-loop queue", ops: "Scenarios & model feedback", readiness: "Horizon \u2194 Domo AI",
-    semantic: "Governed vocabulary", cowork: "Embedded CoWork agent", chat: "Domo Chat v2 agent", how: "Architecture & lineage"
+    semantic: "Governed vocabulary", cowork: "CoWork agent chat", chat: "Domo Chat v2 agent", how: "Architecture & lineage"
   };
   // Surfaces rendered in the meta group (rail footer separator above).
   var META_SURFACES = { how: true };
