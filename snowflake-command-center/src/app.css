@@ -1383,11 +1383,23 @@
   .app-scroll, .app-root.rail-pinned .app-scroll { padding-left: var(--rail-w); }
 }
 
-/* ===================== Cortex Workspace — CoWork chat ===================== */
+/* ===================== Cortex Workspace — CoWork chat =====================
+   Native CoWork is typeset in Inter over a Tailwind-neutral palette (confirmed
+   from the CoWork app shell). Scope Inter + those greys to this surface so it
+   reads as the real thing without disturbing the app's Open Sans identity. */
 .cw-shell {
   display: grid; grid-template-columns: 236px 1fr; gap: 16px;
   height: calc(100vh - 268px); min-height: 560px;
+  --cw-ink: #111827;      /* gray-900 */
+  --cw-muted: #6b7280;    /* gray-500 */
+  --cw-faint: #9ca3af;    /* gray-400 */
+  --cw-line: #e5e7eb;     /* gray-200 */
+  --cw-surface: #ffffff;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  letter-spacing: -0.006em;
 }
+.cw-shell button, .cw-shell input, .cw-shell textarea, .cw-shell select { font-family: inherit; }
+.cw-greet h1 { font-family: "Inter", sans-serif; }
 
 /* Thread rail */
 .cw-threads {
