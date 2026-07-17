@@ -757,23 +757,129 @@
     return wrap;
   }
 
+  // Relative time for the "recent questions" list (mirrors the reference app).
+  function timeAgo(iso) {
+    if (!iso) return "";
+    var d = new Date(iso); if (isNaN(d.getTime())) return "";
+    var mins = Math.floor((Date.now() - d.getTime()) / 60000);
+    if (mins < 1) return "Just now";
+    if (mins < 60) return mins + " min ago";
+    var hrs = Math.floor(mins / 60); if (hrs < 24) return hrs + " hour" + (hrs > 1 ? "s" : "") + " ago";
+    var days = Math.floor(hrs / 24); if (days < 7) return days + " day" + (days > 1 ? "s" : "") + " ago";
+    return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  }
+
+  // The verified queries the semantic model ships with (the ones Cortex trusts).
+  function analystVerified() {
+    var vq = (state.semantic.model && (state.semantic.model.verifiedQueries || state.semantic.model.verified_queries)) || [];
+    if (vq.length) return vq;
+    return ANALYST_SUGGESTED.map(function (q) { return { question: q }; });
+  }
+
+  // Short "tables · metrics" hint parsed from the verified SQL, for card context.
+  function vqHint(q) {
+    var sql = q.sql || ""; if (!sql) return "Semantic view";
+    var tbls = {};
+    (sql.match(/\b([a-z_]+)\.[a-z_]+/g) || []).forEach(function (m) { tbls[m.split(".")[0]] = 1; });
+    var names = Object.keys(tbls).filter(function (n) { return n !== "date"; }).slice(0, 3);
+    return names.length ? names.join(" \u00b7 ") : "Semantic view";
+  }
+
+  // Reference-parity landing: centered "Ask a question" hero + verified query
+  // gallery + recent questions. Shown until the first turn starts a transcript.
+  function analystWelcome() {
+    var view = state.analyst.selectedViews[0] || "REVENUE_CC_ANALYST";
+    var input = h("input", { class: "aw-input", type: "text", placeholder: "e.g. Why did renewal risk increase for West Enterprise accounts this month?", value: state.analyst.input || "" });
+    input.addEventListener("input", function () { state.analyst.input = input.value; });
+    input.addEventListener("keydown", function (e) { if (e.key === "Enter") runAnalyst(input.value); });
+    var send = h("button", { class: "aw-send", title: "Ask" }, ["\u2192"]);
+    send.addEventListener("click", function () { runAnalyst(input.value); });
+
+    var hero = h("div", { class: "aw-hero" }, [
+      h("img", { class: "aw-mark", src: "./public/brand/snowflake-cortex.svg", alt: "" }),
+      h("h1", { class: "aw-title" }, ["Ask a question"]),
+      h("p", { class: "aw-sub" }, ["Ask anything about your revenue data in natural language, or start from a verified query below. Every answer returns governed SQL over ", h("code", {}, [view]), " and live rows."]),
+      h("div", { class: "aw-inputwrap" }, [input, send])
+    ]);
+
+    var vq = analystVerified();
+    var grid = h("div", { class: "aw-vq-grid" });
+    vq.slice(0, 6).forEach(function (q) {
+      var card = h("button", { class: "aw-vq" }, [
+        h("span", { class: "aw-vq-badge" }, [h("span", { class: "aw-vq-check" }, ["\u2713"]), "Verified query"]),
+        h("span", { class: "aw-vq-q" }, [q.question]),
+        h("span", { class: "aw-vq-meta" }, [q.sql ? vqHint(q) : "Suggested"])
+      ]);
+      card.addEventListener("click", function () { runAnalyst(q.question); });
+      grid.appendChild(card);
+    });
+    var verifiedSec = h("div", { class: "aw-section" }, [
+      h("div", { class: "aw-sec-head" }, [h("span", { class: "aw-sec-title" }, ["Verified questions"]), h("span", { class: "aw-sec-count" }, [vq.length + " curated"])]),
+      grid
+    ]);
+
+    var recent = state.analyst.recent || [];
+    var recentSec;
+    if (recent.length) {
+      var list = h("div", { class: "aw-recent-list" });
+      recent.slice(0, 5).forEach(function (r) {
+        var rerun = h("button", { class: "aw-rec-run", title: "Ask again" }, ["\u21bb"]);
+        rerun.addEventListener("click", function (ev) { ev.stopPropagation(); runAnalyst(r.query_text); });
+        var row = h("button", { class: "aw-recent" }, [
+          h("div", { class: "aw-rec-main" }, [
+            h("span", { class: "aw-rec-q" }, [r.query_text || "(query)"]),
+            h("span", { class: "aw-rec-meta" }, [timeAgo(r.created_at) + (r.result_row_count != null ? "  \u00b7  " + r.result_row_count + " rows" : "")])
+          ]),
+          rerun
+        ]);
+        row.addEventListener("click", function () { runAnalyst(r.query_text); });
+        list.appendChild(row);
+      });
+      recentSec = h("div", { class: "aw-section" }, [
+        h("div", { class: "aw-sec-head" }, [h("span", { class: "aw-sec-title" }, ["My recent questions"]), h("span", { class: "aw-sec-count" }, [recent.length + " saved"])]),
+        list
+      ]);
+    } else {
+      recentSec = h("div", { class: "aw-section" }, [
+        h("div", { class: "aw-sec-head" }, [h("span", { class: "aw-sec-title" }, ["My recent questions"])]),
+        h("p", { class: "aw-recent-empty" }, ["Answered questions are saved to the ", h("code", {}, ["recent_queries"]), " AppDB collection and appear here."])
+      ]);
+    }
+
+    return h("div", { class: "analyst-welcome" }, [hero, verifiedSec, recentSec]);
+  }
+
   function renderAnalyst() {
     if (!state.analyst.recentLoaded) loadRecent().then(function () { if (state.surface === "analyst") renderView(); });
     if (!state.analyst.viewsLoaded && !state.analyst.viewsLoading) loadViews().then(function () { if (state.surface === "analyst") renderView(); });
+    if (!state.semantic.loaded && !state.semantic.loading) loadSemantic();
     var frag = document.createDocumentFragment();
     var banner = connBanner(); if (banner) frag.appendChild(banner);
 
     var hasMsgs = state.analyst.messages.length > 0;
+    var chatActive = hasMsgs || state.analyst.loading;
+
+    // Header (shared): title + live semantic-view picker + connection chip.
+    var header = [
+      h("div", { class: "chat-head" }, [
+        h("div", { class: "chat-head-l" }, [h("h2", {}, ["Cortex Analyst"]), h("p", {}, [(state.analyst.conversationHistory.length ? Math.floor(state.analyst.conversationHistory.length / 2) + " turns in context \u00b7 " : "") + "Conversational NL \u2192 governed SQL"])]),
+        h("div", { class: "chat-head-r" }, [
+          viewPicker(),
+          (function () { var b = h("button", { class: "mini-btn ghost" }, ["\u21bb New chat"]); b.addEventListener("click", newChat); return b; })()
+        ])
+      ]),
+      connChip()
+    ];
+
+    // Landing state: centered hero + verified gallery + recent (reference parity).
+    if (!chatActive) {
+      var landing = h("div", { class: "chat-main landing" }, header.concat([analystWelcome()]));
+      frag.appendChild(h("section", { class: "chat-layout solo" }, [landing]));
+      return frag;
+    }
 
     // Transcript
     var scroll = h("div", { class: "chat-scroll" });
-    if (!hasMsgs && !state.analyst.loading) {
-      scroll.appendChild(h("div", { class: "analyst-empty" }, [
-        h("img", { src: "./public/brand/snowflake-cortex.svg", alt: "" }),
-        h("h2", {}, ["Ask the governed brain a question"]),
-        h("p", {}, ["A multi-turn Cortex Analyst chat over the ", h("code", {}, [state.analyst.selectedViews[0] || "REVENUE_CC_ANALYST"]), " semantic view \u2014 switch models with the picker above. Every answer returns the generated SQL and live rows, fully governed, never a client-side guess. Ask a follow-up and it keeps context."])
-      ]));
-    }
     state.analyst.messages.forEach(function (turn) {
       scroll.appendChild(userMsg(turn.question));
       scroll.appendChild(analystAnswer(turn));
@@ -797,17 +903,7 @@
     send.addEventListener("click", function () { runAnalyst(input.value); });
     var composer = h("div", { class: "chat-composer" }, [input, send]);
 
-    var main = h("div", { class: "chat-main" }, [
-      h("div", { class: "chat-head" }, [
-        h("div", { class: "chat-head-l" }, [h("h2", {}, ["Cortex Analyst"]), h("p", {}, [(state.analyst.conversationHistory.length ? Math.floor(state.analyst.conversationHistory.length / 2) + " turns in context \u00b7 " : "") + "Conversational NL \u2192 governed SQL"])]),
-        h("div", { class: "chat-head-r" }, [
-          viewPicker(),
-          (function () { var b = h("button", { class: "mini-btn ghost" }, ["\u21bb New chat"]); b.addEventListener("click", newChat); return b; })()
-        ])
-      ]),
-      connChip(),
-      scroll, composer
-    ]);
+    var main = h("div", { class: "chat-main" }, header.concat([scroll, composer]));
 
     // Rail: examples + recent queries + governed round-trip
     var rail = h("aside", { class: "chat-rail" });
