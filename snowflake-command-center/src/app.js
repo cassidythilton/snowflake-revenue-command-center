@@ -126,7 +126,10 @@
     schema = schema || (state.config && state.config.schema) || "CORE";
     var base = SNOWSIGHT_BASE + "/#/data/databases/" + encodeURIComponent(db) + "/schemas/" + encodeURIComponent(schema);
     if (!name) return base;
-    var seg = objType === "table" ? "/table/" : "/view/"; // views + semantic views both browse as /view/
+    // Snowsight browses each object kind under its own path segment.
+    var seg = objType === "table" ? "/table/"
+      : objType === "semantic-view" || objType === "semantic" ? "/semantic-view/"
+      : "/view/";
     return base + seg + encodeURIComponent(name);
   }
   function snowsightAgentHref() { return SNOWSIGHT_BASE + "/#/studio/agents"; }
@@ -810,7 +813,7 @@
       h("span", { class: "cc-val" }, [cfg.role || "REVENUE_CC_READER"]),
       h("span", { class: "cc-sep" }, ["\u00b7"]),
       h("span", { class: "cc-lab" }, ["View"]),
-      h("a", { class: "cc-val link", href: snowsightObjHref("view", view), target: "_blank", rel: "noopener", title: "Open semantic view in Snowsight" }, [view])
+      h("a", { class: "cc-val link", href: snowsightObjHref("semantic-view", view), target: "_blank", rel: "noopener", title: "Open semantic view in Snowsight" }, [view])
     ]);
     var newBtn = h("button", { class: "cbar-icon", title: "New chat" }, ["\u21bb"]);
     newBtn.addEventListener("click", newChat);
@@ -1802,7 +1805,7 @@
           h("span", {}, ["target ", h("code", {}, [/=/.test(m.target || "") ? "IS_HIGH_RISK" : (m.target || "IS_HIGH_RISK")])]),
           h("span", { class: "dot-sep" }, ["\u00b7"]),
           h("span", {}, ["native warehouse inference \u00b7 governed by ",
-            srcLink("Horizon", snowsightObjHref("view", "REVENUE_CC_ANALYST"), "sf")])
+            srcLink("Horizon", snowsightObjHref("semantic-view", "REVENUE_CC_ANALYST"), "sf")])
         ])
       ]),
       h("div", { class: "ml-status-r" }, [
@@ -2810,15 +2813,12 @@
   function rlDomo(tbl, c) {
     return state.governance.synced[rlKey(tbl, c.name)] === true ? "Synced" : "Staged";
   }
-  // Seed a realistic partial-sync state once (documented columns are all
-  // "prepared" in Horizon; ~60% start synced into Domo so the Sync/Wipe
-  // workflow is meaningful — mirrors the reference app).
-  function preseedReadiness(model) {
-    (model.tables || []).forEach(function (t) {
-      var docs = rlColumns(t).filter(function (c) { return c.comment && String(c.comment).trim(); });
-      docs.slice(0, Math.round(docs.length * 0.6)).forEach(function (c) { state.governance.synced[rlKey(t.name, c.name)] = true; });
-    });
-  }
+  // Horizon is the source of truth: columns are "prepared" there (comments /
+  // synonyms / tags), but NOTHING is synced into Domo AI Readiness until a
+  // human runs Sync. So the initial Domo-synced state is empty — the Sync /
+  // Wipe workflow is what demonstrates the mirror (matches the reference app,
+  // which lands at ~0% synced).
+  function preseedReadiness(model) { /* intentionally no-op: 0 columns synced into Domo */ }
   function rlScore(t) {
     var cols = rlColumns(t);
     var documented = cols.filter(function (c) { return c.comment && String(c.comment).trim(); }).length;
@@ -2828,6 +2828,34 @@
       domoPct: cols.length ? Math.round((synced / cols.length) * 100) : 0 };
   }
   function rlBar(pct, cls) { return h("span", { class: "rl-track" }, [h("span", { class: "rl-fill" + (cls ? " " + cls : ""), style: "width:" + pct + "%" }, [])]); }
+
+  // Context-length donut (reference parity): ring filled by prepared %, char
+  // count in the center.
+  function rlDonut(chars, pct) {
+    var svgNS = "http://www.w3.org/2000/svg";
+    var R = 29, C = 2 * Math.PI * R, cx = 38, cy = 38;
+    var svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("class", "rl-donut"); svg.setAttribute("viewBox", "0 0 76 76");
+    var track = document.createElementNS(svgNS, "circle");
+    track.setAttribute("cx", cx); track.setAttribute("cy", cy); track.setAttribute("r", R);
+    track.setAttribute("fill", "none"); track.setAttribute("stroke", "var(--n-100)"); track.setAttribute("stroke-width", "7");
+    svg.appendChild(track);
+    var arc = document.createElementNS(svgNS, "circle");
+    arc.setAttribute("cx", cx); arc.setAttribute("cy", cy); arc.setAttribute("r", R);
+    arc.setAttribute("fill", "none"); arc.setAttribute("stroke", "var(--sf-blue)"); arc.setAttribute("stroke-width", "7");
+    arc.setAttribute("stroke-linecap", "round");
+    arc.setAttribute("stroke-dasharray", (C * pct / 100).toFixed(1) + " " + (C * (1 - pct / 100)).toFixed(1));
+    arc.setAttribute("transform", "rotate(-90 " + cx + " " + cy + ")");
+    svg.appendChild(arc);
+    var v = document.createElementNS(svgNS, "text");
+    v.setAttribute("class", "rl-donut-v"); v.setAttribute("x", cx); v.setAttribute("y", cy - 1); v.setAttribute("text-anchor", "middle");
+    v.textContent = (chars >= 1000 ? (chars / 1000).toFixed(1) + "k" : String(chars));
+    svg.appendChild(v);
+    var k = document.createElementNS(svgNS, "text");
+    k.setAttribute("class", "rl-donut-k"); k.setAttribute("x", cx); k.setAttribute("y", cy + 12); k.setAttribute("text-anchor", "middle");
+    k.textContent = "chars"; svg.appendChild(k);
+    return svg;
+  }
 
   function readinessRail(model) {
     var tables = (model.tables || []).slice();
@@ -2881,10 +2909,9 @@
     var baseName = String(t.base || t.name || "").split(".").pop();
     var dsId = rlDatasetId(t);
     var chars = rlContextChars(t);
-    var tier = rlContextTier(chars, sc.total);
 
     var links = h("div", { class: "rl-detail-links" }, [
-      srcLink("Snowflake view", snowsightObjHref("view", baseName), "sf"),
+      srcLink("Snowflake view", snowsightObjHref("semantic-view", "REVENUE_CC_ANALYST"), "sf"),
       dsId ? srcLink("Domo dataset", domoDatasetHref(dsId), "domo") : null,
       dsId ? srcLink("Domo AI Readiness", domoAiReadinessHref(dsId), "domo") : null
     ]);
@@ -2892,9 +2919,9 @@
     // Context-length gauge + dual sync meters (reference parity).
     var meters = h("div", { class: "rl-meters" }, [
       h("div", { class: "rl-ctx" }, [
-        h("div", { class: "rl-ctx-v" }, [(chars >= 1000 ? (chars / 1000).toFixed(1) + "k" : num(chars))]),
-        h("div", { class: "rl-ctx-k" }, ["characters of context"]),
-        h("div", { class: "rl-ctx-tier " + tier.cls }, [tier.lab])
+        h("span", { class: "rl-ctx-lab" }, ["Context length"]),
+        rlDonut(chars, sc.docPct),
+        h("div", { class: "rl-ctx-k" }, ["names \u00b7 context \u00b7 synonyms"])
       ]),
       h("div", { class: "rl-meter" }, [h("div", { class: "rl-gauge-top" }, [h("span", {}, ["Snowflake Horizon prepared"]), h("strong", {}, [sc.docPct + "%"])]), rlBar(sc.docPct), h("span", { class: "rl-meter-sub" }, [num(sc.documented) + " / " + num(sc.total) + " columns"])]),
       h("div", { class: "rl-meter" }, [h("div", { class: "rl-gauge-top" }, [h("span", {}, ["Domo AI Readiness synced"]), h("strong", {}, [sc.domoPct + "%"])]), rlBar(sc.domoPct, "domo"), h("span", { class: "rl-meter-sub" }, [num(sc.synced) + " / " + num(sc.total) + " synced into Domo"])])
@@ -2920,7 +2947,7 @@
       var wipeBtn = h("button", { class: "rl-a wipe", disabled: domo !== "Synced" ? "true" : null }, ["Wipe"]);
       if (domo === "Synced") wipeBtn.addEventListener("click", function () { state.governance.synced[rlKey(t.name, c.name)] = false; (state.governance.wiped = state.governance.wiped || {})[t.name + "." + c.name] = true; renderView(); });
       var inspectBtn = h("button", { class: "rl-a inspect" }, ["Inspect"]);
-      inspectBtn.addEventListener("click", function () { window.open(snowsightObjHref("view", baseName), "_blank"); });
+      inspectBtn.addEventListener("click", function () { window.open(snowsightObjHref("semantic-view", "REVENUE_CC_ANALYST"), "_blank"); });
 
       var ctx = h("div", { class: "rl-ctx-cell" }, [
         h("span", { class: "rl-ctx-txt" }, [c.comment || "\u2014"]),
@@ -2976,7 +3003,7 @@
         h("span", {}, [h("strong", {}, [num(totalCols)]), " columns profiled"]),
         h("span", { class: "dot-sep" }, ["\u00b7"]),
         h("span", {}, [state.semantic.live ? "Live \u00b7 semantic model " : "Sample \u00b7 semantic model "]),
-        srcLink("REVENUE_CC_ANALYST", snowsightObjHref("view", "REVENUE_CC_ANALYST"), "sf")
+        srcLink("REVENUE_CC_ANALYST", snowsightObjHref("semantic-view", "REVENUE_CC_ANALYST"), "sf")
       ]),
       h("div", { class: "rl-body" }, [
         h("div", { class: "rl-rail-wrap" }, [h("div", { class: "rl-rail-lab" }, ["Governed datasets"]), readinessRail(model)]),
@@ -2997,8 +3024,7 @@
       frag.appendChild(h("div", { class: "conn-banner" }, [h("div", {}, [h("span", { class: "cb-title" }, ["Governance error \u2014 "]), state.governance.error])]));
       return frag;
     }
-    frag.appendChild(govIdentityBanner());
-    // Hero: the AI Readiness Control Plane (reference parity).
+    // Hero: the AI Readiness Control Plane (reference parity) — no preamble box.
     frag.appendChild(h("section", { class: "grid" }, [readinessControlPlane()]));
 
     // Everything else (parity test, masking, policies, guardrails, semantic
@@ -3014,6 +3040,7 @@
     frag.appendChild(toggle);
 
     if (open) {
+      frag.appendChild(govIdentityBanner());
       frag.appendChild(h("section", { class: "grid" }, [govParityPanel()]));
       frag.appendChild(h("section", { class: "grid" }, [govMaskingPanel(), govPolicyPanel()]));
       frag.appendChild(h("section", { class: "grid" }, [govGuardPanel()]));
