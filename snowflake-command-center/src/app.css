@@ -1493,7 +1493,20 @@
 .cw-toolchip.gov .cw-toolchip-dot { background: var(--status-warn); }
 
 /* Answer */
-.cw-answer { font-size: 13.5px; line-height: 1.62; color: var(--text); white-space: pre-wrap; min-height: 8px; }
+.cw-answer { font-size: 13.5px; line-height: 1.62; color: var(--cw-ink, var(--text)); min-height: 8px; }
+/* Markdown answer formatting (mirrors native CoWork's structured replies) */
+.cw-md > * { margin: 0 0 10px; }
+.cw-md > *:last-child { margin-bottom: 0; }
+.cw-md-p { font-size: 13.5px; line-height: 1.62; color: var(--cw-ink, var(--text)); }
+.cw-md-h { font-size: 14.5px; font-weight: 800; letter-spacing: -.01em; color: var(--cw-ink, var(--text)); }
+.cw-md-list { margin: 0 0 10px; padding-left: 20px; font-size: 13.5px; line-height: 1.6; color: var(--cw-ink, var(--text)); }
+.cw-md-list li { margin: 3px 0; }
+.cw-md-list li::marker { color: var(--cw-faint, var(--muted)); }
+.cw-md strong { font-weight: 700; color: var(--cw-ink, var(--text)); }
+.cw-md em { font-style: italic; }
+.cw-md code { font-family: var(--font-mono); font-size: 12px; background: var(--n-050); color: var(--sf-blue-deep); padding: 1px 5px; border-radius: 4px; }
+.cw-blk { opacity: 0; animation: cw-blk-in .42s ease forwards; }
+@keyframes cw-blk-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
 /* Governed proposal beat */
 .cw-propose { display: flex; align-items: center; gap: 14px; margin-top: 14px; padding: 13px 15px; border: 1px solid #e7c9a0; border-left: 3px solid var(--status-warn); border-radius: var(--r-md); background: var(--status-warn-bg); }

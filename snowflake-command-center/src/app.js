@@ -3293,22 +3293,65 @@
         if (stepEls[i]) stepEls[i].classList.add("show");
         cwScrollBottom(); i++;
         setTimeout(revealStep, 240);
-      } else { typeAnswer(); }
+      } else { showAnswer(); }
     }
-    function typeAnswer() {
+    function showAnswer() {
+      // Render the answer as formatted markdown with a staggered block fade
+      // (mirrors CoWork's progressive, richly-formatted answer reveal).
       var ansEl = host.querySelector(".cw-answer");
-      var full = amsg.text || ""; var n = 0;
-      var step = Math.max(2, Math.round(full.length / 80));
-      (function tick() {
-        n = Math.min(full.length, n + step);
-        amsg.typed = full.slice(0, n);
-        if (ansEl) ansEl.textContent = amsg.typed;
-        cwScrollBottom();
-        if (n < full.length) setTimeout(tick, 16);
-        else { amsg.status = "done"; amsg.typed = full; state.cw.sending = false; renderView(); cwScrollBottom(); cwFocusComposer(); }
-      })();
+      if (ansEl) { ansEl.innerHTML = ""; ansEl.appendChild(cwMarkdown(amsg.text, true)); }
+      cwScrollBottom();
+      var blocks = ansEl ? ansEl.querySelectorAll(".cw-blk").length : 1;
+      var dur = Math.min(1100, 320 + blocks * 140);
+      setTimeout(function () { amsg.status = "done"; amsg.typed = amsg.text; state.cw.sending = false; renderView(); cwScrollBottom(); cwFocusComposer(); }, dur);
     }
     revealStep();
+  }
+
+  /* Minimal, safe markdown -> DOM for agent answers (bold, italics, inline code,
+   * bullet/numbered lists, headings, paragraphs) so replies read like the native
+   * CoWork formatting. Built via DOM nodes (no innerHTML) to avoid injection. */
+  function cwInline(str) {
+    var out = [];
+    var re = /(\*\*([^*]+)\*\*|__([^_]+)__|`([^`]+)`|\*([^*]+)\*|(?:_)([^_]+)_)/g;
+    var last = 0, m;
+    while ((m = re.exec(str))) {
+      if (m.index > last) out.push(document.createTextNode(str.slice(last, m.index)));
+      if (m[2] != null) out.push(h("strong", {}, [m[2]]));
+      else if (m[3] != null) out.push(h("strong", {}, [m[3]]));
+      else if (m[4] != null) out.push(h("code", {}, [m[4]]));
+      else if (m[5] != null) out.push(h("em", {}, [m[5]]));
+      else if (m[6] != null) out.push(h("em", {}, [m[6]]));
+      last = m.index + m[0].length;
+    }
+    if (last < str.length) out.push(document.createTextNode(str.slice(last)));
+    return out;
+  }
+  function cwMarkdown(text, animate) {
+    var wrap = h("div", { class: "cw-md" });
+    var blocks = String(text == null ? "" : text).trim().split(/\n{2,}/);
+    var idx = 0;
+    blocks.forEach(function (blk) {
+      if (!blk.trim()) return;
+      var lines = blk.split("\n");
+      var isUl = lines.length > 0 && lines.every(function (l) { return /^\s*[-*]\s+/.test(l); });
+      var isOl = lines.length > 0 && lines.every(function (l) { return /^\s*\d+[.)]\s+/.test(l); });
+      var node;
+      if (isUl || isOl) {
+        node = h(isUl ? "ul" : "ol", { class: "cw-md-list" });
+        lines.forEach(function (l) { node.appendChild(h("li", {}, cwInline(l.replace(/^\s*(?:[-*]|\d+[.)])\s+/, "")))); });
+      } else if (/^#{1,4}\s+/.test(lines[0]) && lines.length === 1) {
+        var lvl = lines[0].match(/^#+/)[0].length;
+        node = h("h" + Math.min(4, lvl + 2), { class: "cw-md-h" }, cwInline(lines[0].replace(/^#+\s+/, "")));
+      } else {
+        node = h("p", { class: "cw-md-p" });
+        lines.forEach(function (l, li) { if (li) node.appendChild(h("br")); cwInline(l).forEach(function (n) { node.appendChild(n); }); });
+      }
+      if (animate) { node.classList.add("cw-blk"); node.style.animationDelay = Math.min(idx * 90, 720) + "ms"; idx++; }
+      wrap.appendChild(node);
+    });
+    if (!wrap.childNodes.length) wrap.appendChild(h("p", { class: "cw-md-p" }, [String(text || "\u2014")]));
+    return wrap;
   }
   function cwFocusComposer() {
     if (state.surface !== "cowork") return;
@@ -3439,7 +3482,7 @@
     } else {
       rp.messages.forEach(function (m) {
         if (m.role === "user") { stream.appendChild(h("div", { class: "cw-msg user" }, [h("div", { class: "cw-bubble" }, [m.text || ""])])); return; }
-        var body = h("div", { class: "cw-msg-body" }, [h("div", { class: "cw-answer" }, [m.text || "\u2014"])]);
+        var body = h("div", { class: "cw-msg-body" }, [h("div", { class: "cw-answer" }, [cwMarkdown(m.text || "\u2014")])]);
         if (m.sql) {
           var pre = h("pre", { class: "cw-sql-block" }, [h("code", {}, [m.sql])]); pre.style.display = "none";
           var tog = h("button", { class: "cw-sql-toggle" }, [h("span", { class: "cw-sql-caret" }, ["\u25b8"]), "View generated SQL"]);
@@ -3532,8 +3575,8 @@
       }
     }
 
-    // Answer (typed during animation; full text when done).
-    body.appendChild(h("div", { class: "cw-answer" }, [done ? m.text : (m.typed || "")]));
+    // Answer — formatted markdown when done; filled by cwAnimate while answering.
+    body.appendChild(h("div", { class: "cw-answer" }, done ? [cwMarkdown(m.text)] : []));
 
     if (done) {
       // Governed proposal beat.
