@@ -358,14 +358,25 @@ function getForecastHome(persona) {
  *   2) Execute the generated SQL back through the governed SQL API (READER role)
  *      so the browser gets rows it can chart — nothing runs client-side.
  * The full API request/response is returned so the app can show an inspector. */
-function analystMessage(question, history) {
+/* Resolve a caller-supplied semantic-view name to a fully-qualified name.
+ * Accepts a bare name ("REVENUE_CC_ANALYST"), a DB.SCHEMA.VIEW FQN, or empty
+ * (defaults to the primary governed view). Guards against injection by only
+ * allowing identifier characters. */
+function resolveSemanticView(view) {
+  var v = String(view || "").trim();
+  if (!v || !/^[A-Za-z0-9_.$]+$/.test(v)) return DATABASE + "." + SCHEMA + "." + SEMANTIC_VIEW;
+  if (v.indexOf(".") > -1) return v;
+  return DATABASE + "." + SCHEMA + "." + v;
+}
+
+function analystMessage(question, history, view) {
   var url = accountHost() + "/api/v2/cortex/analyst/message";
   var messages = [];
   if (Array.isArray(history) && history.length) messages = messages.concat(history);
   messages.push({ role: "user", content: [{ type: "text", text: String(question || "") }] });
   var body = {
     messages: messages,
-    semantic_view: DATABASE + "." + SCHEMA + "." + SEMANTIC_VIEW
+    semantic_view: resolveSemanticView(view)
   };
   console.log("[snowflakece.askAnalyst] message", JSON.stringify({ q: String(question || "").slice(0, 160), turns: messages.length }));
   return authHeaders()
@@ -410,7 +421,7 @@ function cleanGeneratedSql(sql) {
  * of prior Analyst messages (user + analyst turns) exactly as returned by a
  * previous call; pass it back to keep context. The updated history (with this
  * turn + the analyst reply) is returned so the app can chain the next turn. */
-function askAnalyst(question, persona, conversationHistory) {
+function askAnalyst(question, persona, conversationHistory, view) {
   var region = personaRegion(persona);
   var q = String(question || "").trim();
   if (region) q = q + " (scope results to the " + region + " region)";
@@ -418,13 +429,14 @@ function askAnalyst(question, persona, conversationHistory) {
     return Promise.resolve({ response: { status: "FAILED", error: "Empty question." } });
   }
   var history = Array.isArray(conversationHistory) ? conversationHistory : [];
+  var semanticView = resolveSemanticView(view);
 
   var out = {
     status: "SUCCEEDED",
     mode: "LIVE",
     persona: persona || "Executive Sponsor",
     regionScope: region || "All regions",
-    semanticView: DATABASE + "." + SCHEMA + "." + SEMANTIC_VIEW,
+    semanticView: semanticView,
     question: q,
     interpretation: "",
     sql: "",
@@ -440,9 +452,11 @@ function askAnalyst(question, persona, conversationHistory) {
     generatedAt: new Date().toISOString(),
     api: { endpoint: accountHost() + "/api/v2/cortex/analyst/message", request: null, response: null }
   };
+  var t0 = Date.now();
 
-  return analystMessage(q, history)
+  return analystMessage(q, history, view)
     .then(function (res) {
+      out.elapsedMs = Date.now() - t0;
       out.api.request = res.request;
       out.api.response = res.data;
       out.requestId = res.data && res.data.request_id ? res.data.request_id : null;
@@ -561,14 +575,17 @@ function askCortexAgent(question, persona) {
     api: { endpoint: agentRunUrl(), request: body, response: null }
   };
   console.log("[snowflakece.askCortexAgent] run", JSON.stringify({ q: q.slice(0, 160) }));
+  var t0 = Date.now();
   return authHeaders()
     .then(function (headers) {
       headers.Accept = "application/json";
       return axios.post(agentRunUrl(), body, { headers: headers, timeout: 180000, validateStatus: function () { return true; } });
     })
     .then(function (resp) {
+      out.elapsedMs = Date.now() - t0;
       if (resp.status !== 200) return Promise.reject(resp.data || ("Agent API HTTP " + resp.status));
       out.api.response = resp.data;
+      out.requestId = (resp.data && (resp.data.request_id || resp.data.id)) || (resp.headers && resp.headers["x-snowflake-request-id"]) || null;
       var parsed = parseAgentResponse(resp.data);
       out.answer = parsed.answer;
       out.thinking = parsed.thinking;
@@ -875,6 +892,30 @@ function parseSemanticModel(resultSet, fqn) {
   };
 }
 
+/* Auto-discover the governed semantic views in the schema so the app can offer
+ * a live picker instead of a hardcoded view. Runs SHOW SEMANTIC VIEWS as READER
+ * and returns [{ name, database, schema, fqn, comment }]. Falls back cleanly if
+ * the account has none. */
+function listSemanticViews() {
+  var sql = "SHOW SEMANTIC VIEWS IN SCHEMA " + DATABASE + "." + SCHEMA;
+  return runSql(sql, ROLE_READER)
+    .then(function (rs) {
+      var rows = rowsToObjects(rs);
+      var views = rows.map(function (r) {
+        var name = r.name || r.NAME || "";
+        var db = r.database_name || r.DATABASE_NAME || DATABASE;
+        var sc = r.schema_name || r.SCHEMA_NAME || SCHEMA;
+        return { name: name, database: db, schema: sc, fqn: db + "." + sc + "." + name, comment: r.comment || r.COMMENT || "" };
+      }).filter(function (v) { return !!v.name; });
+      if (!views.length) {
+        views = [{ name: SEMANTIC_VIEW, database: DATABASE, schema: SCHEMA, fqn: DATABASE + "." + SCHEMA + "." + SEMANTIC_VIEW, comment: "" }];
+      }
+      return { response: { status: "SUCCEEDED", mode: "LIVE", primary: DATABASE + "." + SCHEMA + "." + SEMANTIC_VIEW, views: views, sql: sql, generatedAt: new Date().toISOString() } };
+    })
+    .catch(function (err) { return { response: { status: "FAILED", error: detail(err), sql: sql,
+      views: [{ name: SEMANTIC_VIEW, database: DATABASE, schema: SCHEMA, fqn: DATABASE + "." + SCHEMA + "." + SEMANTIC_VIEW, comment: "" }] } }; });
+}
+
 function describeSemanticView(view) {
   var fqn = (view && String(view).indexOf(".") > -1) ? String(view) : (DATABASE + "." + SCHEMA + "." + SEMANTIC_VIEW);
   var sql = "DESCRIBE SEMANTIC VIEW " + fqn;
@@ -978,6 +1019,7 @@ module.exports = {
   getApprovalQueue: getApprovalQueue,
   writeActionStatus: writeActionStatus,
   getGovernance: getGovernance,
+  listSemanticViews: listSemanticViews,
   describeSemanticView: describeSemanticView,
   alterSemanticView: alterSemanticView,
   getSnowflakeIntegrations: getSnowflakeIntegrations,

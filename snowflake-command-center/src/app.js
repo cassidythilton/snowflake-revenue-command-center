@@ -90,7 +90,8 @@
     data: null,
     mode: "loading",
     dataSource: null,
-    analyst: { input: "", loading: false, error: null, messages: [], conversationHistory: [], recent: [], recentLoaded: false, seq: 0 },
+    analyst: { input: "", loading: false, error: null, messages: [], conversationHistory: [], recent: [], recentLoaded: false, seq: 0,
+      views: [], viewsLoaded: false, viewsLoading: false, selectedViews: ["REVENUE_CC_ANALYST"], pickerOpen: false },
     semantic: { loading: false, loaded: false, error: null, live: false, model: null, view: null, sql: null, tab: "graph", selected: null, vqResults: {}, vqBusy: {}, ddlResult: null, ddlBusy: false },
     config: { warehouse: "REVENUE_CC_WH", database: "SNOWFLAKE_REVENUE_CC", schema: "CORE", role: "REVENUE_CC_READER", view: "REVENUE_CC_ANALYST" },
     agent: { question: "", loading: false, error: null, result: null, queue: [], seed: null, inspector: false },
@@ -376,6 +377,41 @@
     }).catch(function () { /* best-effort */ });
   }
 
+  // Auto-discover the governed semantic views (SHOW SEMANTIC VIEWS via the CE
+  // bridge) so the Analyst picker is live, not hardcoded. Falls back to the
+  // primary view offline.
+  function loadViews() {
+    if (state.analyst.viewsLoaded || state.analyst.viewsLoading) return Promise.resolve();
+    state.analyst.viewsLoading = true;
+    var apply = function (views, primary) {
+      state.analyst.views = views && views.length ? views : [{ name: "REVENUE_CC_ANALYST", fqn: "SNOWFLAKE_REVENUE_CC.CORE.REVENUE_CC_ANALYST", comment: "" }];
+      if (primary) {
+        var pn = String(primary).split(".").pop();
+        if (state.analyst.selectedViews.indexOf(pn) === -1 && state.analyst.views.some(function (v) { return v.name === pn; })) state.analyst.selectedViews = [pn];
+      }
+      // Keep only still-valid selections.
+      var valid = state.analyst.views.map(function (v) { return v.name; });
+      state.analyst.selectedViews = state.analyst.selectedViews.filter(function (n) { return valid.indexOf(n) > -1; });
+      if (!state.analyst.selectedViews.length && state.analyst.views[0]) state.analyst.selectedViews = [state.analyst.views[0].name];
+      state.analyst.viewsLoading = false; state.analyst.viewsLoaded = true;
+    };
+    if (isLive()) {
+      return domo.post(CE + "listSemanticViews", {})
+        .then(function (resp) { var d = unwrap(resp); if (d && d.status === "SUCCEEDED") apply(d.views || [], d.primary); else apply(null); })
+        .catch(function () { apply(null); });
+    }
+    apply(null);
+    return Promise.resolve();
+  }
+
+  // The semantic view Cortex Analyst should query for this turn: the first
+  // selected view (Analyst is single-model per call). FQN resolved from discovery.
+  function activeView() {
+    var name = state.analyst.selectedViews[0] || "REVENUE_CC_ANALYST";
+    var v = (state.analyst.views || []).filter(function (x) { return x.name === name; })[0];
+    return v ? (v.fqn || v.name) : name;
+  }
+
   function newChat() {
     state.analyst.messages = [];
     state.analyst.conversationHistory = [];
@@ -406,7 +442,7 @@
       renderView();
     };
     if (isLive()) {
-      domo.post(CE + "askAnalyst", { question: q, persona: state.persona, conversationHistory: state.analyst.conversationHistory })
+      domo.post(CE + "askAnalyst", { question: q, persona: state.persona, conversationHistory: state.analyst.conversationHistory, view: activeView() })
         .then(function (resp) {
           var d = unwrap(resp);
           if (d && d.status === "SUCCEEDED") { d.live = true; done(d); }
@@ -656,8 +692,74 @@
     return h("div", { class: "msg msg-user" }, [h("div", { class: "msg-body" }, [h("p", {}, [text])])]);
   }
 
+  // "Connected: DB.SCHEMA · Role" governance chip (mirrors the reference Cortex
+  // Analyst app), driven by the app's Snowflake config.
+  function connChip() {
+    var cfg = state.config || {};
+    return h("div", { class: "conn-chip" }, [
+      h("span", { class: "cc-dot live" }),
+      h("span", { class: "cc-lab" }, ["Connected"]),
+      h("span", { class: "cc-val" }, [(cfg.database || "SNOWFLAKE_REVENUE_CC") + "." + (cfg.schema || "CORE")]),
+      h("span", { class: "cc-sep" }, ["\u00b7"]),
+      h("span", { class: "cc-lab" }, ["Role"]),
+      h("span", { class: "cc-val" }, [cfg.role || "REVENUE_CC_READER"]),
+      h("span", { class: "cc-sep" }, ["\u00b7"]),
+      h("span", { class: "cc-lab" }, ["Warehouse"]),
+      h("span", { class: "cc-val" }, [cfg.warehouse || "REVENUE_CC_WH"])
+    ]);
+  }
+
+  // Semantic-view picker: a checkable dropdown populated live from
+  // listSemanticViews. Cortex Analyst queries one model per call, so the first
+  // selected view is the active model; extra selections are kept as quick-switch
+  // context. Replaces the previously hardcoded REVENUE_CC_ANALYST.
+  function viewPicker() {
+    var a = state.analyst;
+    var sel = a.selectedViews || [];
+    var label = sel.length <= 1 ? (sel[0] || "REVENUE_CC_ANALYST") : (sel[0] + " +" + (sel.length - 1));
+    var btn = h("button", { class: "vp-btn" + (a.pickerOpen ? " open" : "") }, [
+      h("img", { class: "vp-mark", src: "./public/brand/snowflake-cortex.svg", alt: "" }),
+      h("span", { class: "vp-lab" }, ["Semantic view"]),
+      h("span", { class: "vp-val" }, [label]),
+      h("span", { class: "vp-caret" }, [a.pickerOpen ? "\u25b4" : "\u25be"])
+    ]);
+    btn.addEventListener("click", function (e) { e.stopPropagation(); a.pickerOpen = !a.pickerOpen; if (a.pickerOpen && !a.viewsLoaded) loadViews().then(function () { renderView(); }); renderView(); });
+    var wrap = h("div", { class: "view-picker" }, [btn]);
+    if (a.pickerOpen) {
+      var menu = h("div", { class: "vp-menu" });
+      menu.addEventListener("click", function (e) { e.stopPropagation(); });
+      menu.appendChild(h("div", { class: "vp-menu-head" }, [
+        h("span", {}, ["Governed semantic views"]),
+        (a.viewsLoading ? h("span", { class: "vp-loading" }, [h("span", { class: "spinner sm" }), "discovering\u2026"]) : h("span", { class: "vp-count" }, [String((a.views || []).length) + " live"]))
+      ]));
+      (a.views || []).forEach(function (v) {
+        var on = sel.indexOf(v.name) > -1;
+        var isPrimary = sel[0] === v.name;
+        var row = h("button", { class: "vp-opt" + (on ? " on" : "") }, [
+          h("span", { class: "vp-check" }, [on ? "\u2713" : ""]),
+          h("span", { class: "vp-opt-body" }, [
+            h("span", { class: "vp-opt-name" }, [v.name, isPrimary ? h("span", { class: "vp-primary" }, ["ACTIVE"]) : null]),
+            v.comment ? h("span", { class: "vp-opt-desc" }, [String(v.comment).slice(0, 96)]) : null
+          ])
+        ]);
+        row.addEventListener("click", function (e) {
+          e.stopPropagation();
+          var i = sel.indexOf(v.name);
+          if (i > -1) { if (sel.length > 1) sel.splice(i, 1); }
+          else sel.push(v.name);
+          renderView();
+        });
+        menu.appendChild(row);
+      });
+      menu.appendChild(h("div", { class: "vp-menu-foot" }, ["Cortex Analyst queries the ", h("b", {}, ["ACTIVE"]), " view. Click a view to set/add it; the first selected is active."]));
+      wrap.appendChild(menu);
+    }
+    return wrap;
+  }
+
   function renderAnalyst() {
     if (!state.analyst.recentLoaded) loadRecent().then(function () { if (state.surface === "analyst") renderView(); });
+    if (!state.analyst.viewsLoaded && !state.analyst.viewsLoading) loadViews().then(function () { if (state.surface === "analyst") renderView(); });
     var frag = document.createDocumentFragment();
     var banner = connBanner(); if (banner) frag.appendChild(banner);
 
@@ -669,7 +771,7 @@
       scroll.appendChild(h("div", { class: "analyst-empty" }, [
         h("img", { src: "./public/brand/snowflake-cortex.svg", alt: "" }),
         h("h2", {}, ["Ask the governed brain a question"]),
-        h("p", {}, ["A multi-turn Cortex Analyst chat over the ", h("code", {}, ["REVENUE_CC_ANALYST"]), " semantic view. Every answer returns the generated SQL and live rows \u2014 fully governed, never a client-side guess. Ask a follow-up and it keeps context."])
+        h("p", {}, ["A multi-turn Cortex Analyst chat over the ", h("code", {}, [state.analyst.selectedViews[0] || "REVENUE_CC_ANALYST"]), " semantic view \u2014 switch models with the picker above. Every answer returns the generated SQL and live rows, fully governed, never a client-side guess. Ask a follow-up and it keeps context."])
       ]));
     }
     state.analyst.messages.forEach(function (turn) {
@@ -697,9 +799,13 @@
 
     var main = h("div", { class: "chat-main" }, [
       h("div", { class: "chat-head" }, [
-        h("div", {}, [h("h2", {}, ["Cortex Analyst"]), h("p", {}, [(state.analyst.conversationHistory.length ? Math.floor(state.analyst.conversationHistory.length / 2) + " turns in context \u00b7 " : "") + "Conversational NL \u2192 governed SQL"])]),
-        (function () { var b = h("button", { class: "mini-btn ghost" }, ["\u21bb New chat"]); b.addEventListener("click", newChat); return b; })()
+        h("div", { class: "chat-head-l" }, [h("h2", {}, ["Cortex Analyst"]), h("p", {}, [(state.analyst.conversationHistory.length ? Math.floor(state.analyst.conversationHistory.length / 2) + " turns in context \u00b7 " : "") + "Conversational NL \u2192 governed SQL"])]),
+        h("div", { class: "chat-head-r" }, [
+          viewPicker(),
+          (function () { var b = h("button", { class: "mini-btn ghost" }, ["\u21bb New chat"]); b.addEventListener("click", newChat); return b; })()
+        ])
       ]),
+      connChip(),
       scroll, composer
     ]);
 
@@ -2863,6 +2969,10 @@
     buildPersonaSelect();
     renderTabs();
     refresh();
+    // Close the semantic-view picker on any outside click.
+    document.addEventListener("click", function () {
+      if (state.analyst.pickerOpen) { state.analyst.pickerOpen = false; if (state.surface === "analyst") renderView(); }
+    });
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();

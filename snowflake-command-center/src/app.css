@@ -520,6 +520,39 @@
 .chat-composer { display: flex; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--line); background: var(--n-050); }
 .chat-input { flex: 1; font-family: var(--font-sans); font-size: 13px; color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-md); padding: 10px 13px; }
 .chat-input:focus { outline: none; border-color: var(--sf-blue); }
+.chat-head-r { display: flex; align-items: center; gap: 10px; }
+.spinner.sm { width: 11px; height: 11px; border-width: 2px; }
+
+/* Connection chip (governance provenance strip) */
+.conn-chip { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; padding: 8px 18px; border-bottom: 1px solid var(--line); background: var(--n-050); font-size: 11.5px; }
+.conn-chip .cc-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line-strong); }
+.conn-chip .cc-dot.live { background: #23c552; box-shadow: 0 0 0 3px rgba(35,197,82,0.16); }
+.conn-chip .cc-lab { color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; }
+.conn-chip .cc-val { color: var(--n-700); font-family: var(--font-mono); font-weight: 600; }
+.conn-chip .cc-sep { color: var(--line-strong); }
+
+/* Semantic-view picker (checkable dropdown, live from listSemanticViews) */
+.view-picker { position: relative; }
+.vp-btn { display: flex; align-items: center; gap: 8px; padding: 7px 11px; border: 1px solid var(--line-strong); border-radius: var(--r-md); background: var(--surface); cursor: pointer; font-size: 12px; color: var(--n-700); transition: border-color .15s, box-shadow .15s; }
+.vp-btn:hover, .vp-btn.open { border-color: var(--sf-blue); box-shadow: 0 0 0 3px rgba(41,181,232,0.12); }
+.vp-btn .vp-mark { width: 15px; height: 15px; }
+.vp-btn .vp-lab { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+.vp-btn .vp-val { font-family: var(--font-mono); font-weight: 600; color: var(--sf-blue-deep); }
+.vp-btn .vp-caret { color: var(--muted); font-size: 10px; }
+.vp-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; width: 340px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-md); box-shadow: var(--shadow-lg, 0 12px 32px rgba(0,0,0,0.14)); overflow: hidden; }
+.vp-menu-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 13px; border-bottom: 1px solid var(--line); font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.vp-menu-head .vp-count { color: var(--sf-blue-deep); font-weight: 700; }
+.vp-loading { display: inline-flex; align-items: center; gap: 6px; text-transform: none; letter-spacing: 0; }
+.vp-opt { display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left; padding: 10px 13px; border: none; border-bottom: 1px solid var(--line); background: var(--surface); cursor: pointer; }
+.vp-opt:hover { background: var(--n-050); }
+.vp-opt.on { background: rgba(41,181,232,0.06); }
+.vp-opt .vp-check { width: 16px; color: var(--sf-blue); font-weight: 700; flex: none; margin-top: 1px; }
+.vp-opt-body { display: flex; flex-direction: column; gap: 2px; }
+.vp-opt-name { font-family: var(--font-mono); font-size: 12.5px; font-weight: 600; color: var(--n-700); display: flex; align-items: center; gap: 7px; }
+.vp-primary { font-family: var(--font-sans); font-size: 9px; font-weight: 700; letter-spacing: 0.05em; color: #fff; background: var(--sf-blue); border-radius: var(--r-pill); padding: 1px 7px; }
+.vp-opt-desc { font-size: 11px; color: var(--muted); line-height: 1.4; }
+.vp-menu-foot { padding: 9px 13px; font-size: 10.5px; color: var(--muted); background: var(--n-050); }
+@media (max-width: 720px) { .vp-menu { width: 280px; } }
 .chat-input::placeholder { color: var(--muted); }
 
 .msg { display: flex; gap: 11px; max-width: 100%; }
