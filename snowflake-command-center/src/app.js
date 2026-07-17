@@ -32,7 +32,7 @@
       items: ["AI Readiness control plane \u2014 Horizon prepared \u2192 Domo AI Readiness synced, column-level", "Two-persona parity test \u2014 same question, different governed rows", "Row-access + column-masking policies enforced at the query engine"] },
     { id: "semantic", label: "Semantic Model", sprint: 4, mark: "snowflake-cortex.svg",
       items: ["Governed semantic view \u2014 entities, relationships, and metrics", "Verified queries Cortex trusts", "DESCRIBE SEMANTIC VIEW introspection + DDL builder"] },
-    { id: "cowork", label: "Snowflake Intelligence", sprint: 8, mark: "snowflake-cortex.svg",
+    { id: "cowork", label: "Snowflake CoWork", sprint: 8, mark: "snowflake-cortex.svg",
       items: ["The CoWork agent chat, reproduced in-app via the snowflakece bridge", "Deep Research + Skills scoped by Horizon", "Snowflake-managed MCP + Domo Essentials MCP outward"] },
     { id: "chat", label: "Domo Chat v2", sprint: 9, mark: "domo-ai-agent.svg", gated: true,
       items: ["Embedded native Domo Chat v2 agent", "MCP client \u2192 the Snowflake-managed MCP server (same Agent/Analyst/Search tools)", "Answers inherit REVENUE_CC_ANALYST semantics + Horizon policies"] },
@@ -123,7 +123,7 @@
       tasks: [], tasksLoaded: false, tasksLoading: false, tasksLive: false, busyTask: null, starting: null },
     governance: { loading: false, loaded: false, error: null, live: false, seed: null, parity: null, masking: null, rlSelected: null, synced: {}, wiped: {}, showDetail: false },
     cowork: { loading: false, loaded: false, error: null, live: false, mcp: null, cowork: null },
-    cw: { threads: [], activeId: null, thinking: false, sending: false, draft: "", showWiring: false },
+    cw: { threads: [], activeId: null, thinking: false, sending: false, draft: "", showWiring: false, serverThreads: [], serverLoaded: false, serverLoading: false, replay: null },
     how: { loading: false, loaded: false, error: null, coco: null }
   };
 
@@ -3121,6 +3121,7 @@
     if (!state.agent.seed && !state.agent.loading) {
       loadAgentSeed().then(function () { if (state.surface === "cowork") renderView(); });
     }
+    if (isLive() && !state.cw.serverLoaded && !state.cw.serverLoading) { cwLoadServerThreads(true); }
     frag.appendChild(cwConsole());
     frag.appendChild(cwWiring());
     return frag;
@@ -3145,10 +3146,10 @@
     return st.threads.filter(function (t) { return t.id === st.activeId; })[0];
   }
   function cwNewThread(silent) {
-    var t = { id: "t" + (cwSeq++), title: "New chat", messages: [] };
+    var t = { id: "t" + (cwSeq++), title: "New chat", messages: [], serverThreadId: null, parentMessageId: 0 };
     state.cw.threads.unshift(t);
     state.cw.activeId = t.id;
-    if (!silent) { state.cw.draft = ""; renderView(); }
+    if (!silent) { state.cw.draft = ""; state.cw.replay = null; renderView(); }
     return t;
   }
   function cwScrollBottom() {
@@ -3198,26 +3199,70 @@
     return steps;
   }
 
-  function cwFetchAgent(question) {
-    if (isLive()) {
-      return domo.post(CE + "askCortexAgent", { question: question, persona: state.persona, extendedThinking: !!state.cw.thinking })
+  // Live agent call, threaded so the conversation persists as a Cortex thread
+  // (origin_application='revenue_cc') that shows up in the recent-chats rail.
+  function cwFetchAgent(question, thread) {
+    if (!isLive()) return sampleAgent(question);
+    var ensureThread = (thread && thread.serverThreadId)
+      ? Promise.resolve(thread.serverThreadId)
+      : domo.post(CE + "createCortexThread", { title: question.slice(0, 80) })
+          .then(function (r) { var d = unwrap(r); return (d && d.status === "SUCCEEDED") ? d.threadId : 0; })
+          .catch(function () { return 0; });
+    return ensureThread.then(function (tid) {
+      if (thread && tid) thread.serverThreadId = tid;
+      return domo.post(CE + "askCortexAgent", { question: question, persona: state.persona, threadId: tid || 0, parentMessageId: (thread && thread.parentMessageId) || 0 })
         .then(function (resp) {
           var d = unwrap(resp);
           if (d && d.status === "SUCCEEDED") {
+            if (thread) { if (d.threadId) thread.serverThreadId = d.threadId; if (d.messageId) thread.parentMessageId = d.messageId; }
+            cwLoadServerThreads(true);
             return { live: true, question: d.question || question, answer: d.answer, metrics: d.metrics || null,
               sql: d.sql, searchQuery: d.searchQuery, citations: d.citations || [], toolsFired: d.toolsFired || {},
               api: d.api, elapsedMs: d.elapsedMs, requestId: d.requestId, agent: d.agent, mode: d.mode };
           }
           throw new Error(d && d.error ? d.error : "Agent call failed");
-        })
-        .catch(function (err) { console.warn("[cw] live agent failed, using sample seed:", err); return sampleAgent(question); });
-    }
-    return sampleAgent(question);
+        });
+    }).catch(function (err) { console.warn("[cw] live agent failed, using sample seed:", err); return sampleAgent(question); });
+  }
+
+  // List the app's persisted Cortex threads for the recent-chats rail.
+  function cwLoadServerThreads(silent) {
+    if (!isLive()) { state.cw.serverLoaded = true; return; }
+    if (state.cw.serverLoading) return;
+    state.cw.serverLoading = true;
+    domo.post(CE + "listCortexThreads", {}).then(function (r) {
+      var d = unwrap(r);
+      state.cw.serverThreads = (d && d.status === "SUCCEEDED" && d.threads) ? d.threads : [];
+      state.cw.serverLoaded = true; state.cw.serverLoading = false;
+      if (state.surface === "cowork") renderView();
+    }).catch(function () { state.cw.serverLoading = false; state.cw.serverLoaded = true; });
+  }
+  // Replay a persisted thread (read-only) from getCortexThread.
+  function cwOpenServerThread(threadId, title) {
+    state.cw.replay = { threadId: threadId, title: title || "", loading: true, messages: [] };
+    renderView();
+    domo.post(CE + "getCortexThread", { threadId: threadId }).then(function (r) {
+      var d = unwrap(r);
+      if (d && d.status === "SUCCEEDED") state.cw.replay = { threadId: threadId, title: d.title || title || "", loading: false, messages: d.messages || [] };
+      else state.cw.replay = { threadId: threadId, title: title || "", loading: false, error: (d && d.error) || "Could not load thread", messages: [] };
+      renderView();
+    }).catch(function (err) { state.cw.replay = { threadId: threadId, title: title || "", loading: false, error: String((err && err.message) || err), messages: [] }; renderView(); });
+  }
+  function cwCloseReplay() { state.cw.replay = null; renderView(); }
+  function cwRelTime(ms) {
+    var n = Number(ms) || 0; if (!n) return "";
+    var mins = Math.floor((Date.now() - n) / 60000);
+    if (mins < 1) return "Just now";
+    if (mins < 60) return mins + "m ago";
+    var hrs = Math.floor(mins / 60); if (hrs < 24) return hrs + "h ago";
+    var days = Math.floor(hrs / 24); if (days < 7) return days + "d ago";
+    return new Date(n).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   }
 
   function cwAsk(q) {
     q = String(q || "").trim();
     if (!q || state.cw.sending) return;
+    if (state.cw.replay) state.cw.replay = null;
     var t = cwActiveThread();
     if (!t.messages.length) t.title = q.length > 46 ? q.slice(0, 46) + "\u2026" : q;
     t.messages.push({ id: "u" + (cwSeq++), role: "user", text: q });
@@ -3225,7 +3270,7 @@
     t.messages.push(amsg);
     state.cw.sending = true; state.cw.draft = "";
     renderView(); cwScrollBottom();
-    cwFetchAgent(q).then(function (res) {
+    cwFetchAgent(q, t).then(function (res) {
       amsg.res = res; amsg.text = res.answer || "\u2014"; amsg.steps = cwStatusSteps(res); amsg.status = "answering";
       renderView();
       requestAnimationFrame(function () { cwAnimate(amsg); });
@@ -3291,16 +3336,39 @@
     ]));
     var list = h("div", { class: "cw-thread-list" });
     if (!st.threads.length) cwNewThread(true);
+    var bubble = "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6'><path d='M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z'/></svg>";
+
+    // Current session threads (in-memory; also persisted server-side once asked).
     st.threads.forEach(function (t) {
-      var active = t.id === st.activeId;
+      var active = !st.replay && t.id === st.activeId;
       var last = t.messages.length ? (t.messages.length + " message" + (t.messages.length === 1 ? "" : "s")) : "Empty";
       var item = h("button", { class: "cw-thread" + (active ? " active" : "") }, [
-        h("span", { class: "cw-thread-ico", html: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6'><path d='M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z'/></svg>" }),
+        h("span", { class: "cw-thread-ico", html: bubble }),
         h("span", { class: "cw-thread-meta" }, [h("span", { class: "cw-thread-title" }, [t.title || "New chat"]), h("span", { class: "cw-thread-sub" }, [last])])
       ]);
-      item.addEventListener("click", function () { st.activeId = t.id; renderView(); });
+      item.addEventListener("click", function () { st.replay = null; st.activeId = t.id; renderView(); });
       list.appendChild(item);
     });
+
+    // Recent chats persisted in Snowflake (Cortex Threads API), replayable.
+    var recent = st.serverThreads || [];
+    if (recent.length) {
+      list.appendChild(h("div", { class: "cw-thread-group" }, ["Recent \u00b7 Snowflake"]));
+      recent.slice(0, 20).forEach(function (rt) {
+        var active = st.replay && String(st.replay.threadId) === String(rt.threadId);
+        var item = h("button", { class: "cw-thread" + (active ? " active" : "") }, [
+          h("span", { class: "cw-thread-ico", html: bubble }),
+          h("span", { class: "cw-thread-meta" }, [
+            h("span", { class: "cw-thread-title" }, [rt.title || "Untitled chat"]),
+            h("span", { class: "cw-thread-sub" }, [cwRelTime(rt.updatedOn)])
+          ])
+        ]);
+        item.addEventListener("click", function () { cwOpenServerThread(rt.threadId, rt.title); });
+        list.appendChild(item);
+      });
+    } else if (isLive() && st.serverLoaded) {
+      list.appendChild(h("div", { class: "cw-thread-empty" }, ["Chats you start here are saved to Snowflake and appear as recent threads."]));
+    }
     rail.appendChild(list);
     rail.appendChild(h("div", { class: "cw-threads-foot" }, [
       h("span", { class: "cw-env-dot" }), "Governed by Horizon \u00b7 ", h("code", {}, ["REVENUE_CC_READER"])
@@ -3336,6 +3404,8 @@
       srcLink("Open in CoWork", coworkHomeHref(), "sf")
     ]));
 
+    if (state.cw.replay) { main.appendChild(cwReplay()); return main; }
+
     var t = cwActiveThread();
     if (!t.messages.length) {
       // Home / empty state: greeting \u2192 composer \u2192 suggested questions (CoWork parity).
@@ -3347,6 +3417,46 @@
       main.appendChild(cwComposer());
     }
     return main;
+  }
+
+  // Read-only replay of a persisted Cortex thread (recent-chats rail).
+  function cwReplay() {
+    var rp = state.cw.replay || {};
+    var wrap = h("div", { class: "cw-replay" });
+    var back = h("button", { class: "cw-replay-back" }, [h("span", {}, ["\u2190"]), " Back to chat"]);
+    back.addEventListener("click", function () { cwCloseReplay(); });
+    wrap.appendChild(h("div", { class: "cw-replay-head" }, [
+      h("div", {}, [back, h("div", { class: "cw-replay-title" }, [rp.title || "Untitled chat"])]),
+      h("span", { class: "cw-replay-tag" }, ["Saved thread \u00b7 Snowflake"])
+    ]));
+    var stream = h("div", { class: "cw-stream" });
+    if (rp.loading) {
+      stream.appendChild(h("div", { class: "analyst-loading" }, [h("span", { class: "spinner" }), "Loading the saved conversation from Snowflake\u2026"]));
+    } else if (rp.error) {
+      stream.appendChild(h("div", { class: "cw-error" }, [rp.error]));
+    } else if (!(rp.messages || []).length) {
+      stream.appendChild(h("p", { class: "cw-hero-note" }, ["No messages in this thread."]));
+    } else {
+      rp.messages.forEach(function (m) {
+        if (m.role === "user") { stream.appendChild(h("div", { class: "cw-msg user" }, [h("div", { class: "cw-bubble" }, [m.text || ""])])); return; }
+        var body = h("div", { class: "cw-msg-body" }, [h("div", { class: "cw-answer" }, [m.text || "\u2014"])]);
+        if (m.sql) {
+          var pre = h("pre", { class: "cw-sql-block" }, [h("code", {}, [m.sql])]); pre.style.display = "none";
+          var tog = h("button", { class: "cw-sql-toggle" }, [h("span", { class: "cw-sql-caret" }, ["\u25b8"]), "View generated SQL"]);
+          tog.addEventListener("click", function () { var open = pre.style.display === "none"; pre.style.display = open ? "block" : "none"; tog.querySelector(".cw-sql-caret").textContent = open ? "\u25be" : "\u25b8"; });
+          body.appendChild(h("div", { class: "cw-sql" }, [tog, pre]));
+        }
+        stream.appendChild(h("div", { class: "cw-msg assistant" }, [h("span", { class: "cw-msg-avatar" }, [h("img", { src: "./public/brand/snowflake-cortex.svg", alt: "" })]), body]));
+      });
+    }
+    wrap.appendChild(stream);
+    var reopen = h("button", { class: "cw-replay-continue" }, ["Start a new chat \u2192"]);
+    reopen.addEventListener("click", function () { cwCloseReplay(); cwNewThread(); });
+    wrap.appendChild(h("div", { class: "cw-replay-foot" }, [
+      h("span", {}, ["Read-only replay via ", h("code", {}, ["GET /api/v2/cortex/threads/{id}"])]),
+      reopen
+    ]));
+    return wrap;
   }
 
   function cwHome() {

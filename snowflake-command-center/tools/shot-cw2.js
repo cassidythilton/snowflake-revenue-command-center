@@ -8,7 +8,7 @@ const puppeteer = require("puppeteer");
   page.on("pageerror", (e) => errs.push("PAGEERROR: " + e.message));
   await page.goto("http://localhost:8781/index.html", { waitUntil: "networkidle0" });
   await new Promise((r) => setTimeout(r, 900));
-  await page.evaluate(() => { const el = [...document.querySelectorAll(".rail-item")].find((b) => (b.title || "").indexOf("Snowflake Intelligence") > -1); if (el) el.click(); });
+  await page.evaluate(() => { const el = [...document.querySelectorAll(".rail-item")].find((b) => (b.title || "").indexOf("Snowflake CoWork") > -1); if (el) el.click(); });
   await new Promise((r) => setTimeout(r, 800));
 
   const probe = await page.evaluate(() => ({

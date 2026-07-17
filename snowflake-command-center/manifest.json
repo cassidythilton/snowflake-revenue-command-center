@@ -431,6 +431,28 @@
           "children": [],
           "entitySubType": null,
           "alias": "persona"
+        },
+        {
+          "name": "threadId",
+          "displayName": "threadId",
+          "type": "number",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "threadId"
+        },
+        {
+          "name": "parentMessageId",
+          "displayName": "parentMessageId",
+          "type": "number",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "parentMessageId"
         }
       ],
       "output": {
@@ -1245,6 +1267,129 @@
           "children": [],
           "entitySubType": null,
           "alias": "version"
+        }
+      ],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
+    },
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "createCortexThread",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.4.1",
+      "functionName": "createCortexThread",
+      "parameters": [
+        {
+          "name": "title",
+          "displayName": "title",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "title"
+        }
+      ],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
+    },
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "renameCortexThread",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.4.1",
+      "functionName": "renameCortexThread",
+      "parameters": [
+        {
+          "name": "threadId",
+          "displayName": "threadId",
+          "type": "number",
+          "value": null,
+          "nullable": false,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "threadId"
+        },
+        {
+          "name": "title",
+          "displayName": "title",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "title"
+        }
+      ],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
+    },
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "listCortexThreads",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.4.1",
+      "functionName": "listCortexThreads",
+      "parameters": [],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
+    },
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "getCortexThread",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.4.1",
+      "functionName": "getCortexThread",
+      "parameters": [
+        {
+          "name": "threadId",
+          "displayName": "threadId",
+          "type": "number",
+          "value": null,
+          "nullable": false,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "threadId"
         }
       ],
       "output": {

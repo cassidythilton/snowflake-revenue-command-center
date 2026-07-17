@@ -1411,6 +1411,8 @@
 .cw-thread-title { font-size: 12.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cw-thread.active .cw-thread-title { color: var(--sf-blue-deep); }
 .cw-thread-sub { font-size: 10.5px; color: var(--muted); }
+.cw-thread-group { margin: 12px 6px 4px; font-size: 9.5px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--n-300); }
+.cw-thread-empty { margin: 8px 8px; font-size: 10.5px; line-height: 1.5; color: var(--n-300); }
 .cw-threads-foot { flex: none; padding: 10px 12px; border-top: 1px solid var(--line); font-size: 10.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
 .cw-threads-foot code { font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
 .cw-env-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--status-good); flex: none; }
@@ -1547,6 +1549,19 @@
 .cw-send:active { transform: scale(.94); }
 .cw-send[disabled] { background: var(--n-100); color: var(--n-300); cursor: default; }
 .cw-send svg { width: 17px; height: 17px; display: block; }
+
+/* Read-only replay of a saved Snowflake thread */
+.cw-replay { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.cw-replay-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+.cw-replay-back { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; background: transparent; color: var(--sf-blue-deep); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.cw-replay-back:hover { text-decoration: underline; }
+.cw-replay-title { font-size: 14px; font-weight: 800; color: var(--text); letter-spacing: -.01em; margin-top: 2px; }
+.cw-replay-tag { flex: none; font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--sf-blue-deep); background: rgba(41,181,232,.1); border: 1px solid rgba(41,181,232,.3); border-radius: var(--r-pill); padding: 3px 9px; }
+.cw-replay .cw-stream { padding: 22px 22px 8px; }
+.cw-replay-foot { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; border-top: 1px solid var(--line); font-size: 10.5px; color: var(--muted); }
+.cw-replay-foot code { font-family: var(--font-mono); font-size: 10px; color: var(--sf-blue-deep); }
+.cw-replay-continue { border: 1px solid var(--line-strong); background: var(--white); color: var(--sf-blue-deep); font: inherit; font-size: 11.5px; font-weight: 700; border-radius: var(--r-pill); padding: 5px 12px; cursor: pointer; }
+.cw-replay-continue:hover { border-color: var(--sf-blue); background: #fbfdff; }
 
 /* Under-the-hood wiring */
 .cw-wire { margin-top: 18px; }

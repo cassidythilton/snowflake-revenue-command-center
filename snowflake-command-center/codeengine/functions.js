@@ -554,7 +554,7 @@ function parseAgentResponse(data) {
   return out;
 }
 
-function askCortexAgent(question, persona) {
+function askCortexAgent(question, persona, threadId, parentMessageId) {
   var region = personaRegion(persona);
   var q = String(question || "").trim();
   if (region) q = q + " (focus on the " + region + " region)";
@@ -562,6 +562,8 @@ function askCortexAgent(question, persona) {
 
   var body = {
     stream: false,
+    thread_id: Number(threadId) || 0,
+    parent_message_id: Number(parentMessageId) || 0,
     messages: [{ role: "user", content: [{ type: "text", text: q }] }]
   };
   var out = {
@@ -586,6 +588,10 @@ function askCortexAgent(question, persona) {
       if (resp.status !== 200) return Promise.reject(resp.data || ("Agent API HTTP " + resp.status));
       out.api.response = resp.data;
       out.requestId = (resp.data && (resp.data.request_id || resp.data.id)) || (resp.headers && resp.headers["x-snowflake-request-id"]) || null;
+      var md = (resp.data && resp.data.metadata) ? resp.data.metadata : {};
+      out.threadId = md.thread_id || (Number(threadId) || null);
+      out.messageId = md.assistant_message_id || null;
+      out.userMessageId = md.user_message_id || null;
       var parsed = parseAgentResponse(resp.data);
       out.answer = parsed.answer;
       out.thinking = parsed.thinking;
@@ -1111,6 +1117,89 @@ function registerCloudAmplifierTable(integrationId, database, schema, table, dat
     .catch(function (err) { return { response: { status: "FAILED", error: detail(err) } }; });
 }
 
+/* ----------------------- Cortex Agent Threads API ------------------------- */
+/* Persist + replay chat threads for the in-app Snowflake CoWork surface.
+ * Threads created by the app are tagged origin_application='revenue_cc' so the
+ * "recent chats" rail lists only this app's threads. Scoped to the service
+ * identity (DOMO_CE_USER): lists threads the app created, not a human's native
+ * CoWork threads (that would require per-user OAuth/OBO). Endpoints verified
+ * against the live account via the Cortex CLI. */
+var CW_ORIGIN_APP = "revenue_cc";
+function threadsUrl(id) {
+  return accountHost() + "/api/v2/cortex/threads" + (id ? "/" + encodeURIComponent(id) : "");
+}
+function renameThread(id, title) {
+  return authHeaders().then(function (headers) {
+    headers.Accept = "application/json";
+    return axios.post(threadsUrl(id), { thread_name: String(title || "").slice(0, 120) }, { headers: headers, timeout: 30000, validateStatus: function () { return true; } });
+  });
+}
+/* Create a thread (optionally named) and return its id. */
+function createCortexThread(title) {
+  return authHeaders().then(function (headers) {
+    headers.Accept = "application/json";
+    return axios.post(threadsUrl(), { origin_application: CW_ORIGIN_APP }, { headers: headers, timeout: 30000, validateStatus: function () { return true; } });
+  }).then(function (resp) {
+    if (resp.status !== 200 && resp.status !== 201) return Promise.reject(resp.data || ("threads create HTTP " + resp.status));
+    var tid = resp.data && (resp.data.thread_id || resp.data.threadId || resp.data.id);
+    if (title && tid) {
+      return renameThread(tid, title)
+        .then(function () { return { response: { status: "SUCCEEDED", threadId: tid } }; })
+        .catch(function () { return { response: { status: "SUCCEEDED", threadId: tid } }; });
+    }
+    return { response: { status: "SUCCEEDED", threadId: tid } };
+  }).catch(function (err) { return { response: { status: "FAILED", error: detail(err) } }; });
+}
+/* Rename an existing thread (used to set the display title from the first Q). */
+function renameCortexThread(threadId, title) {
+  if (!threadId) return Promise.resolve({ response: { status: "FAILED", error: "Missing threadId." } });
+  return renameThread(threadId, title)
+    .then(function (resp) { return { response: { status: resp.status === 200 ? "SUCCEEDED" : "FAILED", threadId: threadId } }; })
+    .catch(function (err) { return { response: { status: "FAILED", error: detail(err) } }; });
+}
+/* List this app's threads (recent-first) for the sidebar. */
+function listCortexThreads() {
+  var url = threadsUrl() + "?origin_application=" + encodeURIComponent(CW_ORIGIN_APP);
+  return authHeaders().then(function (headers) {
+    return axios.get(url, { headers: headers, timeout: 30000, validateStatus: function () { return true; } });
+  }).then(function (resp) {
+    if (resp.status !== 200) return Promise.reject(resp.data || ("threads list HTTP " + resp.status));
+    var arr = Array.isArray(resp.data) ? resp.data : ((resp.data && resp.data.threads) || []);
+    var threads = arr.map(function (t) {
+      return { threadId: t.thread_id, title: t.thread_name || "", createdOn: t.created_on, updatedOn: t.updated_on };
+    }).sort(function (a, b) { return (b.updatedOn || 0) - (a.updatedOn || 0); });
+    return { response: { status: "SUCCEEDED", threads: threads } };
+  }).catch(function (err) { return { response: { status: "FAILED", error: detail(err), threads: [] } }; });
+}
+/* Fetch one thread's messages (chronological) for replay. message_payload is a
+ * JSON-encoded string; pull the text (and any Analyst SQL) out of content[]. */
+function getCortexThread(threadId) {
+  if (!threadId) return Promise.resolve({ response: { status: "FAILED", error: "Missing threadId." } });
+  var url = threadsUrl(threadId) + "?message_type=conversation&page_size=100";
+  return authHeaders().then(function (headers) {
+    return axios.get(url, { headers: headers, timeout: 45000, validateStatus: function () { return true; } });
+  }).then(function (resp) {
+    if (resp.status !== 200) return Promise.reject(resp.data || ("thread get HTTP " + resp.status));
+    var meta = (resp.data && resp.data.metadata) || {};
+    var raw = (resp.data && resp.data.messages) || [];
+    var msgs = [];
+    for (var i = raw.length - 1; i >= 0; i--) { // API returns descending -> chronological
+      var m = raw[i] || {};
+      var payload = {};
+      try { payload = JSON.parse(m.message_payload || "{}"); } catch (e) { payload = {}; }
+      var blocks = payload.content || [];
+      var text = "", sql = "";
+      for (var c = 0; c < blocks.length; c++) {
+        var bl = blocks[c] || {};
+        if (bl.type === "text" && bl.text) text += (text ? "\n\n" : "") + bl.text;
+        else if (bl.type === "tool_result" && bl.tool_result) { var j = toolResultJson(bl.tool_result); if (j && j.sql && !sql) sql = j.sql; }
+      }
+      msgs.push({ messageId: m.message_id, parentId: m.parent_id, role: m.role, text: text, sql: sql, createdOn: m.created_on });
+    }
+    return { response: { status: "SUCCEEDED", threadId: meta.thread_id || threadId, title: meta.thread_name || "", messages: msgs } };
+  }).catch(function (err) { return { response: { status: "FAILED", error: detail(err) } }; });
+}
+
 /* -------------------------------- utils ----------------------------------- */
 function detail(err) {
   try {
@@ -1146,5 +1235,9 @@ module.exports = {
   askRetentionAgent: askRetentionAgent,
   startRetentionWorkflow: startRetentionWorkflow,
   listApprovalTasks: listApprovalTasks,
-  completeApprovalTask: completeApprovalTask
+  completeApprovalTask: completeApprovalTask,
+  createCortexThread: createCortexThread,
+  renameCortexThread: renameCortexThread,
+  listCortexThreads: listCortexThreads,
+  getCortexThread: getCortexThread
 };
