@@ -170,7 +170,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "ping",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "ping",
       "parameters": [],
       "output": {
@@ -189,7 +189,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "runSql",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "runSql",
       "parameters": [
         {
@@ -231,7 +231,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "getForecastHome",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "getForecastHome",
       "parameters": [
         {
@@ -262,7 +262,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "askAnalyst",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "askAnalyst",
       "parameters": [
         {
@@ -326,7 +326,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "describeSemanticView",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "describeSemanticView",
       "parameters": [
         {
@@ -357,7 +357,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "listSemanticViews",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "listSemanticViews",
       "parameters": [],
       "output": {
@@ -376,7 +376,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "alterSemanticView",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "alterSemanticView",
       "parameters": [
         {
@@ -407,7 +407,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "askCortexAgent",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "askCortexAgent",
       "parameters": [
         {
@@ -471,7 +471,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "runModelInference",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "runModelInference",
       "parameters": [
         {
@@ -502,7 +502,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "getOpsState",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "getOpsState",
       "parameters": [],
       "output": {
@@ -521,7 +521,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "createScenario",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "createScenario",
       "parameters": [
         {
@@ -651,7 +651,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "updateScenarioStatus",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "updateScenarioStatus",
       "parameters": [
         {
@@ -693,7 +693,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "deleteScenario",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "deleteScenario",
       "parameters": [
         {
@@ -724,7 +724,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "createFeedback",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "createFeedback",
       "parameters": [
         {
@@ -821,7 +821,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "getApprovalQueue",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "getApprovalQueue",
       "parameters": [
         {
@@ -852,7 +852,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "writeActionStatus",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "writeActionStatus",
       "parameters": [
         {
@@ -971,7 +971,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "getGovernance",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "getGovernance",
       "parameters": [],
       "output": {
@@ -990,7 +990,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "getSnowflakeIntegrations",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "getSnowflakeIntegrations",
       "parameters": [],
       "output": {
@@ -1009,7 +1009,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "registerCloudAmplifierTable",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "registerCloudAmplifierTable",
       "parameters": [
         {
@@ -1084,7 +1084,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "askRetentionAgent",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "askRetentionAgent",
       "parameters": [
         {
@@ -1115,7 +1115,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "startRetentionWorkflow",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "startRetentionWorkflow",
       "parameters": [
         {
@@ -1201,7 +1201,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "listApprovalTasks",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "listApprovalTasks",
       "parameters": [
         {
@@ -1232,7 +1232,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "completeApprovalTask",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "completeApprovalTask",
       "parameters": [
         {
@@ -1285,7 +1285,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "createCortexThread",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "createCortexThread",
       "parameters": [
         {
@@ -1316,7 +1316,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "renameCortexThread",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "renameCortexThread",
       "parameters": [
         {
@@ -1358,7 +1358,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "listCortexThreads",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "listCortexThreads",
       "parameters": [],
       "output": {
@@ -1377,7 +1377,7 @@
       "name": "SnowflakeRevenueCommandCenter",
       "alias": "getCortexThread",
       "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "functionName": "getCortexThread",
       "parameters": [
         {

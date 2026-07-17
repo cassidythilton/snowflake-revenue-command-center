@@ -123,7 +123,7 @@
       tasks: [], tasksLoaded: false, tasksLoading: false, tasksLive: false, busyTask: null, starting: null },
     governance: { loading: false, loaded: false, error: null, live: false, seed: null, parity: null, masking: null, rlSelected: null, synced: {}, wiped: {}, showDetail: false },
     cowork: { loading: false, loaded: false, error: null, live: false, mcp: null, cowork: null },
-    cw: { threads: [], activeId: null, thinking: false, sending: false, draft: "", showWiring: false, serverThreads: [], serverLoaded: false, serverLoading: false, replay: null },
+    cw: { threads: [], activeId: null, thinking: false, sending: false, draft: "", showWiring: false, serverThreads: [], serverLoaded: false, serverLoading: false, replay: null, userName: "", userLoaded: false, userLoading: false },
     how: { loading: false, loaded: false, error: null, coco: null }
   };
 
@@ -3138,6 +3138,7 @@
       loadAgentSeed().then(function () { if (state.surface === "cowork") renderView(); });
     }
     if (isLive() && !state.cw.serverLoaded && !state.cw.serverLoading) { cwLoadServerThreads(true); }
+    cwLoadUser();
     frag.appendChild(cwConsole());
     frag.appendChild(cwWiring());
     return frag;
@@ -3439,14 +3440,39 @@
     var hh = new Date().getHours();
     return hh < 12 ? "Good morning" : hh < 18 ? "Good afternoon" : "Good evening";
   }
-  function cwUserName() {
+  // First name only, from a full/display name in any common shape.
+  function cwFirstName(raw) {
+    var n = String(raw == null ? "" : raw).trim();
+    if (!n) return "";
+    if (n.indexOf(",") > -1) { // "Hilton, Cassidy"
+      var after = n.split(",")[1];
+      n = (after && after.trim()) ? after.trim() : n.split(",")[0].trim();
+    }
+    return n.split(/[\s+._-]+/)[0]; // handles "Cassidy Hilton" / "Cassidy+Hilton" / "cassidy.hilton"
+  }
+  // Auto-populate the greeting name from the Domo App Framework User API
+  // (GET /domo/users/v1/me). Cached; re-renders when resolved.
+  function cwLoadUser() {
+    var st = state.cw;
+    if (st.userLoaded || st.userLoading) return;
+    st.userLoading = true;
+    var done = function (raw) {
+      st.userName = cwFirstName(raw); st.userLoaded = true; st.userLoading = false;
+      if (state.surface === "cowork") renderView();
+    };
     try {
-      if (typeof domo !== "undefined" && domo.env) {
-        var n = domo.env.userName || domo.env.USER_NAME || domo.env.user || domo.env.fullName || "";
-        if (n) return String(n).trim().split(/\s+/)[0];
+      if (typeof domo !== "undefined" && typeof domo.get === "function") {
+        domo.get("/domo/users/v1/me").then(function (u) {
+          u = Array.isArray(u) ? (u[0] || {}) : (u || {});
+          done(u.displayName || u.name || u.fullName || u.firstName || "");
+        }).catch(function () {
+          try { done((domo.env && (domo.env.userName || domo.env.fullName)) || ""); }
+          catch (e) { done(""); }
+        });
+        return;
       }
     } catch (e) {}
-    return "";
+    done("");
   }
   var CW_BUBBLE_ICO = "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z'/></svg>";
 
@@ -3519,7 +3545,7 @@
   }
 
   function cwHome() {
-    var name = cwUserName();
+    var name = state.cw.userName || "";
     var home = h("div", { class: "cw-home" });
     home.appendChild(h("div", { class: "cw-greet" }, [
       h("div", { class: "cw-greet-1" }, [cwGreeting() + (name ? ", " + name : "")]),
