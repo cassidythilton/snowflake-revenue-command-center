@@ -794,9 +794,12 @@
 
   // "Connected: DB.SCHEMA · Role" governance chip (mirrors the reference Cortex
   // Analyst app), driven by the app's Snowflake config.
-  function connChip() {
+  // Slim single-line connection bar (reference parity): connection facts inline
+  // on the left, compact icon controls (view picker + new chat) on the right.
+  function analystConnBar() {
     var cfg = state.config || {};
-    return h("div", { class: "conn-chip" }, [
+    var view = (state.analyst.selectedViews && state.analyst.selectedViews[0]) || cfg.view || "REVENUE_CC_ANALYST";
+    var facts = h("div", { class: "cbar-facts" }, [
       h("span", { class: "cc-dot live" }),
       h("span", { class: "cc-lab" }, ["Connected"]),
       h("span", { class: "cc-val" }, [(cfg.database || "SNOWFLAKE_REVENUE_CC") + "." + (cfg.schema || "CORE")]),
@@ -804,9 +807,12 @@
       h("span", { class: "cc-lab" }, ["Role"]),
       h("span", { class: "cc-val" }, [cfg.role || "REVENUE_CC_READER"]),
       h("span", { class: "cc-sep" }, ["\u00b7"]),
-      h("span", { class: "cc-lab" }, ["Warehouse"]),
-      h("span", { class: "cc-val" }, [cfg.warehouse || "REVENUE_CC_WH"])
+      h("span", { class: "cc-lab" }, ["View"]),
+      h("a", { class: "cc-val link", href: snowsightObjHref("view", view), target: "_blank", rel: "noopener", title: "Open semantic view in Snowsight" }, [view])
     ]);
+    var newBtn = h("button", { class: "cbar-icon", title: "New chat" }, ["\u21bb"]);
+    newBtn.addEventListener("click", newChat);
+    return h("div", { class: "conn-bar" }, [facts, h("div", { class: "cbar-tools" }, [viewPicker(), newBtn])]);
   }
 
   // Semantic-view picker: a checkable dropdown populated live from
@@ -816,13 +822,7 @@
   function viewPicker() {
     var a = state.analyst;
     var sel = a.selectedViews || [];
-    var label = sel.length <= 1 ? (sel[0] || "REVENUE_CC_ANALYST") : (sel[0] + " +" + (sel.length - 1));
-    var btn = h("button", { class: "vp-btn" + (a.pickerOpen ? " open" : "") }, [
-      h("img", { class: "vp-mark", src: "./public/brand/snowflake-cortex.svg", alt: "" }),
-      h("span", { class: "vp-lab" }, ["Semantic view"]),
-      h("span", { class: "vp-val" }, [label]),
-      h("span", { class: "vp-caret" }, [a.pickerOpen ? "\u25b4" : "\u25be"])
-    ]);
+    var btn = h("button", { class: "cbar-icon" + (a.pickerOpen ? " open" : ""), title: "Semantic views" + (sel.length > 1 ? " (" + sel.length + " selected)" : "") }, ["\u2699"]);
     btn.addEventListener("click", function (e) { e.stopPropagation(); a.pickerOpen = !a.pickerOpen; if (a.pickerOpen && !a.viewsLoaded) loadViews().then(function () { renderView(); }); renderView(); });
     var wrap = h("div", { class: "view-picker" }, [btn]);
     if (a.pickerOpen) {
@@ -892,13 +892,14 @@
     var input = h("input", { class: "aw-input", type: "text", placeholder: "e.g. Why did renewal risk increase for West Enterprise accounts this month?", value: state.analyst.input || "" });
     input.addEventListener("input", function () { state.analyst.input = input.value; });
     input.addEventListener("keydown", function (e) { if (e.key === "Enter") runAnalyst(input.value); });
-    var send = h("button", { class: "aw-send", title: "Ask" }, ["\u2192"]);
+    var send = h("button", { class: "aw-send", title: "Ask", "aria-label": "Ask" }, [
+      h("span", { class: "aw-send-ico", html: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><line x1='5' y1='12' x2='19' y2='12'/><polyline points='12 5 19 12 12 19'/></svg>" })
+    ]);
     send.addEventListener("click", function () { runAnalyst(input.value); });
 
     var hero = h("div", { class: "aw-hero" }, [
-      h("img", { class: "aw-mark", src: "./public/brand/snowflake-cortex.svg", alt: "" }),
       h("h1", { class: "aw-title" }, ["Ask a question"]),
-      h("p", { class: "aw-sub" }, ["Ask anything about your revenue data in natural language, or start from a verified query below. Every answer returns governed SQL over ", h("code", {}, [view]), " and live rows."]),
+      h("p", { class: "aw-sub" }, ["Natural language over ", h("code", {}, [view]), " \u2014 every answer returns governed SQL and live rows."]),
       h("div", { class: "aw-inputwrap" }, [input, send])
     ]);
 
@@ -959,17 +960,8 @@
     var hasMsgs = state.analyst.messages.length > 0;
     var chatActive = hasMsgs || state.analyst.loading;
 
-    // Header (shared): title + live semantic-view picker + connection chip.
-    var header = [
-      h("div", { class: "chat-head" }, [
-        h("div", { class: "chat-head-l" }, [h("h2", {}, ["Cortex Analyst"]), h("p", {}, [(state.analyst.conversationHistory.length ? Math.floor(state.analyst.conversationHistory.length / 2) + " turns in context \u00b7 " : "") + "Conversational NL \u2192 governed SQL"])]),
-        h("div", { class: "chat-head-r" }, [
-          viewPicker(),
-          (function () { var b = h("button", { class: "mini-btn ghost" }, ["\u21bb New chat"]); b.addEventListener("click", newChat); return b; })()
-        ])
-      ]),
-      connChip()
-    ];
+    // Single slim connection bar (reference parity): facts inline + icon controls.
+    var header = [analystConnBar()];
 
     // Landing state: centered hero + verified gallery + recent (reference parity).
     if (!chatActive) {
