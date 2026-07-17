@@ -120,10 +120,11 @@
     ml: { accountId: "", loading: false, error: null, result: null, inspector: false, seed: null, codeTab: "curl", fbNote: "" },
     ops: { loading: false, loaded: false, error: null, scenarios: [], feedback: [], note: null, tab: "scenarios", selected: null, adding: false },
     approvals: { loading: false, loaded: false, error: null, live: false, seed: null, pending: [], writeback: [], history: [], protected: null, byId: {}, active: null, note: null, busy: null,
-      tasks: [], tasksLoaded: false, tasksLoading: false, tasksLive: false, busyTask: null, starting: null },
+      tasks: [], tasksLoaded: false, tasksLoading: false, tasksLive: false, tasksError: null, busyTask: null, starting: null },
     governance: { loading: false, loaded: false, error: null, live: false, seed: null, parity: null, masking: null, rlSelected: null, synced: {}, wiped: {}, showDetail: false },
     cowork: { loading: false, loaded: false, error: null, live: false, mcp: null, cowork: null },
     cw: { threads: [], activeId: null, thinking: false, sending: false, draft: "", showWiring: false, serverThreads: [], serverLoaded: false, serverLoading: false, replay: null, userName: "", userLoaded: false, userLoading: false },
+    diag: { entries: [], open: false },
     how: { loading: false, loaded: false, error: null, coco: null }
   };
 
@@ -202,8 +203,85 @@
   function unwrap(resp) {
     var cur = resp && (resp.body || resp.data || resp);
     var depth = 0;
-    while (cur && typeof cur === "object" && "response" in cur && depth < 6) { cur = cur.response; depth += 1; }
+    // Peel the Code Engine execution envelope ({executionId, status:'SUCCESS',
+    // result:{...}}) and any nested {response:{...}} wrappers, so callers always
+    // see the function's own return payload regardless of proxy shape.
+    while (cur && typeof cur === "object" && depth < 8) {
+      if (cur.executionId && cur.result && typeof cur.result === "object") { cur = cur.result; depth += 1; continue; }
+      if ("response" in cur && cur.response && typeof cur.response === "object") { cur = cur.response; depth += 1; continue; }
+      break;
+    }
     return cur;
+  }
+
+  /* ------------------------- CE diagnostics logging ----------------------- */
+  // Transparently log every Code Engine call (function, status, latency, error)
+  // so bridge failures are visible in-app instead of silently degrading. A
+  // floating "CE" pill opens a panel with the recent calls.
+  function pushDiag(e) {
+    var d = state.diag; d.entries.unshift(e); if (d.entries.length > 80) d.entries.pop();
+    updateDiagBadge(); if (d.open) renderDiagPanel();
+  }
+  function ceInstrument() {
+    if (typeof domo === "undefined" || !domo || typeof domo.post !== "function" || domo.__ceInstrumented) return;
+    var _post = domo.post.bind(domo);
+    domo.post = function (path, body) {
+      var isCE = typeof path === "string" && path.indexOf("/codeengine/") > -1;
+      if (!isCE) return _post(path, body);
+      var fn = String(path).split("/").pop();
+      var t0 = Date.now();
+      return _post(path, body).then(function (resp) {
+        var d = unwrap(resp); var st = d && d.status;
+        pushDiag({ t: Date.now(), fn: fn, ok: (st === "SUCCEEDED" || st === "SUCCESS"), status: st || "(no status)", ms: Date.now() - t0, error: (d && d.error) || null });
+        console.log("[ce]", fn, "\u2192", st, (Date.now() - t0) + "ms", (d && d.error) ? ("ERR: " + d.error) : "");
+        return resp;
+      }, function (err) {
+        var msg = (err && err.message) ? err.message : (typeof err === "string" ? err : JSON.stringify(err)).slice(0, 300);
+        pushDiag({ t: Date.now(), fn: fn, ok: false, status: "THROW", ms: Date.now() - t0, error: msg });
+        console.warn("[ce]", fn, "THROW", msg);
+        throw err;
+      });
+    };
+    domo.__ceInstrumented = true;
+  }
+  function ensureDiagWidget() {
+    if (el("ceDiagBtn")) return;
+    var btn = h("button", { id: "ceDiagBtn", class: "ce-diag-btn", title: "Code Engine call log" }, [
+      h("span", { class: "ce-diag-dot" }), "CE", h("span", { class: "ce-diag-count", id: "ceDiagCount" }, ["0"])
+    ]);
+    btn.addEventListener("click", function () { state.diag.open = !state.diag.open; renderDiagPanel(); });
+    document.body.appendChild(btn);
+    var panel = h("div", { id: "ceDiagPanel", class: "ce-diag-panel" });
+    document.body.appendChild(panel);
+    renderDiagPanel(); updateDiagBadge();
+  }
+  function updateDiagBadge() {
+    var c = el("ceDiagCount"), btn = el("ceDiagBtn"); if (!c || !btn) return;
+    var errs = state.diag.entries.filter(function (e) { return !e.ok; }).length;
+    c.textContent = String(state.diag.entries.length);
+    btn.classList.toggle("has-err", errs > 0);
+  }
+  function renderDiagPanel() {
+    var panel = el("ceDiagPanel"); if (!panel) return;
+    panel.classList.toggle("open", !!state.diag.open);
+    if (!state.diag.open) { panel.innerHTML = ""; return; }
+    panel.innerHTML = "";
+    var head = h("div", { class: "ce-diag-head" }, [
+      h("span", {}, ["Code Engine \u00b7 recent calls"]),
+      (function () { var b = h("button", { class: "ce-diag-x" }, ["\u00d7"]); b.addEventListener("click", function () { state.diag.open = false; renderDiagPanel(); }); return b; })()
+    ]);
+    panel.appendChild(head);
+    var body = h("div", { class: "ce-diag-body" });
+    if (!state.diag.entries.length) body.appendChild(h("p", { class: "ce-diag-empty" }, ["No Code Engine calls yet."]));
+    state.diag.entries.forEach(function (e) {
+      body.appendChild(h("div", { class: "ce-diag-row" + (e.ok ? "" : " err") }, [
+        h("span", { class: "ce-diag-fn" }, [e.fn]),
+        h("span", { class: "ce-diag-st" }, [e.status]),
+        h("span", { class: "ce-diag-ms" }, [e.ms + "ms"]),
+        e.error ? h("div", { class: "ce-diag-msg" }, [String(e.error).slice(0, 300)]) : null
+      ]));
+    });
+    panel.appendChild(body);
   }
 
   // Pretty-print generated SQL for the read-only "View generated SQL" blocks.
@@ -2448,12 +2526,11 @@
     if (!isLive()) { state.approvals.tasks = []; state.approvals.tasksLive = false; state.approvals.tasksLoaded = true; state.approvals.tasksLoading = false; renderView(); return; }
     domo.post(CE + "listApprovalTasks", { limit: 50 }).then(function (resp) {
       var d = unwrap(resp);
-      if (d && d.status === "SUCCEEDED") { state.approvals.tasksLive = true; state.approvals.tasks = d.tasks || []; }
-      else { state.approvals.tasksLive = false; state.approvals.tasks = []; }
+      if (d && d.status === "SUCCEEDED") { state.approvals.tasksLive = true; state.approvals.tasks = d.tasks || []; state.approvals.tasksError = null; }
+      else { state.approvals.tasksLive = false; state.approvals.tasks = []; state.approvals.tasksError = (d && d.error) ? d.error : ("Unexpected response (status: " + (d && d.status ? d.status : "none") + ")"); }
       state.approvals.tasksLoaded = true; state.approvals.tasksLoading = false; renderView();
     }).catch(function (err) {
-      console.warn("[app] listApprovalTasks failed:", err);
-      state.approvals.tasksLive = false; state.approvals.tasks = []; state.approvals.tasksLoaded = true; state.approvals.tasksLoading = false; renderView();
+      state.approvals.tasksLive = false; state.approvals.tasks = []; state.approvals.tasksError = (err && err.message) ? err.message : String(err); state.approvals.tasksLoaded = true; state.approvals.tasksLoading = false; renderView();
     });
   }
 
@@ -2527,6 +2604,7 @@
         h("div", { class: "ac-empty-ico", html: QUEUE_ICON }),
         h("h3", {}, ["Live queue not connected"]),
         h("p", {}, ["The Action Center is powered entirely by the live Domo Task Center queue through the ", h("code", {}, ["snowflakece"]), " bridge \u2014 there are no sample rows here. Connect in Domo, or open the source queue directly."]),
+        state.approvals.tasksError ? h("p", { class: "ac-err" }, ["listApprovalTasks: ", h("code", {}, [String(state.approvals.tasksError)])]) : null,
         srcLink("Open the approvals queue in Domo", queueHref(), "domo")
       ]);
     } else if (!tasks.length) {
@@ -4528,6 +4606,8 @@
   }
 
   function init() {
+    ceInstrument();
+    ensureDiagWidget();
     buildPersonaSelect();
     initRail();
     renderTabs();
