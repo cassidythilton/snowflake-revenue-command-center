@@ -1,6 +1,6 @@
 {
   "name": "Snowflake Revenue Command Center",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Governed Snowflake + Domo revenue command center. Snowflake is the intelligence plane (Horizon + semantic views + Cortex Analyst/Agent + native ML + Hybrid Tables); Domo is the delivery + action plane. A live Code Engine bridge (package SnowflakeRevenueCommandCenter, key-pair JWT via Domo-managed account 148 / DOMO_CE_USER) powers Forecast Home, Cortex Analyst, Cortex Agent Queue, Snowflake ML inference, Hybrid Table ops, approval writeback, Horizon governance parity, and Cloud Amplifier registration.",
   "size": {
     "width": 1,

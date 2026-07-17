@@ -65,11 +65,31 @@
     "Which Enterprise accounts in the West region have the highest renewal risk and why?"
   ];
 
+  // Domo instance + Cloud Amplifier data models. These mirror the Snowflake
+  // semantic view REVENUE_CC_ANALYST on the Domo side: the same federated
+  // Snowflake tables (registered via Cloud Amplifier) joined into governed
+  // star schemas. The beta Data Model API caps at 4 primary relationships per
+  // model, so the 14-relationship semantic view is represented as three
+  // companion models (account / tenant / product hubs).
+  var DOMO_INSTANCE = "https://snowflake-demo.domo.com";
+  var DOMO_MODELS = [
+    { name: "Account Model", id: "c14ef7a7-edfb-46ca-8498-cb42b5809902", hub: "DIM_ACCOUNT", join: "ACCOUNT_ID", rels: 4,
+      facts: ["FACT_REVENUE_DAILY", "FACT_RENEWAL_RISK", "FACT_SUPPORT_CASES", "FACT_AGENT_ACTIONS"],
+      note: "Revenue, renewal risk, support, and agent actions joined to the account dimension." },
+    { name: "Tenant Model", id: "4549a343-a65d-48bd-aff0-fbd15d76dee5", hub: "DIM_TENANT", join: "TENANT_ID", rels: 4,
+      facts: ["FACT_REVENUE_DAILY", "FACT_RENEWAL_RISK", "FACT_SUPPORT_CASES", "FACT_AGENT_ACTIONS"],
+      note: "The same facts rolled up to the multi-tenant organization." },
+    { name: "Product Model", id: "da0439aa-e998-4e90-afeb-9cab5e668cb7", hub: "DIM_PRODUCT", join: "PRODUCT_ID", rels: 3,
+      facts: ["FACT_PRODUCT_USAGE_DAILY", "FACT_SUPPORT_CASES", "FACT_INCIDENTS"],
+      note: "Usage, support, and incident facts joined to the product dimension." }
+  ];
+
   var state = {
     persona: "Executive Sponsor",
     surface: "home",
     data: null,
     mode: "loading",
+    dataSource: null,
     analyst: { input: "", loading: false, error: null, messages: [], conversationHistory: [], recent: [], recentLoaded: false, seq: 0 },
     semantic: { loading: false, loaded: false, error: null, live: false, model: null, view: null, sql: null, tab: "graph", selected: null, vqResults: {}, vqBusy: {}, ddlResult: null, ddlBusy: false },
     config: { warehouse: "REVENUE_CC_WH", database: "SNOWFLAKE_REVENUE_CC", schema: "CORE", role: "REVENUE_CC_READER", view: "REVENUE_CC_ANALYST" },
@@ -170,16 +190,127 @@
   }
 
   /* ------------------------------- data ---------------------------------- */
+  /* Forecast Home is powered by the Cloud Amplifier federated datasets: the
+   * same Snowflake tables (registered via Cloud Amplifier / Cobra Evo) queried
+   * live through Domo's SQL API — data never leaves Snowflake. Aliases are
+   * declared in manifest.datasetsMapping. If the federation read fails we fall
+   * back to the Code Engine bridge, then to the local sample seed. */
+  var CA = {
+    rev: "fact_revenue_daily",
+    risk: "fact_renewal_risk",
+    actions: "fact_agent_actions",
+    support: "fact_support_cases",
+    forecast: "gold_revenue_forecast"
+  };
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
+  function ymOf(d) { return d.getFullYear() + "-" + pad2(d.getMonth() + 1); }
+  function ymdOf(d) { return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }
+
+  // Run a SQL statement against a federated (Cloud Amplifier) dataset alias and
+  // return row objects keyed by column name. Domo SQL API returns {columns, rows}.
+  function amplifierQuery(alias, sql) {
+    return domo.post("/sql/v1/" + alias, sql, { contentType: "text/plain" })
+      .then(function (res) {
+        var cols = (res && res.columns) || [];
+        var rows = (res && res.rows) || (Array.isArray(res) ? res : []);
+        return rows.map(function (row) {
+          if (Array.isArray(row)) { var o = {}; cols.forEach(function (c, i) { o[c] = row[i]; }); return o; }
+          return row;
+        });
+      });
+  }
+
+  function loadDataViaAmplifier(persona) {
+    var region = regionOf(persona);
+    var regClause = region ? " AND `REGION` = '" + region + "'" : "";
+    var now = new Date();
+    var monthStart = ymOf(now) + "-01";
+    var date90 = ymdOf(new Date(now.getTime() - 90 * 864e5));
+
+    var out = {
+      status: "SUCCEEDED", mode: "LIVE", persona: persona || "Executive Sponsor",
+      regionScope: region || "All regions",
+      source: "Cloud Amplifier federation \u00b7 SNOWFLAKE_REVENUE_CC.CORE (live, data stays in Snowflake)",
+      generatedAt: new Date().toISOString(),
+      kpis: {}, actualVsForecast: [], revenueForecast: null, regionalRisk: [], actionQueue: {}, incident: null
+    };
+
+    var qAV = "SELECT `FISCAL_PERIOD` AS period, SUM(`NET_REVENUE`) AS actual, SUM(`DAILY_ARR`) AS forecast " +
+      "FROM table WHERE 1=1" + regClause + " GROUP BY `FISCAL_PERIOD` ORDER BY `FISCAL_PERIOD` DESC LIMIT 14";
+    var qRar = "SELECT SUM(`REVENUE_AT_RISK`) AS v FROM table WHERE `RISK_MONTH` = '" + monthStart + "'" + regClause;
+    var qProtected = "SELECT SUM(`ACTUAL_REVENUE_PROTECTED`) AS v FROM table WHERE `EXECUTION_STATUS` = 'Executed'" + regClause;
+    var qSla = "SELECT SUM(CASE WHEN `SLA_BREACHED_FLAG` = 'true' THEN 1 ELSE 0 END) AS breaches, COUNT(*) AS cases " +
+      "FROM table WHERE `DATE` >= '" + date90 + "'" + regClause;
+    var qForecast = "SELECT `PERIOD_MONTH`, `KIND`, `ACTUAL`, `FORECAST`, `LOWER_BOUND`, `UPPER_BOUND` FROM table ORDER BY `PERIOD_MONTH`";
+    var qRegional = "SELECT `REGION`, `SEGMENT`, ROUND(AVG(`RENEWAL_RISK_SCORE`),1) AS avgrisk, " +
+      "SUM(CASE WHEN `RISK_TIER` = 'High' THEN 1 ELSE 0 END) AS highrisk, SUM(`REVENUE_AT_RISK`) AS rar " +
+      "FROM table WHERE `RISK_MONTH` = '" + monthStart + "'" + regClause + " GROUP BY `REGION`, `SEGMENT` ORDER BY rar DESC LIMIT 12";
+    var qQueue = "SELECT SUM(CASE WHEN `APPROVAL_STATUS`='Pending' THEN 1 ELSE 0 END) AS pending, " +
+      "SUM(CASE WHEN `APPROVAL_STATUS`='Approved' THEN 1 ELSE 0 END) AS approved, " +
+      "SUM(CASE WHEN `EXECUTION_STATUS`='Executed' THEN 1 ELSE 0 END) AS executed, " +
+      "SUM(CASE WHEN `APPROVAL_STATUS`='Rejected' THEN 1 ELSE 0 END) AS rejected, " +
+      "SUM(CASE WHEN `APPROVAL_STATUS`='Not Required' THEN 1 ELSE 0 END) AS notrequired " +
+      "FROM table WHERE 1=1" + regClause;
+    var qTop = "SELECT `RECOMMENDATION` AS action, COUNT(*) AS cnt, SUM(`EXPECTED_REVENUE_PROTECTED`) AS rar " +
+      "FROM table WHERE 1=1" + regClause + " GROUP BY `RECOMMENDATION` ORDER BY cnt DESC LIMIT 5";
+
+    return amplifierQuery(CA.rev, qAV).then(function (av) {
+      if (!av.length) throw new Error("no federated revenue rows");
+      var cur = num(av[0].actual), prior = av.length > 1 ? num(av[1].actual) : 0;
+      out.kpis.netRevenue = { label: "Net Revenue (MTD)", value: cur, priorValue: prior,
+        deltaPct: prior ? Math.round(((cur - prior) / prior) * 1000) / 10 : 0, unit: "USD" };
+      out.actualVsForecast = av.slice().reverse().map(function (r) { return { period: r.period, actual: num(r.actual), forecast: num(r.forecast) }; });
+      return amplifierQuery(CA.risk, qRar);
+    }).then(function (rows) {
+      out.kpis.revenueAtRisk = { label: "Revenue at Risk", value: num(rows[0] && rows[0].v), unit: "USD", context: "current month" };
+      return amplifierQuery(CA.actions, qProtected);
+    }).then(function (rows) {
+      out.kpis.protectedRevenue = { label: "Protected Revenue", value: num(rows[0] && rows[0].v), unit: "USD", context: "executed agent actions" };
+      return amplifierQuery(CA.support, qSla);
+    }).then(function (rows) {
+      var r = rows[0] || {}; var breaches = num(r.breaches), cases = num(r.cases);
+      out.kpis.slaBreachRate = { label: "SLA Breach Rate (90d)", value: cases ? Math.round((breaches / cases) * 1000) / 10 : 0, unit: "%", breaches: breaches, cases: cases };
+      return amplifierQuery(CA.forecast, qForecast).catch(function () { return []; });
+    }).then(function (rows) {
+      if (rows && rows.length) {
+        var history = [], forecast = [];
+        rows.forEach(function (r) {
+          var period = String(r.PERIOD_MONTH || "").slice(0, 7);
+          if (String(r.KIND) === "forecast") forecast.push({ period: period, forecast: num(r.FORECAST), lower: num(r.LOWER_BOUND), upper: num(r.UPPER_BOUND) });
+          else history.push({ period: period, actual: num(r.ACTUAL) });
+        });
+        out.revenueForecast = { source: "SNOWFLAKE_REVENUE_CC.CORE.GOLD_REVENUE_FORECAST via Cloud Amplifier (SNOWFLAKE.ML.FORECAST)",
+          grain: "month", unit: "USD", predictionInterval: 0.95, history: history, forecast: forecast };
+      }
+      return amplifierQuery(CA.risk, qRegional);
+    }).then(function (rows) {
+      out.regionalRisk = rows.map(function (r) { return { region: r.REGION, segment: r.SEGMENT, avgRisk: num(r.avgrisk), highRiskAccounts: num(r.highrisk), revenueAtRisk: num(r.rar) }; });
+      return amplifierQuery(CA.actions, qQueue);
+    }).then(function (rows) {
+      var r = rows[0] || {};
+      out.actionQueue = { pending: num(r.pending), approved: num(r.approved), executed: num(r.executed), rejected: num(r.rejected), notRequired: num(r.notrequired), topActions: [] };
+      return amplifierQuery(CA.actions, qTop);
+    }).then(function (rows) {
+      out.actionQueue.topActions = rows.map(function (r) { return { action: r.action, count: num(r.cnt), revenueAtRisk: num(r.rar) }; });
+      return out;
+    });
+  }
+
   function loadData(persona) {
     state.mode = "loading";
-    if (typeof domo !== "undefined" && domo && typeof domo.post === "function") {
-      return domo.post(CE + "getForecastHome", { persona: persona })
-        .then(function (resp) {
-          var d = unwrap(resp);
-          if (d && d.status === "SUCCEEDED") { state.mode = "live"; return d; }
-          throw new Error(d && d.error ? d.error : "Code Engine returned no data");
-        })
-        .catch(function (err) { console.warn("[app] live read failed, using sample seed:", err); return sampleData(persona); });
+    if (isLive()) {
+      return loadDataViaAmplifier(persona)
+        .then(function (d) { if (d && d.status === "SUCCEEDED") { state.mode = "live"; state.dataSource = "amplifier"; return d; } throw new Error("amplifier empty"); })
+        .catch(function (aerr) {
+          console.warn("[app] Cloud Amplifier read failed, trying Code Engine bridge:", aerr);
+          return domo.post(CE + "getForecastHome", { persona: persona })
+            .then(function (resp) {
+              var d = unwrap(resp);
+              if (d && d.status === "SUCCEEDED") { state.mode = "live"; state.dataSource = "codeengine"; return d; }
+              throw new Error(d && d.error ? d.error : "Code Engine returned no data");
+            })
+            .catch(function (err) { console.warn("[app] live read failed, using sample seed:", err); return sampleData(persona); });
+        });
     }
     return sampleData(persona);
   }
@@ -743,6 +874,28 @@
     return (d.data || []).map(function (row) { var o = {}; cols.forEach(function (c, i) { o[c] = row[i]; }); return o; });
   }
 
+  function renderDomoModels() {
+    var grid = h("div", { class: "vq-grid" });
+    DOMO_MODELS.forEach(function (m) {
+      var card = h("div", { class: "vq-card" });
+      card.appendChild(h("div", { class: "vq-top" }, [
+        h("span", { class: "vq-badge" }, ["DOMO DATA MODEL \u00b7 CLOUD AMPLIFIER"]),
+        h("h3", {}, [m.name])
+      ]));
+      card.appendChild(h("p", { class: "sem-dt-comment" }, [m.note]));
+      card.appendChild(h("div", { class: "sem-pk" }, ["Hub: " + m.hub + " \u00b7 " + m.rels + " relationships \u00b7 join on " + m.join]));
+      var tl = h("div", { class: "sem-section" }, [h("h4", { class: "dim-h" }, ["Tables ", h("span", { class: "cnt" }, [String(m.facts.length + 1)])])]);
+      tl.appendChild(h("div", { class: "sem-item" }, [h("div", { class: "sem-item-top" }, [h("span", { class: "sem-item-n" }, [m.hub]), h("span", { class: "sem-item-t" }, ["dimension"])])]));
+      m.facts.forEach(function (t) { tl.appendChild(h("div", { class: "sem-item" }, [h("div", { class: "sem-item-top" }, [h("span", { class: "sem-item-n" }, [t]), h("span", { class: "sem-item-t" }, ["fact \u2192 " + m.hub])])])); });
+      card.appendChild(tl);
+      card.appendChild(h("div", { class: "vq-actions" }, [
+        h("a", { class: "mini-btn primary", href: DOMO_INSTANCE + "/datasources/" + m.id + "/details/overview", target: "_blank", rel: "noopener" }, ["Open model in Domo \u2197"])
+      ]));
+      grid.appendChild(card);
+    });
+    return grid;
+  }
+
   function renderVerifiedGallery(model) {
     var vqs = model.verifiedQueries || [];
     var grid = h("div", { class: "vq-grid" });
@@ -870,7 +1023,7 @@
     ]));
 
     // Sub-tabs
-    var tabs = [["graph", "Entity Graph"], ["queries", "Verified Queries"], ["builder", "Model DDL"]];
+    var tabs = [["graph", "Entity Graph"], ["queries", "Verified Queries"], ["builder", "Model DDL"], ["models", "Domo Data Models"]];
     var tabRow = h("div", { class: "sem-tabs" });
     tabs.forEach(function (t) {
       var b = h("button", { class: "sem-tab" + (state.semantic.tab === t[0] ? " active" : "") }, [t[1]]);
@@ -885,6 +1038,11 @@
       frag.appendChild(h("div", { class: "sem-panel" }, [
         h("div", { class: "sem-panel-head" }, [h("h3", {}, ["Verified query gallery"]), h("p", {}, ["The queries Cortex Analyst trusts to answer natural-language questions about this model. Run them live through the governed bridge."])]),
         renderVerifiedGallery(model)
+      ]));
+    } else if (state.semantic.tab === "models") {
+      frag.appendChild(h("div", { class: "sem-panel" }, [
+        h("div", { class: "sem-panel-head" }, [h("h3", {}, ["Domo data models \u00b7 Cloud Amplifier"]), h("p", {}, ["The same Snowflake tables, federated into Domo via Cloud Amplifier and joined into governed star schemas that mirror ", h("code", {}, [model.name || "REVENUE_CC_ANALYST"]), ". Data stays in Snowflake \u2014 Domo queries it live. Open any model to explore its canvas in Domo."])]),
+        renderDomoModels()
       ]));
     } else {
       frag.appendChild(h("div", { class: "sem-panel" }, [
@@ -2222,7 +2380,7 @@
   /* ------------------------------- render -------------------------------- */
   function setMode() {
     var pill = el("modePill");
-    if (state.mode === "live") { pill.className = "mode-pill sf-live"; pill.textContent = "Live \u00b7 Snowflake"; el("envLabel").textContent = "Live Snowflake read \u00b7 Horizon-governed"; }
+    if (state.mode === "live") { pill.className = "mode-pill sf-live"; pill.textContent = "Live \u00b7 Snowflake"; el("envLabel").textContent = state.dataSource === "amplifier" ? "Live \u00b7 Cloud Amplifier federation (data stays in Snowflake)" : "Live Snowflake read \u00b7 Horizon-governed"; }
     else if (state.mode === "sample") { pill.className = "mode-pill sample"; pill.textContent = "Sample data"; el("envLabel").textContent = "Sample seed \u00b7 connect Code Engine for live"; }
     else { pill.className = "mode-pill"; pill.textContent = "Loading"; }
   }
