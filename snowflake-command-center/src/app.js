@@ -205,6 +205,22 @@
     while (cur && typeof cur === "object" && "response" in cur && depth < 6) { cur = cur.response; depth += 1; }
     return cur;
   }
+
+  // Pretty-print generated SQL for the read-only "View generated SQL" blocks.
+  // Uses sql-formatter (Snowflake dialect) when available; falls back to a light
+  // keyword-based line break so it degrades gracefully if the CDN is blocked.
+  function fmtSql(sql) {
+    var s = String(sql == null ? "" : sql).trim();
+    if (!s) return "";
+    try {
+      if (window.sqlFormatter && typeof window.sqlFormatter.format === "function") {
+        return window.sqlFormatter.format(s, { language: "snowflake", keywordCase: "upper", tabWidth: 2, linesBetweenQueries: 1 });
+      }
+    } catch (e) { /* fall through to lite */ }
+    return s.replace(/\s+/g, " ")
+      .replace(/\s*\b(FROM|WHERE|GROUP BY|ORDER BY|HAVING|LIMIT|QUALIFY|WINDOW|UNION ALL|UNION|EXCEPT|INTERSECT|LEFT OUTER JOIN|RIGHT OUTER JOIN|FULL OUTER JOIN|INNER JOIN|LEFT JOIN|RIGHT JOIN|CROSS JOIN|JOIN|ON)\b/gi, "\n$1")
+      .trim();
+  }
   function copyText(text) {
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text);
@@ -787,7 +803,7 @@
         if (res.sql) {
           qrBody.appendChild(h("div", { class: "qr-detail" }, [
             h("div", { class: "qr-d-label row" }, [h("span", {}, ["Generated SQL"]), copyBtn(res.sql, "Copy SQL")]),
-            h("pre", { class: "sql-block" }, [h("code", {}, [res.sql])])
+            h("pre", { class: "sql-block" }, [h("code", {}, [fmtSql(res.sql)])])
           ]));
         }
         var api = res.api || {};
@@ -1595,7 +1611,7 @@
           h("div", {}, [h("h2", {}, ["Analyst tool \u2014 generated SQL"]), h("p", {}, [res.searchQuery ? ("Search tool query: \u201c" + res.searchQuery + "\u201d") : "Structured metrics over the governed semantic view"])]),
           h("span", { class: "panel-tag" }, ["cortex_analyst"])
         ]),
-        h("pre", { class: "sql-block" }, [h("code", {}, [res.sql])])
+        h("pre", { class: "sql-block" }, [h("code", {}, [fmtSql(res.sql)])])
       ]));
     }
 
@@ -3484,7 +3500,7 @@
         if (m.role === "user") { stream.appendChild(h("div", { class: "cw-msg user" }, [h("div", { class: "cw-bubble" }, [m.text || ""])])); return; }
         var body = h("div", { class: "cw-msg-body" }, [h("div", { class: "cw-answer" }, [cwMarkdown(m.text || "\u2014")])]);
         if (m.sql) {
-          var pre = h("pre", { class: "cw-sql-block" }, [h("code", {}, [m.sql])]); pre.style.display = "none";
+          var pre = h("pre", { class: "cw-sql-block" }, [h("code", {}, [fmtSql(m.sql)])]); pre.style.display = "none";
           var tog = h("button", { class: "cw-sql-toggle" }, [h("span", { class: "cw-sql-caret" }, ["\u25b8"]), "View generated SQL"]);
           tog.addEventListener("click", function () { var open = pre.style.display === "none"; pre.style.display = open ? "block" : "none"; tog.querySelector(".cw-sql-caret").textContent = open ? "\u25be" : "\u25b8"; });
           body.appendChild(h("div", { class: "cw-sql" }, [tog, pre]));
@@ -3621,7 +3637,7 @@
       // Generated SQL (collapsible).
       if (res.sql) {
         var open = false;
-        var pre = h("pre", { class: "cw-sql-block" }, [h("code", {}, [res.sql])]);
+        var pre = h("pre", { class: "cw-sql-block" }, [h("code", {}, [fmtSql(res.sql)])]);
         pre.style.display = "none";
         var tog = h("button", { class: "cw-sql-toggle" }, [
           h("span", { class: "cw-sql-caret" }, ["\u25b8"]), "View generated SQL \u00b7 ", h("code", {}, ["cortex_analyst"])
