@@ -743,6 +743,48 @@
 .msg-meta { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); }
 .msg-meta .req { color: var(--muted); }
 .msg-meta .mini-btn { margin-left: auto; }
+
+/* ---- Cortex Analyst: "Processing Query" step card (reference parity) ---- */
+.proc-card { border: 1px solid var(--line); border-radius: var(--r-lg); background: linear-gradient(180deg, var(--surface), var(--n-050)); padding: 18px 18px 14px; max-width: 460px; box-shadow: var(--shadow-sm, 0 1px 2px rgba(16,24,40,0.05)); }
+.proc-head { display: flex; align-items: center; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.proc-mark { width: 20px; height: 20px; }
+.proc-title { font-size: 15px; font-weight: 700; color: var(--ink); }
+.proc-steps { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.proc-step { position: relative; display: flex; align-items: center; gap: 12px; padding: 11px 13px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); overflow: hidden; }
+.proc-step.active { border-color: var(--sf-blue); box-shadow: 0 0 0 1px var(--sf-blue) inset; }
+.proc-step.todo { opacity: .55; }
+.proc-ico { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; flex: none; }
+.proc-ico svg { width: 15px; height: 15px; }
+.proc-step.done .proc-ico { color: var(--status-good, #2F9E6E); background: rgba(47,158,110,0.12); }
+.proc-step.active .proc-ico { color: var(--sf-blue-deep); background: rgba(41,181,232,0.14); }
+.proc-step.todo .proc-ico { border: 1.5px solid var(--line-strong); }
+.proc-body { display: flex; flex-direction: column; gap: 1px; }
+.proc-step-title { font-size: 13px; font-weight: 700; color: var(--ink); }
+.proc-step-sub { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.proc-bar { position: absolute; left: 0; bottom: 0; height: 3px; width: 40%; background: var(--sf-blue); border-radius: 3px; animation: procbar 1.1s ease-in-out infinite; }
+@keyframes procbar { 0% { left: -40%; } 100% { left: 100%; } }
+.proc-foot { text-align: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.proc-foot-b { color: var(--sf-blue-deep); font-weight: 700; }
+
+/* ---- Cortex Analyst: Query Results panel with Table/Chart/Details tabs ---- */
+.qr-panel { margin-top: 12px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); overflow: hidden; }
+.qr-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 12px; border-bottom: 1px solid var(--line); background: var(--n-050); }
+.qr-count { font-size: 11.5px; font-weight: 700; color: var(--muted); }
+.qr-tabs { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--line-strong); border-radius: var(--r-pill); background: var(--surface); }
+.qr-tab { font-family: var(--font-sans); font-size: 11.5px; font-weight: 700; color: var(--muted); border: none; background: transparent; border-radius: var(--r-pill); padding: 4px 13px; cursor: pointer; }
+.qr-tab.active { color: #fff; background: var(--sf-blue); }
+.qr-body { padding: 12px; }
+.qr-actions { margin-top: 10px; display: flex; justify-content: flex-end; }
+.qr-charttools { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.qr-empty { color: var(--muted); font-size: 12.5px; text-align: center; padding: 24px; }
+.qr-detail { margin-bottom: 14px; }
+.qr-detail:last-child { margin-bottom: 0; }
+.qr-d-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; margin-bottom: 5px; }
+.qr-d-label.row { display: flex; align-items: center; gap: 10px; }
+.qr-d-label.row .req { font-family: var(--font-mono); text-transform: none; letter-spacing: 0; }
+.qr-d-label.row .mini-btn { margin-left: auto; }
+.qr-d-q { font-size: 13.5px; font-weight: 600; color: var(--ink); margin: 0; line-height: 1.5; }
+.qr-d-a { font-size: 13px; color: var(--n-700); margin: 0; line-height: 1.6; }
 .chart-svg svg, .chart-pie svg { display: block; }
 .chart-pie { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
 .chart-xlab { fill: var(--muted); font-size: 9px; text-anchor: middle; }

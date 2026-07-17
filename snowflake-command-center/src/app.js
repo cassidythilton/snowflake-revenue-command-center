@@ -421,6 +421,25 @@
     renderView();
   }
 
+  // Cortex Analyst "Processing Query" steps (mirrors the reference app's modal).
+  var ANALYST_STEPS = [
+    { title: "Connecting to Snowflake", sub: function () { return (state.config.database || "SNOWFLAKE_REVENUE_CC") + "." + (state.config.schema || "CORE"); } },
+    { title: "Analyzing with Cortex Analyst", sub: function () { return "Natural language processing"; } },
+    { title: "Generating SQL Query", sub: function () { return "Optimizing for performance"; } },
+    { title: "Executing Query", sub: function () { return "Fetching results"; } }
+  ];
+  function startAnalystSteps() {
+    stopAnalystSteps();
+    state.analyst.step = 0;
+    state.analyst.stepTimer = setInterval(function () {
+      if (!state.analyst.loading) { stopAnalystSteps(); return; }
+      if (state.analyst.step < ANALYST_STEPS.length - 1) { state.analyst.step++; renderView(); scrollChat(); }
+    }, 850);
+  }
+  function stopAnalystSteps() {
+    if (state.analyst.stepTimer) { clearInterval(state.analyst.stepTimer); state.analyst.stepTimer = null; }
+  }
+
   function runAnalyst(question) {
     var q = String(question || "").trim();
     if (!q || state.analyst.loading) return;
@@ -428,16 +447,19 @@
     state.analyst.loading = true;
     state.analyst.error = null;
     state.analyst.pending = q;
+    startAnalystSteps();
     renderView(); scrollChat();
     var done = function (res) {
+      stopAnalystSteps();
       state.analyst.loading = false; state.analyst.pending = null;
       if (Array.isArray(res.conversationHistory)) state.analyst.conversationHistory = res.conversationHistory;
-      var turn = { id: state.analyst.seq++, question: q, res: res, chartType: "bar", inspector: false };
+      var turn = { id: state.analyst.seq++, question: q, res: res, chartType: "bar", inspector: false, resultTab: (res.rows || []).length ? "table" : "details" };
       state.analyst.messages.push(turn);
       saveRecent(turn);
       renderView(); scrollChat();
     };
     var fail = function (err) {
+      stopAnalystSteps();
       state.analyst.loading = false; state.analyst.pending = null;
       state.analyst.error = String(err && err.message ? err.message : err);
       renderView();
@@ -608,6 +630,36 @@
     return b;
   }
 
+  // "Processing Query" step card shown while Cortex Analyst runs (reference parity).
+  var CHECK_SVG = "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 6L9 17l-5-5'/></svg>";
+  var PLAY_SVG = "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polygon points='6 4 20 12 6 20 6 4'/></svg>";
+  function analystProcessing() {
+    var cur = state.analyst.step || 0;
+    var card = h("div", { class: "proc-card" }, [
+      h("div", { class: "proc-head" }, [
+        h("img", { class: "proc-mark", src: "./public/brand/snowflake-cortex.svg", alt: "" }),
+        h("span", { class: "proc-title" }, ["Processing Query"])
+      ])
+    ]);
+    var list = h("div", { class: "proc-steps" });
+    ANALYST_STEPS.forEach(function (s, i) {
+      var stateCls = i < cur ? "done" : (i === cur ? "active" : "todo");
+      var icon = h("span", { class: "proc-ico", html: i < cur ? CHECK_SVG : (i === cur ? PLAY_SVG : "") });
+      var row = h("div", { class: "proc-step " + stateCls }, [
+        icon,
+        h("div", { class: "proc-body" }, [
+          h("span", { class: "proc-step-title" }, [s.title]),
+          h("span", { class: "proc-step-sub" }, [typeof s.sub === "function" ? s.sub() : s.sub])
+        ])
+      ]);
+      if (i === cur) row.appendChild(h("span", { class: "proc-bar" }));
+      list.appendChild(row);
+    });
+    card.appendChild(list);
+    card.appendChild(h("div", { class: "proc-foot" }, ["Powered by ", h("span", { class: "proc-foot-b" }, ["Cortex Analyst"])]));
+    return card;
+  }
+
   // Render one analyst answer card (interpretation, SQL, chart+switcher, table, follow-ups, inspector).
   function analystAnswer(turn) {
     var res = turn.res;
@@ -626,35 +678,70 @@
       body.appendChild(head);
       if (res.interpretation) body.appendChild(h("p", { class: "msg-interp" }, [res.interpretation]));
 
-      // SQL
-      if (res.sql) {
-        body.appendChild(h("div", { class: "msg-block" }, [
-          h("div", { class: "msg-block-head" }, [h("span", {}, ["Generated SQL"]), copyBtn(res.sql, "Copy SQL")]),
-          h("pre", { class: "sql-block" }, [h("code", {}, [res.sql])])
-        ]));
-      }
+      // Query Results panel with Table / Chart / Details tabs (reference parity).
+      var cols = res.columns || [];
+      var rows = res.rows || [];
+      var hasRows = rows.length > 0;
+      var spec = chartSpec(res);
+      var tabs = [];
+      if (hasRows) tabs.push("table");
+      if (spec) tabs.push("chart");
+      tabs.push("details");
+      var tab = turn.resultTab || (hasRows ? "table" : "details");
+      if (tabs.indexOf(tab) === -1) tab = tabs[0];
 
-      // Result: chart + type switcher + CSV + table
-      if ((res.rows || []).length) {
-        var spec = chartSpec(res);
-        var tools = h("div", { class: "msg-block-head" }, [h("span", {}, [num((res.rows || []).length) + " rows"])]);
-        var right = h("div", { class: "chart-tools" });
-        if (spec) {
-          ["bar", "line", "pie"].forEach(function (t) {
-            var b = h("button", { class: "seg" + (turn.chartType === t ? " active" : "") }, [t.charAt(0).toUpperCase() + t.slice(1)]);
-            b.addEventListener("click", function () { turn.chartType = t; renderView(); });
-            right.appendChild(b);
-          });
+      var seg = h("div", { class: "qr-tabs" });
+      tabs.forEach(function (t) {
+        var b = h("button", { class: "qr-tab" + (t === tab ? " active" : "") }, [t.charAt(0).toUpperCase() + t.slice(1)]);
+        b.addEventListener("click", function () { turn.resultTab = t; renderView(); });
+        seg.appendChild(b);
+      });
+      var qrHead = h("div", { class: "qr-head" }, [
+        h("span", { class: "qr-count" }, [hasRows ? (num(rows.length) + " rows, " + num(cols.length) + " columns") : "No rows returned"]),
+        seg
+      ]);
+      var qrBody = h("div", { class: "qr-body" });
+
+      if (tab === "table") {
+        qrBody.appendChild(resultTable(res, 100));
+        var csv = h("button", { class: "mini-btn" }, ["Download CSV"]);
+        csv.addEventListener("click", function () { downloadCsv("analyst-result-" + turn.id + ".csv", cols, rows); });
+        qrBody.appendChild(h("div", { class: "qr-actions" }, [csv]));
+      } else if (tab === "chart") {
+        var ct = h("div", { class: "chart-tools" });
+        ["bar", "line", "pie"].forEach(function (t) {
+          var b = h("button", { class: "seg" + (turn.chartType === t ? " active" : "") }, [t.charAt(0).toUpperCase() + t.slice(1)]);
+          b.addEventListener("click", function () { turn.chartType = t; renderView(); });
+          ct.appendChild(b);
+        });
+        qrBody.appendChild(h("div", { class: "qr-charttools" }, [ct]));
+        var ch = buildChart(turn);
+        qrBody.appendChild(ch || h("p", { class: "qr-empty" }, ["This result isn\u2019t chartable \u2014 view it as a table."]));
+      } else {
+        qrBody.appendChild(h("div", { class: "qr-detail" }, [h("div", { class: "qr-d-label" }, ["Question"]), h("p", { class: "qr-d-q" }, [turn.question])]));
+        qrBody.appendChild(h("div", { class: "qr-detail" }, [h("div", { class: "qr-d-label" }, ["Analyst response"]), h("p", { class: "qr-d-a" }, [res.interpretation || "Cortex Analyst interpreted your question over the governed semantic view."])]));
+        if (res.sql) {
+          qrBody.appendChild(h("div", { class: "qr-detail" }, [
+            h("div", { class: "qr-d-label row" }, [h("span", {}, ["Generated SQL"]), copyBtn(res.sql, "Copy SQL")]),
+            h("pre", { class: "sql-block" }, [h("code", {}, [res.sql])])
+          ]));
         }
-        var csv = h("button", { class: "mini-btn" }, ["CSV"]);
-        csv.addEventListener("click", function () { downloadCsv("analyst-result-" + turn.id + ".csv", res.columns || [], res.rows || []); });
-        right.appendChild(csv);
-        tools.appendChild(right);
-        var block = h("div", { class: "msg-block" }, [tools]);
-        if (spec) { var ch = buildChart(turn); if (ch) block.appendChild(ch); }
-        block.appendChild(resultTable(res, 50));
-        body.appendChild(block);
+        var api = res.api || {};
+        var insp = h("button", { class: "mini-btn ghost" }, [turn.inspector ? "Hide API payload" : "Inspect API payload"]);
+        insp.addEventListener("click", function () { turn.inspector = !turn.inspector; renderView(); });
+        qrBody.appendChild(h("div", { class: "qr-detail" }, [
+          h("div", { class: "qr-d-label row" }, [h("span", {}, [res.semanticView || "REVENUE_CC_ANALYST"]),
+            res.requestId ? h("span", { class: "req" }, ["request_id " + String(res.requestId).slice(0, 8)]) : null, insp])
+        ]));
+        if (turn.inspector) {
+          var ins = h("div", { class: "inspector-body" });
+          ins.appendChild(h("div", { class: "insp-label" }, ["POST " + (api.endpoint || "/api/v2/cortex/analyst/message")]));
+          ins.appendChild(h("pre", { class: "sql-block" }, [h("code", {}, [JSON.stringify(api.request || { note: "Populated on live calls through the snowflakece bridge." }, null, 2)])]));
+          if (api.response) { ins.appendChild(h("div", { class: "insp-label" }, ["Response"])); ins.appendChild(h("pre", { class: "sql-block" }, [h("code", {}, [JSON.stringify(api.response, null, 2)])])); }
+          qrBody.appendChild(ins);
+        }
       }
+      body.appendChild(h("div", { class: "qr-panel" }, [qrHead, qrBody]));
 
       // Follow-up chips
       if ((res.suggestions || []).length) {
@@ -665,24 +752,6 @@
           chips.appendChild(c);
         });
         body.appendChild(h("div", { class: "msg-followups" }, [h("span", { class: "fu-lab" }, ["Follow up"]), chips]));
-      }
-
-      // Footer meta + inspector toggle
-      var meta = h("div", { class: "msg-meta" }, [
-        h("span", {}, [res.semanticView || "REVENUE_CC_ANALYST"]),
-        res.requestId ? h("span", { class: "req" }, ["request_id " + String(res.requestId).slice(0, 8)]) : null
-      ]);
-      var insp = h("button", { class: "mini-btn ghost" }, [turn.inspector ? "Hide API" : "Inspect API"]);
-      insp.addEventListener("click", function () { turn.inspector = !turn.inspector; renderView(); });
-      meta.appendChild(insp);
-      body.appendChild(meta);
-      if (turn.inspector) {
-        var api = res.api || {};
-        var ins = h("div", { class: "inspector-body" });
-        ins.appendChild(h("div", { class: "insp-label" }, ["POST " + (api.endpoint || "/api/v2/cortex/analyst/message")]));
-        ins.appendChild(h("pre", { class: "sql-block" }, [h("code", {}, [JSON.stringify(api.request || { note: "Populated on live calls through the snowflakece bridge." }, null, 2)])]));
-        if (api.response) { ins.appendChild(h("div", { class: "insp-label" }, ["Response"])); ins.appendChild(h("pre", { class: "sql-block" }, [h("code", {}, [JSON.stringify(api.response, null, 2)])])); }
-        body.appendChild(ins);
       }
     }
     card.appendChild(body);
@@ -889,7 +958,7 @@
       if (state.analyst.pending) scroll.appendChild(userMsg(state.analyst.pending));
       scroll.appendChild(h("div", { class: "msg msg-analyst" }, [
         h("div", { class: "msg-avatar" }, [h("img", { src: "./public/brand/snowflake-cortex.svg", alt: "" })]),
-        h("div", { class: "msg-body" }, [h("div", { class: "analyst-loading" }, [h("span", { class: "spinner" }), "Interpreting your question and generating governed SQL\u2026"])])
+        h("div", { class: "msg-body" }, [analystProcessing()])
       ]));
     }
     if (state.analyst.error) {
