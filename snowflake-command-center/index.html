@@ -57,8 +57,12 @@
   </footer>
 </div>
 
-<!-- Domo runtime (served by the platform when published; absent in local preview). -->
-<script src="/domo.js"></script>
+<!-- Domo runtime (ryuu.js SDK from CDN; the platform-injected /domo.js route is unreliable in some embeds). -->
+<script
+  src="https://unpkg.com/ryuu.js@4.6.0/dist/domo.js"
+  integrity="sha384-YYsd9wQ+wDlUWhvpfGdptxmNYIqBC+52oJtWgPKJadbs3sSFTY/+ZotPbEHTTRWz"
+  crossorigin="anonymous"
+></script>
 <script src="./src/app.js"></script>
 </body>
 </html>
