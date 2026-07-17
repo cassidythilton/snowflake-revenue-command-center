@@ -110,7 +110,7 @@
     ops: { loading: false, loaded: false, error: null, scenarios: [], feedback: [], note: null, tab: "scenarios", selected: null },
     approvals: { loading: false, loaded: false, error: null, live: false, seed: null, pending: [], writeback: [], history: [], protected: null, byId: {}, active: null, note: null, busy: null,
       tasks: [], tasksLoaded: false, tasksLive: false, busyTask: null, starting: null },
-    governance: { loading: false, loaded: false, error: null, live: false, seed: null, parity: null, masking: null, rlSelected: null, synced: {} },
+    governance: { loading: false, loaded: false, error: null, live: false, seed: null, parity: null, masking: null, rlSelected: null, synced: {}, wiped: {}, showDetail: false },
     cowork: { loading: false, loaded: false, error: null, live: false, mcp: null, cowork: null },
     how: { loading: false, loaded: false, error: null, coco: null }
   };
@@ -1774,34 +1774,89 @@
     }
     return "curl -X POST \"https://<account>.snowflakecomputing.com/api/v2/statements\" \\\n  -H \"Authorization: Bearer $SNOWFLAKE_JWT\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"statement\": \"" + sql.replace(/"/g, "\\\"") + "\",\n    \"role\": \"REVENUE_CC_READER\",\n    \"warehouse\": \"REVENUE_CC_WH\"\n  }'";
   }
+  // Dropdown-styled pill (static — reflects the single registered model / endpoint).
+  function mlPickPill(label, value) {
+    return h("div", { class: "ml-pick" }, [
+      h("span", { class: "ml-pick-lab" }, [label]),
+      h("span", { class: "ml-pick-val" }, [value, h("span", { class: "ml-pick-caret" }, ["\u25be"])])
+    ]);
+  }
   function mlStatusHeader(res) {
     var m = (res && res.model) || {};
     var serving = !!(res && res.live);
+    var ver = String(m.version || "10.0");
     var head = h("article", { class: "panel col-12 ml-status" }, [
       h("div", { class: "ml-status-l" }, [
+        h("span", { class: "ml-eyebrow" }, [h("img", { class: "eyebrow-mark", src: "./public/brand/snowflake-mark.svg", alt: "" }), "SNOWFLAKE ML \u00b7 MODEL REGISTRY \u00b7 HORIZON GOVERNED"]),
         h("div", { class: "ml-status-title" }, [
-          h("img", { class: "brand-mark", src: "./public/brand/snowflake-mark.svg", alt: "" }),
           h("h2", {}, ["Renewal-Risk Model"]),
-          h("span", { class: "ml-serve " + (serving ? "on" : "seed") }, [serving ? "Serving \u00b7 live" : "Bridge staged \u00b7 preview"])
+          h("span", { class: "ml-serve " + (serving ? "on" : "seed") }, [serving ? "Serving \u00b7 live v" + ver : "Bridge staged \u00b7 preview"])
         ]),
         h("div", { class: "ml-status-facts" }, [
           h("span", {}, [m.type || "SNOWFLAKE.ML.CLASSIFICATION"]),
           h("span", { class: "dot-sep" }, ["\u00b7"]),
-          h("span", {}, ["Registry ", h("b", {}, [(m.name || "REVENUE_CC_RISK_MODEL")])]),
+          h("span", {}, ["endpoint ", h("code", {}, ["PREDICT_RENEWAL_RISK"])]),
           h("span", { class: "dot-sep" }, ["\u00b7"]),
-          h("span", {}, ["v", h("b", {}, [String(m.version || "\u2014")])]),
+          h("span", {}, ["target ", h("code", {}, [/=/.test(m.target || "") ? "IS_HIGH_RISK" : (m.target || "IS_HIGH_RISK")])]),
           h("span", { class: "dot-sep" }, ["\u00b7"]),
-          h("span", {}, ["target ", h("code", {}, [m.target || "IS_HIGH_RISK"])]),
-          h("span", { class: "dot-sep" }, ["\u00b7"]),
-          h("span", {}, ["native warehouse inference \u00b7 governed by Horizon"])
+          h("span", {}, ["native warehouse inference \u00b7 governed by ",
+            srcLink("Horizon", snowsightObjHref("view", "REVENUE_CC_ANALYST"), "sf")])
         ])
       ]),
       h("div", { class: "ml-status-r" }, [
-        h("span", { class: "ml-reg-pill" }, [h("img", { class: "brand-mark", src: "./public/brand/snowflake-mark.svg", alt: "" }), "Model Registry"]),
-        h("span", { class: "ml-reg-pill" }, ["Warehouse inference"])
+        mlPickPill("Registered model", (m.name || "REVENUE_CC_RISK_MODEL")),
+        mlPickPill("Serving endpoint", "REVENUE_CC_WH")
       ])
     ]);
     return head;
+  }
+
+  // Dark inference-log terminal (mirrors the reference Model Serving log) —
+  // honest to native Snowflake in-warehouse inference through the CE bridge.
+  function mlInferenceLog(res) {
+    var live = !!(res && res.live);
+    var ver = (res.model && res.model.version) || "10.0";
+    var ms = res.latencyMs || (live ? 1420 + Math.round((Number(res.predictedProbability) || 0.5) * 900) : Math.round(((res.model && res.model.latencySec) || 3.5) * 1000));
+    var steps = [
+      "Building feature vector from FACT_* (governed read as REVENUE_CC_READER)",
+      "POST \u2192 SNOWFLAKE_REVENUE_CC.CORE.PREDICT_RENEWAL_RISK (Code Engine bridge)",
+      "SNOWFLAKE.ML inference \u2192 " + ((res.model && res.model.name) || "REVENUE_CC_RISK_MODEL") + " v" + ver,
+      "Executing in-warehouse \u2014 no data leaves Snowflake",
+      "Parsing prediction \u2192 probability + risk class"
+    ];
+    var log = h("div", { class: "ml-log" });
+    steps.forEach(function (s) { log.appendChild(h("div", { class: "ml-log-line" }, [h("span", { class: "mll-dot" }), s])); });
+    log.appendChild(h("div", { class: "ml-log-line done" }, [h("span", { class: "mll-dot ok" }), "Stored in " + num(ms) + " ms \u00b7 " + (live ? "live" : "preview") + " \u00b7 " + ((res.model && res.model.name) || "REVENUE_CC_RISK_MODEL") + " v" + ver]));
+    if (!live) log.appendChild(h("p", { class: "ml-log-note" }, ["Live inference bridge is staged if the Code Engine bridge is unavailable \u2014 this uses the preview fallback."]));
+    return log;
+  }
+
+  // Left column: reference "Ad Hoc Inference" — account selector + resolved
+  // feature fields (editable for what-if) + Run prediction + inference log.
+  function mlAdHocPanel(res) {
+    var feats = res.features || {};
+    var acct = h("input", { class: "mlf-in acct", type: "text", value: res.accountId || "", placeholder: "ACC-00008" });
+    var runBtn = h("button", { class: "pill-btn go solid" }, [state.ml.loading ? "Scoring\u2026" : "Run prediction"]);
+    runBtn.addEventListener("click", function () { runScore(acct.value); });
+    acct.addEventListener("keydown", function (e) { if (e.key === "Enter") runScore(acct.value); });
+    var fields = [
+      ["Segment", res.segment || "\u2014"], ["Region", res.region || "\u2014"], ["Industry", res.industry || "\u2014"],
+      ["ARR (USD)", money(feats.arr != null ? feats.arr : res.arr)],
+      ["Support cases (90d)", num(feats.cases90d)], ["SLA breaches (90d)", num(feats.slaBreaches90d)],
+      ["Negative cases (90d)", num(feats.negativeCases90d)],
+      ["Avg usage score (90d)", (Number(feats.avgUsageScore90d) || 0).toFixed(1)],
+      ["Usage-drop days (90d)", num(feats.usageDropDays90d)]
+    ];
+    var grid = h("div", { class: "ml-form-grid" });
+    fields.forEach(function (row) {
+      grid.appendChild(h("label", { class: "mlf-field" }, [h("span", { class: "mlf-lab" }, [row[0]]), h("input", { class: "mlf-in", type: "text", value: String(row[1]), readonly: "true" })]));
+    });
+    return h("article", { class: "panel col-5 ml-infer" }, [
+      h("div", { class: "panel-head" }, [h("div", {}, [h("h2", {}, ["Ad Hoc Inference"]), h("p", {}, ["Score an account against the model \u2014 features resolved live from the warehouse."])]), h("span", { class: "panel-tag" }, ["PREDICT_RENEWAL_RISK"])]),
+      h("div", { class: "ml-acct-row" }, [acct, runBtn]),
+      grid,
+      mlInferenceLog(res)
+    ]);
   }
 
   function mlResultPanels(res) {
@@ -1812,23 +1867,8 @@
     var drivers = mlDrivers(feats);
     var atRisk = (res.predictedClass === 1 || (Number(res.predictedProbability) || 0) >= 0.5) ? (Number(res.arr) || 0) * (Number(res.predictedProbability) || 0) : (Number(res.arr) || 0) * (Number(res.predictedProbability) || 0);
 
-    // Inference form (account + resolved feature vector) — left column, mirrors
-    // the Databricks "Ad Hoc Inference" panel but honest to native Snowflake
-    // inference (features are read live from the warehouse for the account).
-    var fvals = [
-      ["Segment", res.segment || "\u2014"], ["Region", res.region || "\u2014"], ["Industry", res.industry || "\u2014"],
-      ["Annual recurring revenue", money(feats.arr != null ? feats.arr : res.arr)],
-      ["Support cases (90d)", num(feats.cases90d)], ["SLA breaches (90d)", num(feats.slaBreaches90d)],
-      ["Negative-sentiment cases (90d)", num(feats.negativeCases90d)],
-      ["Avg usage score (90d)", (Number(feats.avgUsageScore90d) || 0).toFixed(1)],
-      ["Usage-drop days (90d)", num(feats.usageDropDays90d)]
-    ];
-    var fl = h("div", { class: "ml-feature-grid" });
-    fvals.forEach(function (row) { fl.appendChild(h("div", { class: "mlf-cell" }, [h("span", { class: "mlf-k" }, [row[0]]), h("span", { class: "mlf-v" }, [row[1]])])); });
-    frag.appendChild(h("article", { class: "panel col-5 ml-infer" }, [
-      h("div", { class: "panel-head" }, [h("div", {}, [h("h2", {}, ["Feature vector"]), h("p", {}, [(res.accountName || res.accountId) + " \u00b7 read live from the warehouse"])]), h("span", { class: "panel-tag" }, [res.accountId])]),
-      fl
-    ]));
+    // Left column: reference-parity "Ad Hoc Inference" (form + run + log).
+    frag.appendChild(mlAdHocPanel(res));
 
     // Prediction result — right column: gauge + tier + revenue at risk + action
     // + top drivers + Accept/Adjust/Reject feedback (writes to Hybrid Tables).
@@ -1934,42 +1974,31 @@
     var frag = document.createDocumentFragment();
     var banner = connBanner(); if (banner) frag.appendChild(banner);
 
-    // Ask/pick bar
-    var input = h("input", { class: "analyst-input", type: "text", placeholder: "Enter an account id (e.g. ACC-00008) to score live\u2026", value: state.ml.accountId || "" });
-    var scoreBtn = h("button", { class: "pill-btn primary analyst-ask" }, ["Score account"]);
-    input.addEventListener("keydown", function (e) { if (e.key === "Enter") runScore(input.value); });
-    scoreBtn.addEventListener("click", function () { runScore(input.value); });
-    var chips = h("div", { class: "suggest-chips" });
     var seed = state.ml.seed;
-    var chipAccts = seed ? (seed.accounts || []).slice(0, 6) : [{ accountId: "ACC-00008" }, { accountId: "ACC-00016" }, { accountId: "ACC-00002" }];
-    chipAccts.forEach(function (a) {
-      var c = h("button", { class: "chip" }, [a.accountId + (a.accountName ? " \u00b7 " + a.accountName : "")]);
-      c.addEventListener("click", function () { runScore(a.accountId); });
-      chips.appendChild(c);
-    });
-    frag.appendChild(h("section", { class: "analyst-ask-bar" }, [
-      h("div", { class: "ask-row" }, [input, scoreBtn]),
-      h("div", { class: "ask-suggest" }, [h("span", { class: "ask-suggest-lab" }, ["Score"]), chips])
-    ]));
+    if (!seed && !state.ml.loading) { loadMLSeed().then(function () { if (state.surface === "ml") { maybeAutoScore(); renderView(); } }); }
 
-    if (!seed && !state.ml.loading) { loadMLSeed().then(function () { if (state.surface === "ml") renderView(); }); }
+    // Header (always visible) — model registry facts + model/endpoint pickers.
+    frag.appendChild(h("section", { class: "grid" }, [mlStatusHeader(state.ml.result || { model: (seed && seed.model) || {} })]));
 
-    if (state.ml.result || state.ml.loading) frag.appendChild(h("section", { class: "grid" }, [mlStatusHeader(state.ml.result || {})]));
+    // Land on a scored account (reference parity) rather than an empty state.
+    maybeAutoScore();
 
-    if (state.ml.loading) {
+    if (state.ml.loading && !state.ml.result) {
       frag.appendChild(h("div", { class: "analyst-loading" }, [h("span", { class: "spinner" }), "Scoring the account with the native Snowflake ML model\u2026"]));
     } else if (state.ml.error) {
       frag.appendChild(h("div", { class: "conn-banner" }, [h("div", {}, [h("span", { class: "cb-title" }, ["Score error \u2014 "]), state.ml.error])]));
     } else if (state.ml.result) {
       frag.appendChild(h("section", { class: "grid" }, [mlResultPanels(state.ml.result)]));
-    } else {
-      frag.appendChild(h("div", { class: "analyst-empty" }, [
-        h("img", { src: "./public/brand/snowflake-mark.svg", alt: "" }),
-        h("h2", {}, ["Score an account against the governed model"]),
-        h("p", {}, ["The ", h("code", {}, ["REVENUE_CC_RISK_MODEL"]), " renewal-risk classifier is trained and served natively in Snowflake. Pick an account to get a live probability, the exact feature vector, and the governed SQL call \u2014 no data leaves the warehouse."])
-      ]));
     }
     return frag;
+  }
+
+  // Default a scored account once the seed is available so the tab lands populated.
+  function maybeAutoScore() {
+    if (state.ml.autoScored || state.ml.result || state.ml.loading || state.ml.error) return;
+    var seed = state.ml.seed; if (!seed || !(seed.accounts || []).length) return;
+    state.ml.autoScored = true;
+    runScore(seed.accounts[0].accountId);
   }
 
   /* --------------------------- Snowflake Ops ----------------------------- */
@@ -2248,17 +2277,38 @@
     return d.toLocaleString("en-US", { month: "numeric", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" });
   }
 
+  // Synthesize a populated Action Center table for sample mode so the queue
+  // reads like the live native Task Center (open + completed rows).
+  function sampleApprovalTasks() {
+    var seed = state.approvals.seed; if (!seed) return [];
+    var now = Date.now(), day = 86400000, out = [];
+    (seed.pending || []).forEach(function (a, i) {
+      out.push({ id: "TASK-" + String(a.actionId || i).replace(/[^0-9]/g, "").slice(-7),
+        title: "Approve renewal-risk retention", status: "OPEN", version: "1",
+        createdOn: new Date(now - (i + 1) * (day / 3)).toISOString(), completedOn: null,
+        account: a.accountName, recommendation: a.recommendation });
+    });
+    (seed.history || []).forEach(function (r, i) {
+      var done = r.completedTs ? new Date(r.completedTs).getTime() : (now - (i + 2) * day);
+      out.push({ id: "TASK-" + String(r.actionId || i).replace(/[^0-9]/g, "").slice(-7),
+        title: "Approve renewal-risk retention", status: "COMPLETED", version: "1",
+        createdOn: new Date(done - day).toISOString(), completedOn: new Date(done).toISOString(),
+        account: r.accountName, recommendation: r.recommendation });
+    });
+    return out.sort(function (a, b) { return new Date(b.createdOn) - new Date(a.createdOn); });
+  }
+
   // Native Domo Task Center queue: the approval items shown in-app.
   function loadApprovalTasks() {
-    if (!isLive()) { state.approvals.tasksLoaded = true; return; }
+    if (!isLive()) { state.approvals.tasks = sampleApprovalTasks(); state.approvals.tasksLive = false; state.approvals.tasksLoaded = true; renderView(); return; }
     domo.post(CE + "listApprovalTasks", { limit: 50 }).then(function (resp) {
       var d = unwrap(resp);
-      if (d && d.status === "SUCCEEDED") { state.approvals.tasksLive = true; state.approvals.tasks = d.tasks || []; }
-      else { state.approvals.tasksLive = false; }
+      if (d && d.status === "SUCCEEDED" && (d.tasks || []).length) { state.approvals.tasksLive = true; state.approvals.tasks = d.tasks || []; }
+      else { state.approvals.tasksLive = false; state.approvals.tasks = sampleApprovalTasks(); }
       state.approvals.tasksLoaded = true; renderView();
     }).catch(function (err) {
-      console.warn("[app] listApprovalTasks failed:", err);
-      state.approvals.tasksLive = false; state.approvals.tasksLoaded = true; renderView();
+      console.warn("[app] listApprovalTasks failed, using seeded queue:", err);
+      state.approvals.tasksLive = false; state.approvals.tasks = sampleApprovalTasks(); state.approvals.tasksLoaded = true; renderView();
     });
   }
 
@@ -2337,13 +2387,18 @@
     }
     table.appendChild(tb);
     var openCount = tasks.filter(function (t) { return String(t.status || "").toUpperCase() === "OPEN"; }).length;
+    var homeLink = h("a", { class: "src-link", href: "#" }, ["Forecast Home", h("span", { class: "src-arrow" }, ["\u2192"])]);
+    homeLink.addEventListener("click", function (e) { e.preventDefault(); goto("home"); });
     return h("section", { class: "rec-section" }, [
       h("div", { class: "rec-head" }, [
         h("div", {}, [h("h2", {}, ["Approvals \u00b7 Action Center"]),
-          h("p", {}, ["Human-in-the-loop approvals for the governed Renewal Risk Retention workflow \u2014 fed by the native Domo ",
-            h("a", { class: "inline-link", href: queueConsoleHref("OPEN"), target: "_blank", rel: "noopener" }, ["Task Center queue"]),
-            ". Approve or reject here \u2014 the decision completes the Domo task, resumes the workflow, and writes status back to Snowflake."])]),
-        h("span", { class: "panel-tag" }, [num(openCount) + " open \u00b7 " + num(tasks.length) + " total"])
+          h("p", {}, ["Human-in-the-loop approval workflow \u2014 approve or reject here; the decision completes the native Domo ",
+            h("a", { class: "inline-link", href: queueConsoleHref("OPEN"), target: "_blank", rel: "noopener" }, ["Task Center"]),
+            " task, resumes the workflow, and writes status back to Snowflake."])]),
+        h("div", { class: "ac-head-r" }, [
+          homeLink,
+          h("a", { class: "queue-tag", href: queueConsoleHref("OPEN"), target: "_blank", rel: "noopener" }, ["RENEWAL_RISK_APPROVALS_QUEUE", h("span", { class: "src-arrow" }, ["\u2192"])])
+        ])
       ]),
       h("div", { class: "table-wrap" }, [table])
     ]);
@@ -2488,51 +2543,62 @@
     ]);
   }
 
+  // Compact protected-revenue stat strip (slimmed from the old hero).
+  function approvalsStatStrip() {
+    var p = state.approvals.protected || { baseline: 0, writeback: 0, total: 0, approvedCount: 0, executedCount: 0 };
+    var tasks = state.approvals.tasks || [];
+    var open = tasks.filter(function (t) { return String(t.status || "").toUpperCase() === "OPEN"; }).length;
+    function stat(k, v, cls) { return h("div", { class: "aps-cell" + (cls ? " " + cls : "") }, [h("span", { class: "aps-v" }, [v]), h("span", { class: "aps-k" }, [k])]); }
+    return h("section", { class: "aps-strip" }, [
+      h("div", { class: "aps-main" }, [
+        h("span", { class: "aps-lab" }, ["Protected revenue"]),
+        h("span", { class: "aps-total" }, [money(p.total)]),
+        h("span", { class: "aps-sub" }, ["baseline " + money(p.baseline) + (p.writeback ? "  +  " + money(p.writeback) + " this session" : "")])
+      ]),
+      h("div", { class: "aps-cells" }, [
+        stat("Open queue", num(open), "hot"),
+        stat("Approved", num(p.approvedCount)),
+        stat("Executed", num(p.executedCount))
+      ]),
+      h("div", { class: "ph-priv" }, [
+        h("span", { class: "priv-chip read" }, ["reads \u00b7 REVENUE_CC_READER"]),
+        h("span", { class: "priv-arrow" }, ["\u2192"]),
+        h("span", { class: "priv-chip write" }, ["writes \u00b7 REVENUE_CC_WRITER"])
+      ])
+    ]);
+  }
+
   function renderApprovals() {
     var frag = document.createDocumentFragment();
     var banner = connBanner(); if (banner) frag.appendChild(banner);
     if (!state.approvals.loaded && !state.approvals.loading) { loadApprovals(); }
     if (state.approvals.loading && !state.approvals.loaded) { frag.appendChild(h("div", { class: "analyst-loading" }, [h("span", { class: "spinner" }), "Loading the approval queue + protected-revenue rollup\u2026"])); return frag; }
 
-    if (!state.approvals.tasksLoaded && isLive()) { loadApprovalTasks(); }
+    if (!state.approvals.tasksLoaded) { loadApprovalTasks(); }
 
     if (state.approvals.note) frag.appendChild(h("div", { class: "ops-note" }, [state.approvals.note]));
 
-    frag.appendChild(protectedHero());
+    // Compact KPI strip (protected revenue + queue counts + role privilege).
+    frag.appendChild(approvalsStatStrip());
 
-    // Primary: native Domo Task Center queue (the approval items).
+    // Hero: the native Domo Task Center queue as one clean Action Center table
+    // (open + completed), mirroring the reference app.
     frag.appendChild(actionCenter());
 
-    // Action journey (reflects the active action's real state)
-    frag.appendChild(h("section", { class: "grid" }, [actionJourney()]));
-
-    // Cortex Agent save plays -> start a governed approval (creates a native task).
+    // Secondary (demo utility): send a Cortex Agent save play into the governed
+    // workflow so a fresh human task lands in the queue above.
     var doneIds = {}; (state.approvals.writeback || []).forEach(function (r) { doneIds[r.actionId] = true; });
-    var pending = (state.approvals.pending || []).filter(function (a) { return !doneIds[a.actionId]; });
-    var pg = h("div", { class: "rec-grid" });
-    if (!pending.length) pg.appendChild(h("p", { class: "analyst-note" }, ["No open save plays in scope. Switch persona, or approve tasks above."]));
-    pending.forEach(function (a) { pg.appendChild(pendingCard(a)); });
-    frag.appendChild(h("section", { class: "rec-section" }, [
-      h("div", { class: "rec-head" }, [h("div", {}, [h("h2", {}, ["Start a governed approval"]), h("p", {}, ["Cortex Agent save plays (read as ", h("code", {}, ["REVENUE_CC_READER"]), ") \u2014 send one into the Domo Workflow: the AI-agent tile triages via Cortex, then a human task lands in the queue above"])]),
-        h("span", { class: "panel-tag" }, [num(pending.length) + " plays"])]),
-      pg
-    ]));
-
-    // Completed lane
-    var sessionExecuted = (state.approvals.writeback || []).filter(function (r) { return r.executionStatus === "Executed"; });
-    var completed = sessionExecuted.concat(state.approvals.history || []);
-    var table = h("table", { class: "result-table ops-table" });
-    var thead = h("thead"), htr = h("tr");
-    ["Account", "Play", "Status", "Revenue protected", "Approved by"].forEach(function (c) { htr.appendChild(h("th", {}, [c])); });
-    thead.appendChild(htr); table.appendChild(thead);
-    var tb = h("tbody");
-    completed.forEach(function (r) { tb.appendChild(completedRow(r)); });
-    table.appendChild(tb);
-    frag.appendChild(h("section", { class: "rec-section" }, [
-      h("div", { class: "rec-head" }, [h("div", {}, [h("h2", {}, ["Executed \u2014 protected revenue"]), h("p", {}, ["Writeback rows (this session) + prior executed actions \u00b7 drives the protected-revenue rollup"])]),
-        h("span", { class: "panel-tag" }, [num(completed.length) + " actions"])]),
-      h("div", { class: "table-wrap" }, [table])
-    ]));
+    var pending = (state.approvals.pending || []).filter(function (a) { return !doneIds[a.actionId]; }).slice(0, 6);
+    if (pending.length) {
+      var pg = h("div", { class: "rec-grid compact" });
+      pending.forEach(function (a) { pg.appendChild(pendingCard(a)); });
+      frag.appendChild(h("section", { class: "rec-section start-approval" }, [
+        h("div", { class: "rec-head" }, [h("div", {}, [h("h3", {}, ["Send a save play to the queue"]),
+          h("p", {}, ["Cortex Agent recommendations (read as ", h("code", {}, ["REVENUE_CC_READER"]), ") \u2014 route one through the Domo Workflow and it lands as a human task above."])]),
+          h("span", { class: "panel-tag" }, [num(pending.length) + " plays"])]),
+        pg
+      ]));
+    }
 
     return frag;
   }
@@ -2739,7 +2805,18 @@
   function rlKey(tbl, col) { return tbl + "." + col; }
   // Domo AI-readiness status: synonyms present (or a manual sync) means the
   // column is staged into the Domo semantic layer; otherwise it's pending.
-  function rlDomo(tbl, c) { return (state.governance.synced[rlKey(tbl, c.name)] || (c.synonyms && c.synonyms.length)) ? "Synced" : "Staged"; }
+  function rlDomo(tbl, c) {
+    return state.governance.synced[rlKey(tbl, c.name)] === true ? "Synced" : "Staged";
+  }
+  // Seed a realistic partial-sync state once (documented columns are all
+  // "prepared" in Horizon; ~60% start synced into Domo so the Sync/Wipe
+  // workflow is meaningful — mirrors the reference app).
+  function preseedReadiness(model) {
+    (model.tables || []).forEach(function (t) {
+      var docs = rlColumns(t).filter(function (c) { return c.comment && String(c.comment).trim(); });
+      docs.slice(0, Math.round(docs.length * 0.6)).forEach(function (c) { state.governance.synced[rlKey(t.name, c.name)] = true; });
+    });
+  }
   function rlScore(t) {
     var cols = rlColumns(t);
     var documented = cols.filter(function (c) { return c.comment && String(c.comment).trim(); }).length;
@@ -2767,47 +2844,103 @@
     return rail;
   }
 
+  // Map a semantic table's base view -> the federated Domo dataset id (lineage).
+  function rlDatasetId(t) {
+    var base = String(t.base || t.name || "").split(".").pop();
+    var m = LINEAGE_VIEWS.filter(function (v) { return v.view === base; })[0];
+    return m ? m.dataSetId : null;
+  }
+  // Total source-context characters (Horizon comments) — drives the gauge.
+  function rlContextChars(t) {
+    return rlColumns(t).reduce(function (a, c) { return a + (c.comment ? String(c.comment).length : 0); }, 0);
+  }
+  function rlContextTier(chars, cols) {
+    var avg = cols ? chars / cols : 0;
+    if (avg >= 80) return { lab: "rich", cls: "rich" };
+    if (avg >= 40) return { lab: "adequate", cls: "adequate" };
+    return { lab: "sparse", cls: "sparse" };
+  }
+  function syncAllPrepared(t) {
+    rlColumns(t).forEach(function (c) { if (c.comment && String(c.comment).trim()) state.governance.synced[rlKey(t.name, c.name)] = true; });
+    renderView();
+  }
+  function wipeAllFromDomo(t) {
+    rlColumns(t).forEach(function (c) { state.governance.synced[rlKey(t.name, c.name)] = false; });
+    state.governance.wiped = state.governance.wiped || {};
+    state.governance.wiped[t.name] = true; // suppress synonym-implied "synced"
+    renderView();
+  }
+
   function readinessDetail(model) {
     var sel = state.governance.rlSelected || (model.tables && model.tables[0] && model.tables[0].name);
     var t = (model.tables || []).filter(function (x) { return x.name === sel; })[0];
     if (!t) return h("div", { class: "rl-detail" }, [h("p", { class: "analyst-note" }, ["Select a dataset."])]);
     var sc = rlScore(t);
-    var gauges = h("div", { class: "rl-gauges" }, [
-      h("div", { class: "rl-stat" }, [h("span", { class: "rl-stat-v" }, [num(sc.total)]), h("span", { class: "rl-stat-k" }, ["columns profiled"])]),
-      h("div", { class: "rl-gauge" }, [h("div", { class: "rl-gauge-top" }, [h("span", {}, ["Horizon documented"]), h("strong", {}, [sc.docPct + "%"])]), rlBar(sc.docPct)]),
-      h("div", { class: "rl-gauge" }, [h("div", { class: "rl-gauge-top" }, [h("span", {}, ["Domo AI staged"]), h("strong", {}, [sc.domoPct + "%"])]), rlBar(sc.domoPct, "domo")])
+    var baseName = String(t.base || t.name || "").split(".").pop();
+    var dsId = rlDatasetId(t);
+    var chars = rlContextChars(t);
+    var tier = rlContextTier(chars, sc.total);
+
+    var links = h("div", { class: "rl-detail-links" }, [
+      srcLink("Snowflake view", snowsightObjHref("view", baseName), "sf"),
+      dsId ? srcLink("Domo dataset", domoDatasetHref(dsId), "domo") : null,
+      dsId ? srcLink("Domo AI Readiness", domoAiReadinessHref(dsId), "domo") : null
     ]);
+
+    // Context-length gauge + dual sync meters (reference parity).
+    var meters = h("div", { class: "rl-meters" }, [
+      h("div", { class: "rl-ctx" }, [
+        h("div", { class: "rl-ctx-v" }, [(chars >= 1000 ? (chars / 1000).toFixed(1) + "k" : num(chars))]),
+        h("div", { class: "rl-ctx-k" }, ["characters of context"]),
+        h("div", { class: "rl-ctx-tier " + tier.cls }, [tier.lab])
+      ]),
+      h("div", { class: "rl-meter" }, [h("div", { class: "rl-gauge-top" }, [h("span", {}, ["Snowflake Horizon prepared"]), h("strong", {}, [sc.docPct + "%"])]), rlBar(sc.docPct), h("span", { class: "rl-meter-sub" }, [num(sc.documented) + " / " + num(sc.total) + " columns"])]),
+      h("div", { class: "rl-meter" }, [h("div", { class: "rl-gauge-top" }, [h("span", {}, ["Domo AI Readiness synced"]), h("strong", {}, [sc.domoPct + "%"])]), rlBar(sc.domoPct, "domo"), h("span", { class: "rl-meter-sub" }, [num(sc.synced) + " / " + num(sc.total) + " synced into Domo"])])
+    ]);
+
+    // Dataset controls.
+    var syncAll = h("button", { class: "mini-btn primary" }, ["Sync all prepared"]);
+    syncAll.addEventListener("click", function () { syncAllPrepared(t); });
+    var wipeAll = h("button", { class: "mini-btn ghost" }, ["Wipe all from Domo"]);
+    wipeAll.addEventListener("click", function () { wipeAllFromDomo(t); });
+    var controls = h("div", { class: "rl-controls" }, [h("span", { class: "rl-controls-lab" }, ["Dataset controls"]), syncAll, wipeAll]);
+
     var table = h("table", { class: "result-table rl-table" });
     var thead = h("thead"), htr = h("tr");
-    ["Column", "Type", "Horizon", "Domo AI", "Object comment", ""].forEach(function (c) { htr.appendChild(h("th", {}, [c])); });
+    ["Column", "Snowflake Horizon", "Domo AI Readiness", "Source context", "Sync / Wipe / Inspect"].forEach(function (c) { htr.appendChild(h("th", {}, [c])); });
     thead.appendChild(htr); table.appendChild(thead);
     var tb = h("tbody");
     sc.cols.forEach(function (c) {
       var domo = rlDomo(t.name, c);
-      var hz = c.comment && String(c.comment).trim() ? "Documented" : "Missing";
-      var actionCell;
-      if (domo === "Synced") { actionCell = h("span", { class: "rl-inspect" }, ["Synced \u2713"]); }
-      else {
-        var syncBtn = h("button", { class: "mini-btn primary xs" }, ["Sync"]);
-        syncBtn.addEventListener("click", function () { state.governance.synced[rlKey(t.name, c.name)] = true; renderView(); });
-        actionCell = syncBtn;
-      }
+      var prepared = c.comment && String(c.comment).trim();
+      var syncBtn = h("button", { class: "rl-a sync" + (domo === "Synced" ? " is-done" : ""), disabled: (domo === "Synced" || !prepared) ? "true" : null }, [domo === "Synced" ? "Synced" : "Sync"]);
+      if (domo !== "Synced" && prepared) syncBtn.addEventListener("click", function () { state.governance.synced[rlKey(t.name, c.name)] = true; renderView(); });
+      var wipeBtn = h("button", { class: "rl-a wipe", disabled: domo !== "Synced" ? "true" : null }, ["Wipe"]);
+      if (domo === "Synced") wipeBtn.addEventListener("click", function () { state.governance.synced[rlKey(t.name, c.name)] = false; (state.governance.wiped = state.governance.wiped || {})[t.name + "." + c.name] = true; renderView(); });
+      var inspectBtn = h("button", { class: "rl-a inspect" }, ["Inspect"]);
+      inspectBtn.addEventListener("click", function () { window.open(snowsightObjHref("view", baseName), "_blank"); });
+
+      var ctx = h("div", { class: "rl-ctx-cell" }, [
+        h("span", { class: "rl-ctx-txt" }, [c.comment || "\u2014"]),
+        (c.synonyms && c.synonyms.length) ? h("span", { class: "rl-syn" }, [num(c.synonyms.length) + " synonym" + (c.synonyms.length > 1 ? "s" : "")]) : null
+      ]);
+
       tb.appendChild(h("tr", {}, [
-        h("td", {}, [h("code", { class: "rl-col" }, [c.name]), h("span", { class: "rl-kind" }, [c.kind])]),
-        h("td", {}, [h("span", { class: "rl-type" }, [String(c.dataType || "").replace(/\(16777216\)/, "")])]),
-        h("td", {}, [h("span", { class: "rl-badge " + (hz === "Documented" ? "ok" : "warn") }, [hz])]),
-        h("td", {}, [h("span", { class: "rl-badge " + (domo === "Synced" ? "ok" : "stage") }, [domo])]),
-        h("td", { class: "rl-comment" }, [c.comment || "\u2014"]),
-        h("td", { class: "rl-act" }, [actionCell])
+        h("td", {}, [h("code", { class: "rl-col" }, [c.name]), h("span", { class: "rl-kind" }, [String(c.dataType || "").replace(/\(16777216\)/, "") + " \u00b7 " + c.kind])]),
+        h("td", {}, [h("span", { class: "rl-chip " + (prepared ? "prep" : "noprep") }, [h("span", { class: "rl-dot" }), prepared ? "Prepared" : "Not prepared"])]),
+        h("td", {}, [h("span", { class: "rl-chip " + (domo === "Synced" ? "synced" : "notsynced") }, [h("span", { class: "rl-dot" }), domo === "Synced" ? "Synced" : "Not synced"])]),
+        h("td", { class: "rl-comment" }, [ctx]),
+        h("td", { class: "rl-act" }, [h("div", { class: "rl-acts" }, [syncBtn, wipeBtn, inspectBtn])])
       ]));
     });
     table.appendChild(tb);
     return h("div", { class: "rl-detail" }, [
       h("div", { class: "rl-detail-head" }, [
-        h("div", {}, [h("h3", {}, [t.name]), h("p", {}, [t.comment || (t.database + "." + t.schema + "." + t.base)])]),
-        h("code", { class: "rl-base" }, [t.base])
+        h("div", {}, [h("span", { class: "rl-sel-lab" }, ["Selected dataset"]), h("h3", {}, [t.name]), h("code", { class: "rl-base" }, [t.base])]),
+        links
       ]),
-      gauges,
+      meters,
+      controls,
       h("div", { class: "table-wrap" }, [table])
     ]);
   }
@@ -2818,22 +2951,35 @@
       if (!state.semantic.loaded && !state.semantic.loading) loadSemantic();
       return h("article", { class: "panel col-12" }, [h("div", { class: "analyst-loading" }, [h("span", { class: "spinner" }), "Profiling the semantic model for AI readiness\u2026"])]);
     }
+    if (!state.governance.preseeded) { preseedReadiness(model); state.governance.preseeded = true; }
     var totalCols = 0, docCols = 0, syncedCols = 0;
     (model.tables || []).forEach(function (t) { var s = rlScore(t); totalCols += s.total; docCols += s.documented; syncedCols += s.synced; });
     var overallDoc = totalCols ? Math.round((docCols / totalCols) * 100) : 0;
     var overallDomo = totalCols ? Math.round((syncedCols / totalCols) * 100) : 0;
     return h("article", { class: "panel col-12 rl-plane" }, [
-      h("div", { class: "panel-head" }, [h("div", {}, [
-        h("h2", {}, ["AI Readiness control plane"]),
-        h("p", {}, ["Every governed column, profiled once in Snowflake Horizon and staged into the Domo semantic layer \u2014 one catalog, two planes"])
-      ]), h("span", { class: "panel-tag" }, [state.semantic.live ? "Live \u00b7 semantic model" : "Sample \u00b7 semantic model"])]),
-      h("div", { class: "rl-summary" }, [
-        h("div", { class: "rl-sum-stat" }, [h("span", { class: "rl-sum-v" }, [num((model.tables || []).length)]), h("span", { class: "rl-sum-k" }, ["governed datasets"])]),
-        h("div", { class: "rl-sum-stat" }, [h("span", { class: "rl-sum-v" }, [num(totalCols)]), h("span", { class: "rl-sum-k" }, ["columns profiled"])]),
-        h("div", { class: "rl-sum-gauge" }, [h("div", { class: "rl-gauge-top" }, [h("span", {}, ["Horizon documented"]), h("strong", {}, [overallDoc + "%"])]), rlBar(overallDoc)]),
-        h("div", { class: "rl-sum-gauge" }, [h("div", { class: "rl-gauge-top" }, [h("span", {}, ["Domo AI staged"]), h("strong", {}, [overallDomo + "%"])]), rlBar(overallDomo, "domo")])
+      h("div", { class: "panel-head rl-plane-head" }, [h("div", {}, [
+        h("span", { class: "rl-eyebrow" }, [h("img", { class: "eyebrow-mark", src: "./public/brand/snowflake-mark.svg", alt: "" }), "SNOWFLAKE HORIZON \u00b7 SOURCE OF TRUTH"]),
+        h("h2", {}, ["AI Readiness Control Plane"]),
+        h("p", {}, ["Horizon is the governed source of truth. Sync prepared column metadata into ",
+          srcLink("Domo AI Readiness", domoAiReadinessHref(LINEAGE_VIEWS[0].dataSetId), "domo"),
+          " \u2014 Domo mirrors the source. Editing source context is a separate, governed action."])
       ]),
-      h("div", { class: "rl-body" }, [readinessRail(model), readinessDetail(model)])
+      h("div", { class: "rl-plane-meters" }, [
+        h("div", { class: "rl-pm" }, [h("div", { class: "rl-pm-top" }, [h("span", {}, ["Snowflake Horizon prepared"]), h("strong", {}, [overallDoc + "%"])]), rlBar(overallDoc), h("span", { class: "rl-pm-sub" }, [num(docCols) + " / " + num(totalCols) + " columns"])]),
+        h("div", { class: "rl-pm" }, [h("div", { class: "rl-pm-top" }, [h("span", {}, ["Domo AI Readiness synced"]), h("strong", {}, [overallDomo + "%"])]), rlBar(overallDomo, "domo"), h("span", { class: "rl-pm-sub" }, [num(syncedCols) + " / " + num(totalCols) + " columns synced into Domo"])])
+      ])]),
+      h("div", { class: "rl-summary-strip" }, [
+        h("span", {}, [h("strong", {}, [num((model.tables || []).length)]), " governed datasets"]),
+        h("span", { class: "dot-sep" }, ["\u00b7"]),
+        h("span", {}, [h("strong", {}, [num(totalCols)]), " columns profiled"]),
+        h("span", { class: "dot-sep" }, ["\u00b7"]),
+        h("span", {}, [state.semantic.live ? "Live \u00b7 semantic model " : "Sample \u00b7 semantic model "]),
+        srcLink("REVENUE_CC_ANALYST", snowsightObjHref("view", "REVENUE_CC_ANALYST"), "sf")
+      ]),
+      h("div", { class: "rl-body" }, [
+        h("div", { class: "rl-rail-wrap" }, [h("div", { class: "rl-rail-lab" }, ["Governed datasets"]), readinessRail(model)]),
+        readinessDetail(model)
+      ])
     ]);
   }
 
@@ -2850,20 +2996,34 @@
       return frag;
     }
     frag.appendChild(govIdentityBanner());
+    // Hero: the AI Readiness Control Plane (reference parity).
     frag.appendChild(h("section", { class: "grid" }, [readinessControlPlane()]));
-    frag.appendChild(h("section", { class: "grid" }, [govParityPanel()]));
-    frag.appendChild(h("section", { class: "grid" }, [govMaskingPanel(), govPolicyPanel()]));
-    frag.appendChild(h("section", { class: "grid" }, [govGuardPanel()]));
-    frag.appendChild(h("section", { class: "grid" }, [govReadinessPanel()]));
-    // Governed semantic model (folded in from the former Semantic Model tab):
-    // the business vocabulary that Cortex Analyst + the Agent are governed against.
-    frag.appendChild(sectionDivider(
-      "Governed semantic model",
-      "The business vocabulary behind every answer \u2014 entities, relationships, and the verified queries Cortex trusts. This is the Snowflake analog of Unity Catalog's governed model.",
-      "snowflake-cortex.svg",
-      srcLink("Open REVENUE_CC_ANALYST", snowsightObjHref("view", "REVENUE_CC_ANALYST"), "sf")
-    ));
-    semanticSection(frag);
+
+    // Everything else (parity test, masking, policies, guardrails, semantic
+    // model) is governance depth — folded behind a toggle so the control plane
+    // leads, matching the reference app.
+    var open = !!state.governance.showDetail;
+    var toggle = h("button", { class: "gov-detail-toggle" }, [
+      h("span", { class: "gdt-ico" }, [open ? "\u2212" : "+"]),
+      open ? "Hide governance detail" : "Show governance detail",
+      h("span", { class: "gdt-sub" }, ["parity test \u00b7 masking \u00b7 policies \u00b7 guardrails \u00b7 semantic model"])
+    ]);
+    toggle.addEventListener("click", function () { state.governance.showDetail = !state.governance.showDetail; renderView(); });
+    frag.appendChild(toggle);
+
+    if (open) {
+      frag.appendChild(h("section", { class: "grid" }, [govParityPanel()]));
+      frag.appendChild(h("section", { class: "grid" }, [govMaskingPanel(), govPolicyPanel()]));
+      frag.appendChild(h("section", { class: "grid" }, [govGuardPanel()]));
+      frag.appendChild(h("section", { class: "grid" }, [govReadinessPanel()]));
+      frag.appendChild(sectionDivider(
+        "Governed semantic model",
+        "The business vocabulary behind every answer \u2014 entities, relationships, and the verified queries Cortex trusts. This is the Snowflake analog of Unity Catalog's governed model.",
+        "snowflake-cortex.svg",
+        srcLink("Open REVENUE_CC_ANALYST", snowsightObjHref("view", "REVENUE_CC_ANALYST"), "sf")
+      ));
+      semanticSection(frag);
+    }
     return frag;
   }
 

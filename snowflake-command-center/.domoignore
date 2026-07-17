@@ -4,3 +4,5 @@ README.md
 .domoignore
 node_modules/
 tools/
+tools/**
+tools/*
