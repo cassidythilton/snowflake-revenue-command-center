@@ -200,17 +200,26 @@
     if (p.indexOf("south") > -1) return "South";
     return null;
   }
+  // Return a CE function's own payload regardless of proxy wrapper shape. Walks
+  // the common wrappers (CE execution envelope {executionId,result}, {response},
+  // {body}, {data}) and returns the first object whose status is the function
+  // convention (SUCCEEDED/FAILED). Falls back to legacy response-peeling.
   function unwrap(resp) {
-    var cur = resp && (resp.body || resp.data || resp);
-    var depth = 0;
-    // Peel the Code Engine execution envelope ({executionId, status:'SUCCESS',
-    // result:{...}}) and any nested {response:{...}} wrappers, so callers always
-    // see the function's own return payload regardless of proxy shape.
-    while (cur && typeof cur === "object" && depth < 8) {
-      if (cur.executionId && cur.result && typeof cur.result === "object") { cur = cur.result; depth += 1; continue; }
-      if ("response" in cur && cur.response && typeof cur.response === "object") { cur = cur.response; depth += 1; continue; }
-      break;
+    function walk(o, depth) {
+      if (!o || typeof o !== "object" || depth > 10) return null;
+      if (o.status === "SUCCEEDED" || o.status === "FAILED") return o;
+      var next = null;
+      if (o.executionId && o.result && typeof o.result === "object") next = o.result;
+      else if (o.response && typeof o.response === "object") next = o.response;
+      else if (o.result && typeof o.result === "object") next = o.result;
+      else if (o.body && typeof o.body === "object") next = o.body;
+      else if (o.data && typeof o.data === "object") next = o.data;
+      return next ? walk(next, depth + 1) : null;
     }
+    var found = walk(resp, 0);
+    if (found) return found;
+    var cur = resp && (resp.body || resp.data || resp), d = 0;
+    while (cur && typeof cur === "object" && "response" in cur && cur.response && typeof cur.response === "object" && d < 8) { cur = cur.response; d += 1; }
     return cur;
   }
 
@@ -232,8 +241,10 @@
       var t0 = Date.now();
       return _post(path, body).then(function (resp) {
         var d = unwrap(resp); var st = d && d.status;
-        pushDiag({ t: Date.now(), fn: fn, ok: (st === "SUCCEEDED" || st === "SUCCESS"), status: st || "(no status)", ms: Date.now() - t0, error: (d && d.error) || null });
-        console.log("[ce]", fn, "\u2192", st, (Date.now() - t0) + "ms", (d && d.error) ? ("ERR: " + d.error) : "");
+        var shape = ""; try { shape = resp && typeof resp === "object" ? Object.keys(resp).join(",") : typeof resp; } catch (e) {}
+        var raw = ""; try { raw = JSON.stringify(resp).slice(0, 400); } catch (e) {}
+        pushDiag({ t: Date.now(), fn: fn, ok: (st === "SUCCEEDED" || st === "SUCCESS"), status: st || "(no status)", ms: Date.now() - t0, error: (d && d.error) || null, shape: shape, raw: raw });
+        console.log("[ce]", fn, "\u2192", st, (Date.now() - t0) + "ms", "keys:[" + shape + "]", (d && d.error) ? ("ERR: " + d.error) : "");
         return resp;
       }, function (err) {
         var msg = (err && err.message) ? err.message : (typeof err === "string" ? err : JSON.stringify(err)).slice(0, 300);
@@ -278,7 +289,9 @@
         h("span", { class: "ce-diag-fn" }, [e.fn]),
         h("span", { class: "ce-diag-st" }, [e.status]),
         h("span", { class: "ce-diag-ms" }, [e.ms + "ms"]),
-        e.error ? h("div", { class: "ce-diag-msg" }, [String(e.error).slice(0, 300)]) : null
+        e.shape ? h("div", { class: "ce-diag-shape" }, ["keys: " + e.shape]) : null,
+        e.error ? h("div", { class: "ce-diag-msg" }, [String(e.error).slice(0, 300)]) : null,
+        e.raw ? h("div", { class: "ce-diag-raw" }, [e.raw]) : null
       ]));
     });
     panel.appendChild(body);
@@ -4558,6 +4571,13 @@
     // Pull the account-level action queue for the home table (deferred so the
     // synchronous loader can't re-enter this render pass).
     if (!state.approvals.loaded && !state.approvals.loading) setTimeout(loadApprovals, 0);
+
+    // Guard: never crash if the forecast payload hasn't resolved (or came back
+    // without KPIs) — show a loading state instead.
+    if (!data || !data.kpis) {
+      frag.appendChild(h("div", { class: "analyst-loading" }, [h("span", { class: "spinner" }), "Loading the governed forecast\u2026"]));
+      return frag;
+    }
 
     var k = data.kpis;
     var histActuals = ((data.revenueForecast && data.revenueForecast.history) || []).map(function (p) { return p.actual; }).slice(-12);

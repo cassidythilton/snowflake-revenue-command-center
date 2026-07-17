@@ -429,6 +429,8 @@
 .ce-diag-st { font-size: 10.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
 .ce-diag-ms { font-family: var(--font-mono); font-size: 10.5px; color: var(--n-300); }
 .ce-diag-msg { grid-column: 1 / -1; margin-top: 3px; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.45; color: var(--status-bad); word-break: break-word; }
+.ce-diag-shape { grid-column: 1 / -1; margin-top: 3px; font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+.ce-diag-raw { grid-column: 1 / -1; margin-top: 3px; font-family: var(--font-mono); font-size: 9.5px; line-height: 1.4; color: var(--n-500); word-break: break-word; white-space: pre-wrap; max-height: 90px; overflow: auto; }
 
 .rec-card.approved { border-left-color: var(--status-good); }
 
