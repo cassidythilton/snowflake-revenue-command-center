@@ -3506,8 +3506,8 @@
     var name = cwUserName();
     var home = h("div", { class: "cw-home" });
     home.appendChild(h("div", { class: "cw-greet" }, [
-      h("h1", {}, [cwGreeting() + (name ? ", " + name : "")]),
-      h("h1", { class: "cw-greet-sub" }, ["What insights can I help with?"])
+      h("div", { class: "cw-greet-1" }, [cwGreeting() + (name ? ", " + name : "")]),
+      h("div", { class: "cw-greet-2" }, ["What insights can I help with?"])
     ]));
     home.appendChild(cwComposer());
     var chips = h("div", { class: "cw-starters" });
