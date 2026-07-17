@@ -100,6 +100,7 @@
     data: null,
     mode: "loading",
     dataSource: null,
+    home: { range: 24, showBand: true },
     analyst: { input: "", loading: false, error: null, messages: [], conversationHistory: [], recent: [], recentLoaded: false, seq: 0,
       views: [], viewsLoaded: false, viewsLoading: false, selectedViews: ["REVENUE_CC_ANALYST"], pickerOpen: false },
     semantic: { loading: false, loaded: false, error: null, live: false, model: null, view: null, sql: null, tab: "graph", selected: null, vqResults: {}, vqBusy: {}, ddlResult: null, ddlBusy: false },
@@ -3191,6 +3192,52 @@
     return b;
   }
 
+  // Small area sparkline for KPI cards. series: array of numbers.
+  function sparkline(series, color) {
+    var svgNS = "http://www.w3.org/2000/svg";
+    var W = 240, H = 40, pad = 3;
+    var pts = (series || []).filter(function (v) { return typeof v === "number" && isFinite(v); });
+    var svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("class", "kpi-spark"); svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.setAttribute("preserveAspectRatio", "none");
+    if (pts.length < 2) return svg;
+    var mn = Math.min.apply(null, pts), mx = Math.max.apply(null, pts), rng = (mx - mn) || 1;
+    var X = function (i) { return pad + (W - pad * 2) * (i / (pts.length - 1)); };
+    var Y = function (v) { return (H - pad) - (H - pad * 2) * ((v - mn) / rng); };
+    var d = "M" + X(0).toFixed(1) + "," + Y(pts[0]).toFixed(1);
+    for (var i = 1; i < pts.length; i++) d += " L" + X(i).toFixed(1) + "," + Y(pts[i]).toFixed(1);
+    var gid = "spk" + Math.random().toString(36).slice(2, 8);
+    var defs = document.createElementNS(svgNS, "defs");
+    defs.innerHTML = "<linearGradient id='" + gid + "' x1='0' y1='0' x2='0' y2='1'><stop offset='0%' stop-color='" + color + "' stop-opacity='0.28'/><stop offset='100%' stop-color='" + color + "' stop-opacity='0'/></linearGradient>";
+    svg.appendChild(defs);
+    var area = document.createElementNS(svgNS, "path");
+    area.setAttribute("d", d + " L" + X(pts.length - 1).toFixed(1) + "," + H + " L" + X(0).toFixed(1) + "," + H + " Z");
+    area.setAttribute("fill", "url(#" + gid + ")"); area.setAttribute("stroke", "none"); svg.appendChild(area);
+    var line = document.createElementNS(svgNS, "path");
+    line.setAttribute("d", d); line.setAttribute("fill", "none"); line.setAttribute("stroke", color);
+    line.setAttribute("stroke-width", "1.8"); line.setAttribute("stroke-linecap", "round"); line.setAttribute("stroke-linejoin", "round");
+    svg.appendChild(line);
+    var last = document.createElementNS(svgNS, "circle");
+    last.setAttribute("cx", X(pts.length - 1).toFixed(1)); last.setAttribute("cy", Y(pts[pts.length - 1]).toFixed(1));
+    last.setAttribute("r", "2.4"); last.setAttribute("fill", color); svg.appendChild(last);
+    return svg;
+  }
+
+  // Deterministic representative series ending at `value` (for KPIs without a
+  // native time series). dir > 0 rising, < 0 falling.
+  function trendSeries(value, dir, n) {
+    n = n || 12; value = Number(value) || 0;
+    var out = [], start = value * (dir >= 0 ? 0.72 : 1.28);
+    for (var i = 0; i < n; i++) {
+      var t = i / (n - 1);
+      var base = start + (value - start) * t;
+      var wobble = Math.sin(i * 1.7) * value * 0.03;
+      out.push(Math.max(0, base + wobble));
+    }
+    out[n - 1] = value;
+    return out;
+  }
+
   function kpiCard(k, opts) {
     opts = opts || {};
     var meta;
@@ -3198,19 +3245,23 @@
       var up = k.deltaPct >= 0;
       meta = h("div", { class: "kpi-meta" }, [
         h("span", { class: "kpi-delta " + (up ? "up" : "down") }, [(up ? "\u25b2 " : "\u25bc ") + Math.abs(k.deltaPct).toFixed(1) + "%"]),
-        " vs. prior month"
+        opts.metaText || " vs. prior month"
       ]);
     } else if (k.breaches != null) {
-      meta = h("div", { class: "kpi-meta" }, [num(k.breaches) + " of " + num(k.cases) + " cases (90d)"]);
+      meta = h("div", { class: "kpi-meta" }, [
+        opts.chip ? h("span", { class: "kpi-delta warn" }, [opts.chip]) : null,
+        num(k.breaches) + " of " + num(k.cases) + " cases (90d)"
+      ]);
     } else {
-      meta = h("div", { class: "kpi-meta" }, [k.context || ""]);
+      meta = h("div", { class: "kpi-meta" }, [
+        opts.chip ? h("span", { class: "kpi-delta " + (opts.chipCls || "warn") }, [opts.chip]) : null,
+        k.context || ""
+      ]);
     }
     var val = k.unit === "%" ? (Number(k.value).toFixed(1) + "%") : money(k.value);
-    return h("article", { class: "kpi" + (opts.cls ? " " + opts.cls : "") }, [
-      h("span", { class: "kpi-label" }, [k.label]),
-      h("span", { class: "kpi-value" }, [val]),
-      meta
-    ]);
+    var kids = [h("span", { class: "kpi-label" }, [k.label]), h("span", { class: "kpi-value" }, [val]), meta];
+    if (opts.spark) kids.push(sparkline(opts.spark, opts.sparkColor || "var(--domo-blue)"));
+    return h("article", { class: "kpi" + (opts.cls ? " " + opts.cls : "") }, kids);
   }
 
   var MONTHS_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -3250,17 +3301,29 @@
     return "M" + pts[0].x.toFixed(1) + "," + pts[0].y.toFixed(1) + smoothCurveCmds(pts);
   }
 
+  function fcMiniStat(label, value, sub, subCls) {
+    return h("div", { class: "fc-stat" }, [
+      h("span", { class: "fc-stat-lab" }, [label]),
+      h("span", { class: "fc-stat-val" }, [value]),
+      sub ? h("span", { class: "fc-stat-sub" + (subCls ? " " + subCls : "") }, [sub]) : null
+    ]);
+  }
+
   function forecastChart(data) {
     var rf = data && data.revenueForecast;
     if (!rf || !rf.history || !rf.history.length) {
       var av = (data && data.actualVsForecast) || [];
       rf = { history: av.map(function (p) { return { period: p.period, actual: p.actual }; }), forecast: [], predictionInterval: 0.95 };
     }
-    var hist = rf.history || [], fc = rf.forecast || [];
+    var fullHist = rf.history || [], fc = rf.forecast || [];
+    // Range filter: show the last N months of actuals (forecast always shown).
+    var range = (state.home && state.home.range) || 24;
+    var hist = fullHist.length > range ? fullHist.slice(fullHist.length - range) : fullHist;
+    var showBand = !(state.home && state.home.showBand === false);
     var svgNS = "http://www.w3.org/2000/svg";
     function E(name, attrs) { var e = document.createElementNS(svgNS, name); if (attrs) for (var k in attrs) e.setAttribute(k, attrs[k]); return e; }
 
-    var W = 800, H = 300, x0 = 58, x1 = 784, y0 = 22, y1 = 246;
+    var W = 1200, H = 384, x0 = 66, x1 = 1184, y0 = 26, y1 = 312;
     var labels = hist.map(function (p) { return p.period; }).concat(fc.map(function (p) { return p.period; }));
     var N = labels.length || 1;
     var cut = hist.length; // first forecast index; last actual at cut-1
@@ -3283,27 +3346,25 @@
     var upPts = [anchor].concat(fc.map(function (p, i) { return { x: X(cut + i), y: Y(p.upper) }; }));
     var loPts = [anchor].concat(fc.map(function (p, i) { return { x: X(cut + i), y: Y(p.lower) }; }));
 
-    var svg = E("svg", { viewBox: "0 0 " + W + " " + H, class: "fchart", style: "display:block;width:100%;height:auto" });
+    var svg = E("svg", { viewBox: "0 0 " + W + " " + H, class: "fchart", preserveAspectRatio: "none", style: "display:block;width:100%;height:auto" });
 
     var defs = E("defs");
     defs.innerHTML =
       "<linearGradient id='fcActFill' x1='0' y1='0' x2='0' y2='1'>" +
-      "<stop offset='0%' stop-color='#4a90c2' stop-opacity='0.30'/>" +
+      "<stop offset='0%' stop-color='#4a90c2' stop-opacity='0.24'/>" +
       "<stop offset='72%' stop-color='#99ccee' stop-opacity='0'/>" +
       "<stop offset='100%' stop-color='#99ccee' stop-opacity='0'/></linearGradient>" +
       "<linearGradient id='fcBand' x1='0' y1='0' x2='0' y2='1'>" +
-      "<stop offset='0%' stop-color='#29b5e8' stop-opacity='0.34'/>" +
-      "<stop offset='100%' stop-color='#29b5e8' stop-opacity='0.06'/></linearGradient>" +
-      "<linearGradient id='fcActLine' x1='0' y1='0' x2='1' y2='0'>" +
-      "<stop offset='0%' stop-color='#1f5d86'/><stop offset='100%' stop-color='#1f5d86'/></linearGradient>";
+      "<stop offset='0%' stop-color='#29b5e8' stop-opacity='0.30'/>" +
+      "<stop offset='100%' stop-color='#29b5e8' stop-opacity='0.05'/></linearGradient>";
     svg.appendChild(defs);
 
     // horizontal gridlines + y labels
-    var ticks = 4;
+    var ticks = 5;
     for (var g = 0; g <= ticks; g++) {
       var gv = floor + (ceil - floor) * (g / ticks), gy = Y(gv);
       svg.appendChild(E("line", { class: "fc-grid", x1: x0, y1: gy.toFixed(1), x2: x1, y2: gy.toFixed(1) }));
-      var yl = E("text", { class: "fc-ylab", x: x0 - 10, y: (gy + 3.5).toFixed(1) }); yl.textContent = fmtMoneyAxis(gv); svg.appendChild(yl);
+      var yl = E("text", { class: "fc-ylab", x: x0 - 12, y: (gy + 3.5).toFixed(1) }); yl.textContent = fmtMoneyAxis(gv); svg.appendChild(yl);
     }
 
     // forecast region shading (subtle) behind the band
@@ -3314,33 +3375,36 @@
     svg.appendChild(E("path", { class: "fc-area", d: areaD, fill: "url(#fcActFill)" }));
 
     // confidence band (opening cone from the last actual)
-    var loRev = loPts.slice().reverse();
-    var bandD = smoothPath(upPts) + " L" + loRev[0].x.toFixed(1) + "," + loRev[0].y.toFixed(1) + smoothCurveCmds(loRev) + " Z";
-    svg.appendChild(E("path", { class: "fc-bandfill", d: bandD, fill: "url(#fcBand)" }));
+    if (showBand && fc.length) {
+      var loRev = loPts.slice().reverse();
+      var bandD = smoothPath(upPts) + " L" + loRev[0].x.toFixed(1) + "," + loRev[0].y.toFixed(1) + smoothCurveCmds(loRev) + " Z";
+      svg.appendChild(E("path", { class: "fc-bandfill", d: bandD, fill: "url(#fcBand)" }));
+    }
 
-    // cutover marker
+    // Today marker (boundary between actual + forecast)
     svg.appendChild(E("line", { class: "fc-cut", x1: X(cut - 1).toFixed(1), y1: y0 - 2, x2: X(cut - 1).toFixed(1), y2: y1 }));
-    var cutLab = E("text", { class: "fc-cutlab", x: (X(cut - 1) + 6).toFixed(1), y: y0 + 8 }); cutLab.textContent = "Forecast \u2192"; svg.appendChild(cutLab);
+    var cutLab = E("text", { class: "fc-cutlab", x: X(cut - 1).toFixed(1), y: y0 - 8, "text-anchor": "middle" }); cutLab.textContent = "Today"; svg.appendChild(cutLab);
 
     // lines
-    svg.appendChild(E("path", { class: "fc-line fc-forecast", d: smoothPath(fcPts) }));
+    if (fc.length) svg.appendChild(E("path", { class: "fc-line fc-forecast", d: smoothPath(fcPts) }));
     svg.appendChild(E("path", { class: "fc-line fc-actual", d: smoothPath(actPts) }));
 
     // dots
     actPts.forEach(function (p, i) {
-      svg.appendChild(E("circle", { class: "fc-dot" + (i === cut - 1 ? " last" : ""), cx: p.x.toFixed(1), cy: p.y.toFixed(1), r: i === cut - 1 ? 4.2 : 2.3 }));
+      svg.appendChild(E("circle", { class: "fc-dot" + (i === cut - 1 ? " last" : ""), cx: p.x.toFixed(1), cy: p.y.toFixed(1), r: i === cut - 1 ? 4.2 : 2.1 }));
     });
     fc.forEach(function (p, i) {
-      svg.appendChild(E("circle", { class: "fc-dot fc", cx: X(cut + i).toFixed(1), cy: Y(p.forecast).toFixed(1), r: 2.8 }));
+      svg.appendChild(E("circle", { class: "fc-dot fc", cx: X(cut + i).toFixed(1), cy: Y(p.forecast).toFixed(1), r: 2.6 }));
     });
 
-    // x labels (skip regular ticks adjacent to the cutover to avoid crowding)
+    // x labels
+    var xEvery = N > 22 ? 3 : (N > 14 ? 2 : 1);
     for (var i = 0; i < N; i++) {
       var isCut = i === cut - 1;
-      var isReg = i % 3 === 0 || i === N - 1;
+      var isReg = i % xEvery === 0 || i === N - 1;
       if (!isCut && !isReg) continue;
-      if (!isCut && Math.abs(i - (cut - 1)) < 2) continue;
-      var xl = E("text", { class: "fc-xlab" + (isCut ? " cut" : ""), x: X(i).toFixed(1), y: y1 + 20 });
+      if (!isCut && Math.abs(i - (cut - 1)) < 1) continue;
+      var xl = E("text", { class: "fc-xlab" + (isCut ? " cut" : ""), x: X(i).toFixed(1), y: y1 + 22 });
       xl.textContent = monthLabel(labels[i]); svg.appendChild(xl);
     }
 
@@ -3391,55 +3455,117 @@
     var legend = h("div", { class: "chart-legend" }, [
       h("span", { class: "lg-item" }, [h("span", { class: "lg-line" }), " Actual net revenue"]),
       h("span", { class: "lg-item" }, [h("span", { class: "lg-line dashed", style: "border-color: var(--sf-blue)" }), " Snowflake ML forecast"]),
-      h("span", { class: "lg-item" }, [h("span", { class: "lg-band" }), " 95% prediction interval"])
+      showBand ? h("span", { class: "lg-item" }, [h("span", { class: "lg-band" }), " 95% confidence band"]) : null,
+      h("span", { class: "lg-item" }, [h("span", { class: "lg-today" }), " Today"])
     ]);
-    var panel = h("article", { class: "panel col-8" }, [
+
+    // Range + confidence band controls (top-right of the panel head).
+    var ranges = [[12, "12M"], [18, "18M"], [24, "24M"]];
+    var rangeGroup = h("div", { class: "fc-toggle" });
+    ranges.forEach(function (r) {
+      var b = h("button", { class: "fc-toggle-btn" + (range === r[0] ? " active" : "") }, [r[1]]);
+      b.addEventListener("click", function () { state.home.range = r[0]; renderView(); });
+      rangeGroup.appendChild(b);
+    });
+    var bandBtn = h("button", { class: "fc-band-btn" + (showBand ? " active" : "") }, [(showBand ? "\u2713 " : "+ ") + "Confidence band"]);
+    bandBtn.addEventListener("click", function () { state.home.showBand = !showBand; renderView(); });
+
+    // In-panel mini-stats.
+    var lastFc = fc.length ? fc[fc.length - 1].forecast : lastAct;
+    var fcDelta = lastAct ? ((lastFc - lastAct) / lastAct) * 100 : 0;
+    var kp = data.kpis || {};
+    var stats = h("div", { class: "fc-stats" }, [
+      fcMiniStat("Current run-rate", fmtMoneyTip(lastAct), monthLabel(hist.length ? hist[hist.length - 1].period : "")),
+      fcMiniStat("Forecast (end)", fmtMoneyTip(lastFc), (fcDelta >= 0 ? "\u25b2 " : "\u25bc ") + Math.abs(fcDelta).toFixed(1) + "%", fcDelta >= 0 ? "up" : "down"),
+      fcMiniStat("Revenue at risk", kp.revenueAtRisk ? fmtMoneyTip(kp.revenueAtRisk.value) : "\u2014", "current month"),
+      fcMiniStat("Protected", kp.protectedRevenue ? fmtMoneyTip(kp.protectedRevenue.value) : "\u2014", "agent actions")
+    ]);
+
+    var panel = h("article", { class: "panel col-12 fc-panel" }, [
       h("div", { class: "panel-head" }, [
-        h("div", {}, [h("h2", {}, ["Revenue \u2014 Actual vs. ML Forecast"]),
-          h("p", {}, ["Monthly net revenue \u00b7 24 mo actual + 6 mo Snowflake ML forecast (95% interval)"])]),
-        h("span", { class: "panel-tag" }, ["ML.FORECAST"])
+        h("div", {}, [
+          h("span", { class: "fc-eyebrow" }, ["Snowflake-modeled \u00b7 renewal-risk adjusted"]),
+          h("h2", {}, ["Net Revenue \u2014 Actual vs. Forecast"]),
+          h("p", {}, [(fullHist.length) + " mo actual + " + fc.length + " mo Snowflake ML forecast \u00b7 all tenants and regions"])
+        ]),
+        h("div", { class: "panel-head-actions" }, [
+          rangeGroup, bandBtn,
+          srcLink("GOLD_REVENUE_FORECAST", snowsightObjHref("view", "GOLD_REVENUE_FORECAST"), "sf")
+        ])
       ]),
-      box, legend
+      stats, box, legend
     ]);
     return panel;
   }
 
+  function goto(surface) { state.surface = surface; renderTabs(); renderView(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+
   function insightRail(data) {
     var inc = data.incident || {};
-    var west = (data.regionalRisk || []).filter(function (r) { return r.region === "West" && r.segment === "Enterprise"; })[0];
-    var rail = h("div", { class: "insight-rail" }, [
-      h("div", { class: "insight warn" }, [h("span", { class: "insight-dot" }),
-        h("div", { class: "insight-body" }, [h("h3", {}, ["Reliability incident " + (inc.id || "INC-0001")]),
-          h("p", {}, [(inc.rootCause || "West Enterprise reliability incident") + " \u2014 " + num(inc.affectedAccounts) + " accounts, " + num(inc.slaBreaches) + " SLA breaches."])])]),
-      h("div", { class: "insight info" }, [h("span", { class: "insight-dot" }),
-        h("div", { class: "insight-body" }, [h("h3", {}, ["Renewal risk elevated in the West"]),
-          h("p", {}, [west ? ("West Enterprise avg risk " + west.avgRisk + " across " + num(west.highRiskAccounts) + " high-risk accounts, " + money(west.revenueAtRisk) + " at risk.") : "Renewal risk concentrated in West Enterprise."])])]),
-      h("div", { class: "insight good" }, [h("span", { class: "insight-dot" }),
-        h("div", { class: "insight-body" }, [h("h3", {}, ["Protected revenue climbing"]),
-          h("p", {}, [money(data.kpis.protectedRevenue.value) + " protected via executed agent actions to date."])])])
-    ]);
-    return h("article", { class: "panel col-4" }, [
-      h("div", { class: "panel-head" }, [h("div", {}, [h("h2", {}, ["Insights"]), h("p", {}, ["From the latest governed run"])])]), rail
+    var reg = regionAgg(data)[0] || { region: "West", avgRisk: 83, revenueAtRisk: 0 };
+    var items = [
+      { cls: "warn", title: "Forecast headwind isolated to " + reg.region,
+        body: (inc.rootCause || "Reliability incident") + " \u2014 " + reg.region + " avg risk " + (reg.avgRisk).toFixed(0) + ", " + money(reg.revenueAtRisk) + " at risk in the exposed cohort.",
+        link: ["Ask Cortex why", function () { goto("analyst"); }] },
+      { cls: "info", title: "Model recovery is conditional on actions",
+        body: "The forecast recovery assumes approved retention plays land. " + money(data.kpis.protectedRevenue.value) + " already protected; pending plays carry the remaining upside.",
+        link: ["Score an account", function () { goto("ml"); }] },
+      { cls: "good", title: "Operational state is captured",
+        body: "Scenario runs and prediction feedback persist in Snowflake Hybrid Tables \u2014 the loop remembers across sessions.",
+        link: ["Open Snowflake Ops", function () { goto("ops"); }] }
+    ];
+    var rail = h("div", { class: "insight-rail" });
+    items.forEach(function (it) {
+      var a = h("button", { class: "insight-link" }, [it.link[0], h("span", { class: "il-arrow" }, ["\u2192"])]);
+      a.addEventListener("click", it.link[1]);
+      rail.appendChild(h("div", { class: "insight " + it.cls }, [h("span", { class: "insight-dot" }),
+        h("div", { class: "insight-body" }, [h("h3", {}, [it.title]), h("p", {}, [it.body]), a])]));
+    });
+    return h("article", { class: "panel col-5" }, [
+      h("div", { class: "panel-head" }, [
+        h("div", {}, [h("h2", {}, ["Insight Rail"]), h("p", {}, ["What the forecast can\u2019t tell you \u2014 act on it now"])]),
+        h("span", { class: "panel-tag agent" }, [h("img", { class: "tag-mark", src: "./public/brand/snowflake-cortex.svg", alt: "" }), "Agent-grounded"])
+      ]), rail
     ]);
   }
 
+  // Aggregate region×segment rows to region-level (avg risk + summed at-risk).
+  function regionAgg(data) {
+    var by = {};
+    (data.regionalRisk || []).forEach(function (r) {
+      var g = by[r.region] || (by[r.region] = { region: r.region, rar: 0, wRisk: 0, w: 0, accts: 0 });
+      g.rar += r.revenueAtRisk || 0;
+      g.wRisk += (r.avgRisk || 0) * (r.highRiskAccounts || 1);
+      g.w += (r.highRiskAccounts || 1);
+      g.accts += (r.highRiskAccounts || 0);
+    });
+    return Object.keys(by).map(function (k) {
+      var g = by[k];
+      return { region: g.region, avgRisk: g.w ? g.wRisk / g.w : 0, revenueAtRisk: g.rar, highRiskAccounts: g.accts };
+    }).sort(function (a, b) { return b.revenueAtRisk - a.revenueAtRisk; });
+  }
+
   function regionalPanel(data) {
-    var rows = (data.regionalRisk || []).slice(0, 8);
+    var rows = regionAgg(data);
     var max = 1; rows.forEach(function (r) { max = Math.max(max, r.revenueAtRisk); });
-    var chart = h("div", { class: "bar-chart" });
-    rows.forEach(function (r) {
-      var hot = r.avgRisk >= 70;
+    var chart = h("div", { class: "bar-chart region-bars" });
+    rows.forEach(function (r, idx) {
+      var hot = idx === 0 && r.avgRisk >= 60;
       var value = h("span", { class: "bar-value" }, [money(r.revenueAtRisk)]);
-      if (hot) value.appendChild(h("span", { class: "bar-flag" }, ["risk " + r.avgRisk]));
+      value.appendChild(h("span", { class: "bar-flag" + (hot ? " hot" : "") }, ["risk " + r.avgRisk.toFixed(0)]));
+      var label = h("span", { class: "bar-label" }, [r.region]);
+      if (hot) label.appendChild(h("span", { class: "hotspot" }, ["HOTSPOT"]));
       chart.appendChild(h("div", { class: "bar-row" }, [
-        h("span", { class: "bar-label" }, [r.region + " \u00b7 " + (r.segment === "Enterprise" ? "Ent" : r.segment === "Mid-Market" ? "MM" : "SMB")]),
+        label,
         h("span", { class: "bar-track" }, [h("span", { class: "bar-fill" + (hot ? " hot" : ""), style: "width: " + Math.max(3, (r.revenueAtRisk / max) * 100) + "%" })]),
         value
       ]));
     });
-    return h("article", { class: "panel col-6" }, [
-      h("div", { class: "panel-head" }, [h("div", {}, [h("h2", {}, ["Regional Renewal Risk"]), h("p", {}, ["Revenue at risk by region \u00d7 segment, current month"])]),
-        h("span", { class: "panel-tag" }, ["fact_renewal_risk"])]),
+    return h("article", { class: "panel col-7" }, [
+      h("div", { class: "panel-head" }, [
+        h("div", {}, [h("h2", {}, ["Regional Renewal Risk"]), h("p", {}, ["Revenue at risk by region \u2014 the West forecast bears the scar"])]),
+        srcLink("GOLD_CUSTOMER_RENEWAL_RISK", snowsightObjHref("view", "GOLD_CUSTOMER_RENEWAL_RISK"), "sf")
+      ]),
       chart
     ]);
   }
@@ -3482,6 +3608,63 @@
         h("span", { class: "panel-tag" }, ["fact_agent_actions"])]),
       h("div", { class: "queue-wrap" }, [svg, legend]),
       mini
+    ]);
+  }
+
+  // Full-width Agent Action Queue table (reference parity). Rows come from the
+  // native approval queue (pending) + executed history.
+  function agentActionQueueTable() {
+    var pending = (state.approvals.pending || []).slice(0, 4);
+    var executed = (state.approvals.history || []).slice(0, 2);
+    var table = h("table", { class: "result-table aaq-table" });
+    var thead = h("thead"), htr = h("tr");
+    ["Account", "Recommended action", "Approval", "Execution", "Protected"].forEach(function (c, i) {
+      htr.appendChild(h("th", { class: i === 4 ? "num" : "" }, [c]));
+    });
+    thead.appendChild(htr); table.appendChild(thead);
+    var tb = h("tbody");
+
+    pending.forEach(function (a) {
+      var approve = h("button", { class: "mini-btn go solid" }, ["Approve & execute"]);
+      approve.addEventListener("click", function () { goto("approvals"); });
+      var inspect = h("button", { class: "linklike" }, ["Inspect agent \u2192"]);
+      inspect.addEventListener("click", function () { goto("cowork"); });
+      tb.appendChild(h("tr", {}, [
+        h("td", {}, [h("a", { class: "aaq-acct", href: snowsightObjHref("view", "GOLD_AGENT_ACTION_QUEUE"), target: "_blank", rel: "noopener" }, [a.accountId || a.accountName]),
+          h("span", { class: "aaq-sub" }, [a.region || ""])]),
+        h("td", {}, [a.recommendation || a.play || "\u2014"]),
+        h("td", {}, [approvalPill("Pending")]),
+        h("td", {}, [h("div", { class: "aaq-exec" }, [h("span", { class: "exec-badge warn" }, ["Waiting"]), h("div", { class: "aaq-actions" }, [approve, inspect])])]),
+        h("td", { class: "num" }, [money(a.expectedRevenueProtected || a.revenueAtRisk || 0)])
+      ]));
+    });
+    executed.forEach(function (r) {
+      var inspect = h("button", { class: "linklike" }, ["Inspect agent \u2192"]);
+      inspect.addEventListener("click", function () { goto("cowork"); });
+      tb.appendChild(h("tr", {}, [
+        h("td", {}, [h("a", { class: "aaq-acct", href: snowsightObjHref("view", "GOLD_AGENT_ACTION_QUEUE"), target: "_blank", rel: "noopener" }, [r.accountId || r.accountName]),
+          h("span", { class: "aaq-sub" }, [r.region || ""])]),
+        h("td", {}, [r.recommendation || "\u2014"]),
+        h("td", {}, [approvalPill("Approved")]),
+        h("td", {}, [h("div", { class: "aaq-exec" }, [h("span", { class: "exec-badge good" }, ["Executed"]), inspect])]),
+        h("td", { class: "num" }, [money(r.actualRevenueProtected || 0)])
+      ]));
+    });
+    if (!pending.length && !executed.length) {
+      tb.appendChild(h("tr", {}, [h("td", { colspan: "5" }, [h("span", { class: "analyst-note" }, ["Loading the governed action queue\u2026"])])]));
+    }
+    table.appendChild(tb);
+
+    return h("article", { class: "panel col-12 aaq-panel" }, [
+      h("div", { class: "panel-head" }, [
+        h("div", {}, [h("h2", {}, ["Agent Action Queue"]), h("p", {}, ["Approve & execute starts a governed Domo Workflow (human approval + writeback to Snowflake)"])]),
+        h("div", { class: "panel-head-actions" }, [
+          (function () { var b = h("button", { class: "linklike strong" }, ["Approvals \u2192"]); b.addEventListener("click", function () { goto("approvals"); }); return b; })(),
+          srcLink("GOLD_AGENT_ACTION_QUEUE", snowsightObjHref("view", "GOLD_AGENT_ACTION_QUEUE"), "sf")
+        ])
+      ]),
+      h("div", { class: "table-wrap" }, [table]),
+      h("p", { class: "aaq-foot" }, ["Cortex Agent called from Domo: ", h("a", { class: "src-link sf", href: snowsightAgentHref(), target: "_blank", rel: "noopener" }, ["REVENUE_CC_AGENT", h("span", { class: "src-arrow" }, ["\u2197"])]), " \u00b7 human approval routed through the native Domo Task Center queue."])
     ]);
   }
 
@@ -3536,21 +3719,26 @@
   function renderHome(data) {
     var frag = document.createDocumentFragment();
     var banner = connBanner(); if (banner) frag.appendChild(banner);
+    // Pull the account-level action queue for the home table (deferred so the
+    // synchronous loader can't re-enter this render pass).
+    if (!state.approvals.loaded && !state.approvals.loading) setTimeout(loadApprovals, 0);
+
     var k = data.kpis;
+    var histActuals = ((data.revenueForecast && data.revenueForecast.history) || []).map(function (p) { return p.actual; }).slice(-12);
     frag.appendChild(h("section", { class: "kpi-row" }, [
-      kpiCard(k.netRevenue),
-      kpiCard(k.revenueAtRisk, { cls: "is-warn sf-intel" }),
-      kpiCard(k.protectedRevenue, { cls: "is-good" }),
-      kpiCard(k.slaBreachRate, { cls: "is-alt" })
+      kpiCard(k.netRevenue, { spark: histActuals, sparkColor: "var(--domo-blue)" }),
+      kpiCard(k.revenueAtRisk, { cls: "is-warn", chip: "exposed", chipCls: "warn", spark: trendSeries(k.revenueAtRisk.value, 1), sparkColor: "var(--domo-orange)" }),
+      kpiCard(k.protectedRevenue, { cls: "is-good", chip: "recovered", chipCls: "up", spark: trendSeries(k.protectedRevenue.value, 1), sparkColor: "var(--accent-sage)" }),
+      kpiCard(k.slaBreachRate, { cls: "is-alt", chip: "trending", spark: trendSeries((k.slaBreachRate && k.slaBreachRate.breaches) || k.slaBreachRate.value, 1), sparkColor: "var(--accent-violet)" })
     ]));
-    frag.appendChild(h("section", { class: "grid" }, [
-      forecastChart(data),
-      insightRail(data),
-      regionalPanel(data),
-      queuePanel(data),
-      sourcesPanel(),
-      journeyPanel()
-    ]));
+    // Full-width forecast.
+    frag.appendChild(h("section", { class: "grid" }, [forecastChart(data)]));
+    // Two-column: Regional Renewal Risk + Insight Rail.
+    frag.appendChild(h("section", { class: "grid" }, [regionalPanel(data), insightRail(data)]));
+    // Full-width Agent Action Queue.
+    frag.appendChild(h("section", { class: "grid" }, [agentActionQueueTable()]));
+    // Full-width Governed Data Lineage.
+    frag.appendChild(h("section", { class: "grid" }, [sourcesPanel()]));
     return frag;
   }
 

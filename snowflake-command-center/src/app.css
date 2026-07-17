@@ -1016,6 +1016,57 @@
 .fc-tip-r .sw.band { background: linear-gradient(var(--sf-blue), rgba(41, 181, 232, 0.12)); }
 /* forecast legend band swatch matches the Snowflake interval fill */
 .chart-legend .lg-band { background: linear-gradient(rgba(41, 181, 232, 0.34), rgba(41, 181, 232, 0.06)); }
+.chart-legend .lg-today { width: 0; height: 13px; border-left: 2px dashed var(--sf-blue); }
+
+/* Forecast panel: eyebrow, range/band toggles, in-panel mini-stats */
+.fc-eyebrow { display: block; font-size: 10px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: var(--sf-blue-deep); margin-bottom: 3px; }
+.fc-panel .panel-head { align-items: flex-start; }
+.fc-toggle { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--r-pill); overflow: hidden; }
+.fc-toggle-btn { font-family: var(--font-sans); font-size: 11px; font-weight: 700; color: var(--muted); background: var(--surface); border: 0; padding: 4px 11px; cursor: pointer; transition: background .12s, color .12s; }
+.fc-toggle-btn + .fc-toggle-btn { border-left: 1px solid var(--line); }
+.fc-toggle-btn.active { background: var(--domo-blue); color: #fff; }
+.fc-band-btn { font-family: var(--font-sans); font-size: 11px; font-weight: 700; color: var(--muted); background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-pill); padding: 4px 11px; cursor: pointer; }
+.fc-band-btn.active { color: var(--sf-blue-deep); border-color: var(--sf-blue); background: rgba(41,181,232,0.07); }
+.fc-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 4px 0 6px; padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.fc-stat { display: flex; flex-direction: column; gap: 2px; }
+.fc-stat-lab { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.fc-stat-val { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; color: var(--n-700); font-variant-numeric: tabular-nums; }
+.fc-stat-sub { font-size: 11px; color: var(--muted); font-weight: 600; }
+.fc-stat-sub.up { color: var(--status-good); }
+.fc-stat-sub.down { color: var(--status-bad); }
+
+/* Regional bars: room for the HOTSPOT tag on the label */
+.region-bars .bar-row { grid-template-columns: 150px 1fr 132px; }
+.region-bars .bar-label { display: flex; align-items: center; gap: 8px; }
+.hotspot { font-size: 8.5px; font-weight: 800; letter-spacing: 0.04em; color: var(--domo-orange); background: var(--status-warn-bg); border: 1px solid #f2c98a; padding: 1px 5px; border-radius: var(--r-pill); }
+.bar-flag.hot { color: #fff; background: var(--domo-orange); }
+
+/* Insight rail: agent-grounded tag + action links */
+.panel-tag.agent { display: inline-flex; align-items: center; gap: 5px; color: var(--sf-blue-deep); background: rgba(41,181,232,0.08); border: 1px solid rgba(41,181,232,0.3); }
+.panel-tag .tag-mark { width: 12px; height: 12px; }
+.insight-link { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-sans); font-size: 11.5px; font-weight: 700; color: var(--sf-blue-deep); background: none; border: 0; padding: 0; cursor: pointer; }
+.insight-link:hover { color: var(--domo-blue-deep); }
+.insight-link .il-arrow { transition: transform .12s; }
+.insight-link:hover .il-arrow { transform: translateX(2px); }
+
+/* Agent Action Queue table */
+.aaq-table td { vertical-align: middle; }
+.aaq-table td.num, .aaq-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.aaq-acct { font-weight: 700; color: var(--domo-blue-ink); text-decoration: none; }
+.aaq-acct:hover { text-decoration: underline; }
+.aaq-sub { display: block; font-size: 10.5px; color: var(--muted); font-weight: 500; }
+.aaq-exec { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.aaq-actions { display: inline-flex; align-items: center; gap: 10px; }
+.exec-badge { font-size: 10px; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; padding: 2px 8px; border-radius: var(--r-pill); }
+.exec-badge.warn { color: var(--status-warn); background: var(--status-warn-bg); }
+.exec-badge.good { color: var(--status-good); background: var(--status-good-bg); }
+.mini-btn.go.solid { color: #fff; background: var(--domo-blue); border-color: var(--domo-blue); }
+.mini-btn.go.solid:hover { background: var(--domo-blue-deep); }
+.linklike { font-family: var(--font-sans); font-size: 11.5px; font-weight: 700; color: var(--sf-blue-deep); background: none; border: 0; padding: 0; cursor: pointer; }
+.linklike:hover { text-decoration: underline; }
+.linklike.strong { color: var(--domo-blue-deep); }
+.aaq-foot { margin: 12px 2px 0; font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+.aaq-foot .src-link { padding: 1px 7px; }
 
 @media (max-width: 1000px) {
   .chat-layout, .sem-graph { grid-template-columns: 1fr; }
