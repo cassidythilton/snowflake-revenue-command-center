@@ -26,8 +26,8 @@
       items: ["Score any account live from the Model Registry", "Request / response inspector (SQL · curl · Python)", "Accept a prediction \u2192 seeds a scenario"] },
     { id: "approvals", label: "Approvals", sprint: 6, mark: "domo-approvals.svg",
       items: ["Native Domo Task Center approval queue", "In-app Approve / Reject resumes the workflow", "Cortex Agent save plays start governed approvals \u2014 status writes back to Snowflake"] },
-    { id: "ops", label: "Snowflake Ops", sprint: 5, mark: "snowflake-mark.svg",
-      items: ["Hybrid Tables workspace", "Browse / add / edit / delete scenario runs", "Prediction feedback CRUD (operational memory)"] },
+    { id: "ops", label: "Hybrid Tables", sprint: 5, mark: "snowflake-mark.svg",
+      items: ["Operational state in Snowflake Hybrid Tables (OLTP)", "What-if scenario runs \u2014 browse / add / edit / delete", "Human prediction feedback on the model (operational memory)"] },
     { id: "readiness", label: "Horizon AI Readiness", sprint: 7, mark: "domo-pdp.svg",
       items: ["AI Readiness control plane \u2014 Horizon prepared \u2192 Domo AI Readiness synced, column-level", "Two-persona parity test \u2014 same question, different governed rows", "Row-access + column-masking policies enforced at the query engine"] },
     { id: "semantic", label: "Semantic Model", sprint: 4, mark: "snowflake-cortex.svg",
@@ -109,7 +109,7 @@
     config: { warehouse: "REVENUE_CC_WH", database: "SNOWFLAKE_REVENUE_CC", schema: "CORE", role: "REVENUE_CC_READER", view: "REVENUE_CC_ANALYST" },
     agent: { question: "", loading: false, error: null, result: null, queue: [], seed: null, inspector: false },
     ml: { accountId: "", loading: false, error: null, result: null, inspector: false, seed: null, codeTab: "curl", fbNote: "" },
-    ops: { loading: false, loaded: false, error: null, scenarios: [], feedback: [], note: null, tab: "scenarios", selected: null },
+    ops: { loading: false, loaded: false, error: null, scenarios: [], feedback: [], note: null, tab: "scenarios", selected: null, adding: false },
     approvals: { loading: false, loaded: false, error: null, live: false, seed: null, pending: [], writeback: [], history: [], protected: null, byId: {}, active: null, note: null, busy: null,
       tasks: [], tasksLoaded: false, tasksLoading: false, tasksLive: false, busyTask: null, starting: null },
     governance: { loading: false, loaded: false, error: null, live: false, seed: null, parity: null, masking: null, rlSelected: null, synced: {}, wiped: {}, showDetail: false },
@@ -2014,7 +2014,7 @@
             assumptionNotes: "Seeded from Snowflake ML score (" + ((res.model && res.model.name) || "REVENUE_CC_RISK_MODEL") + ").",
             projectedRevenueAtRisk: (res.predictedClass === 1 ? Number(res.arr) || 0 : 0), status: "Open", createdBy: state.persona });
         })
-        .then(function () { setNote(decision === "Accept" ? "Saved to SCENARIO_RUNS \u2014 review in Snowflake Ops \u2192" : "Feedback saved to PREDICTION_FEEDBACK."); state.ops.loaded = false; renderView(); })
+        .then(function () { setNote(decision === "Accept" ? "Saved to SCENARIO_RUNS \u2014 review in Hybrid Tables \u2192" : "Feedback saved to PREDICTION_FEEDBACK."); state.ops.loaded = false; renderView(); })
         .catch(function (err) { setNote("Write failed: " + (err && err.message ? err.message : err)); renderView(); });
     } else {
       setNote("Sample mode \u2014 captured locally. Connect the bridge to persist to the Hybrid Tables.");
@@ -2108,126 +2108,184 @@
     }
   }
 
-  var SCEN_STATUS = ["Open", "Mitigating", "Closed"];
-  function cycleStatus(s) { var i = SCEN_STATUS.indexOf(s || "Open"); return SCEN_STATUS[(i + 1) % SCEN_STATUS.length]; }
-
-  function scenarioCard(sc) {
-    var next = cycleStatus(sc.status);
-    var statusBtn = h("button", { class: "pill-btn ghost xs" }, ["Set " + next]);
-    statusBtn.addEventListener("click", function () {
-      opsMutate("updateScenarioStatus", { scenarioId: sc.scenarioId, status: next }, function () { sc.status = next; });
-    });
-    var delBtn = h("button", { class: "pill-btn ghost xs danger" }, ["Delete"]);
-    delBtn.addEventListener("click", function () {
-      opsMutate("deleteScenario", { scenarioId: sc.scenarioId }, function () { state.ops.scenarios = state.ops.scenarios.filter(function (x) { return x !== sc; }); });
-    });
-    var viewBtn = h("button", { class: "pill-btn ghost xs" }, ["View"]);
-    viewBtn.addEventListener("click", function () { state.ops.selected = sc; renderView(); scrollToSelected(); });
-    var stCls = sc.status === "Closed" ? "good" : sc.status === "Mitigating" ? "warn" : "info";
-    return h("article", { class: "scen-card" + (state.ops.selected === sc ? " selected" : "") }, [
-      h("div", { class: "scen-top" }, [
-        h("div", {}, [h("span", { class: "scen-account" }, [sc.accountName || sc.accountId]), h("span", { class: "scen-meta" }, [(sc.region || "") + " \u00b7 " + (sc.segment || "") + " \u00b7 " + (sc.accountId || "")])]),
-        h("span", { class: "scen-status " + stCls }, [sc.status || "Open"])
-      ]),
-      h("div", { class: "scen-name" }, [sc.scenarioName || "Scenario"]),
-      sc.assumptionNotes ? h("p", { class: "scen-notes" }, [sc.assumptionNotes]) : null,
-      h("div", { class: "scen-foot" }, [
-        h("span", { class: "scen-chip" }, ["P(risk) " + ((Number(sc.predictedRiskProbability) || 0) * 100).toFixed(0) + "%"]),
-        h("span", { class: "scen-chip" }, [money(sc.projectedRevenueAtRisk) + " at risk"]),
-        sc.createdBy ? h("span", { class: "scen-by" }, ["by " + sc.createdBy]) : null
-      ]),
-      h("div", { class: "scen-actions" }, [viewBtn, statusBtn, delBtn])
-    ]);
+  var SCEN_STATUS = ["Open", "Mitigating", "Under Review", "Accepted", "Closed"];
+  function scenStatusCls(s) {
+    s = String(s || "").toLowerCase();
+    if (/accept|closed|complete|done|resolved/.test(s)) return "good";
+    if (/mitigat|review|running|progress/.test(s)) return "warn";
+    if (/archiv|void|reject|downside/.test(s)) return "bad";
+    return "info";
   }
+  function scenStatusPill(s) { return h("span", { class: "scen-pill " + scenStatusCls(s) }, [h("span", { class: "scen-dot" }), s || "Open"]); }
   function scrollToSelected() { requestAnimationFrame(function () { var el2 = document.querySelector(".ops-selected"); if (el2) el2.scrollIntoView({ behavior: "smooth", block: "nearest" }); }); }
+
+  // One scenario run row in the Hybrid Table (SCENARIO_RUNS) table.
+  function scenarioRow(sc) {
+    var selected = state.ops.selected === sc;
+    var editBtn = h("button", { class: "ico-btn", title: "View / edit run", html: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M11 4H4v16h16v-7'/><path d='M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z'/></svg>" });
+    editBtn.addEventListener("click", function (e) { e.stopPropagation(); state.ops.selected = sc; renderView(); scrollToSelected(); });
+    var delBtn = h("button", { class: "ico-btn danger", title: "Delete run", html: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14'/></svg>" });
+    delBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      opsMutate("deleteScenario", { scenarioId: sc.scenarioId }, function () { state.ops.scenarios = state.ops.scenarios.filter(function (x) { return x !== sc; }); if (state.ops.selected === sc) state.ops.selected = null; });
+    });
+    var tr = h("tr", { class: "scen-row" + (selected ? " selected" : "") }, [
+      h("td", {}, [h("div", { class: "scen-cell" }, [
+        h("span", { class: "scen-name" }, [sc.scenarioName || "Scenario"]),
+        h("span", { class: "scen-sub" }, [(sc.accountName || sc.accountId || "") + (sc.region ? " \u00b7 " + sc.region : "") + (sc.segment ? " \u00b7 " + sc.segment : "")])
+      ])]),
+      h("td", {}, [scenStatusPill(sc.status)]),
+      h("td", {}, [h("span", { class: "scen-by" }, [sc.createdBy || "\u2014"])]),
+      h("td", { class: "num" }, [h("span", { class: "scen-risk" }, [money(sc.projectedRevenueAtRisk)])]),
+      h("td", {}, [h("div", { class: "scen-acts" }, [editBtn, delBtn])])
+    ]);
+    tr.addEventListener("click", function () { state.ops.selected = sc; renderView(); scrollToSelected(); });
+    return tr;
+  }
 
   function feedbackRow(f) {
     var vCls = /agree/i.test(f.humanVerdict) && !/dis/i.test(f.humanVerdict) ? "good" : /disagree/i.test(f.humanVerdict) ? "bad" : "warn";
     return h("tr", {}, [
-      h("td", {}, [f.accountId]),
+      h("td", {}, [h("code", { class: "scen-acct" }, [f.accountId])]),
       h("td", {}, [h("span", { class: "verdict " + vCls }, [f.humanVerdict || "\u2014"])]),
       h("td", { class: "num" }, [((Number(f.predictedRiskProbability) || 0) * 100).toFixed(0) + "%"]),
+      h("td", {}, [f.correctedLabel || "\u2014"]),
       h("td", {}, [f.modelVersion ? (/^v/i.test(f.modelVersion) ? f.modelVersion : "v" + f.modelVersion) : "\u2014"]),
       h("td", {}, [f.comment || "\u2014"]),
       h("td", {}, [f.createdBy || "\u2014"])
     ]);
   }
 
-  function newScenarioForm() {
-    var acc = h("input", { class: "ops-in", type: "text", placeholder: "Account id (ACC-00008)" });
-    var name = h("input", { class: "ops-in", type: "text", placeholder: "Scenario name" });
-    var risk = h("input", { class: "ops-in sm", type: "text", placeholder: "Rev at risk ($)" });
-    var notes = h("input", { class: "ops-in wide", type: "text", placeholder: "Assumption notes" });
-    var add = h("button", { class: "pill-btn go solid" }, ["Add scenario"]);
+  // Inline "Add row" editor (toggled) — mirrors the Lakebase add-row form.
+  function opsAddForm() {
+    var wrap = h("div", { class: "ops-addform" });
+    var cancel = h("button", { class: "linklike" }, ["Cancel"]);
+    cancel.addEventListener("click", function () { state.ops.adding = false; renderView(); });
+    if (state.ops.tab === "feedback") {
+      var facc = h("input", { class: "ops-in", type: "text", placeholder: "ACC-00008" });
+      var verdict = h("select", { class: "ops-in" }, [h("option", {}, ["Agree"]), h("option", {}, ["Disagree"]), h("option", {}, ["Unsure"])]);
+      var corrected = h("input", { class: "ops-in", type: "text", placeholder: "Corrected label (optional)" });
+      var fby = h("input", { class: "ops-in", type: "text", value: state.persona });
+      var comment = h("textarea", { class: "ops-in ops-ta", rows: "2", placeholder: "Comment / rationale" });
+      var addF = h("button", { class: "pill-btn go solid" }, ["Add to Snowflake"]);
+      addF.addEventListener("click", function () {
+        var id = String(facc.value || "").trim().toUpperCase(); if (!id) { facc.focus(); return; }
+        var seedAcct = (state.ml.seed && (state.ml.seed.accounts || []).filter(function (a) { return a.accountId === id; })[0]) || {};
+        var payload = { accountId: id, modelVersion: (state.ml.seed && state.ml.seed.model && state.ml.seed.model.version) || "10.0",
+          predictedRiskProbability: seedAcct.predictedProbability || null, humanVerdict: verdict.value, correctedLabel: corrected.value || "", comment: comment.value || "", createdBy: fby.value || state.persona };
+        opsMutate("createFeedback", payload, function () { state.ops.feedback.unshift(Object.assign({ feedbackId: "local-" + Date.now(), createdTs: new Date().toISOString() }, payload)); });
+        state.ops.adding = false;
+      });
+      wrap.appendChild(h("div", { class: "ops-addform-head" }, [h("span", {}, ["Add prediction feedback"]), cancel]));
+      wrap.appendChild(h("div", { class: "ops-grid" }, [
+        opsField("Account id", facc), opsField("Verdict", verdict), opsField("Corrected label", corrected), opsField("Created by", fby)
+      ]));
+      wrap.appendChild(opsField("Comment", comment, true));
+      wrap.appendChild(addF);
+      return wrap;
+    }
+    var acc = h("input", { class: "ops-in", type: "text", placeholder: "ACC-00008" });
+    var name = h("input", { class: "ops-in", type: "text", placeholder: "e.g. West save play \u2014 aggressive" });
+    var status = h("select", { class: "ops-in" }, SCEN_STATUS.map(function (s) { return h("option", {}, [s]); }));
+    var by = h("input", { class: "ops-in", type: "text", value: state.persona });
+    var risk = h("input", { class: "ops-in", type: "text", placeholder: "$ e.g. 420000" });
+    var notes = h("textarea", { class: "ops-in ops-ta", rows: "3", placeholder: "Assumptions \u2014 free text or JSON, e.g. { \"segment\": \"West\", \"intervention\": \"exec outreach + reliability credit\" }" });
+    var add = h("button", { class: "pill-btn go solid" }, ["Add to Snowflake"]);
     add.addEventListener("click", function () {
-      var id = String(acc.value || "").trim().toUpperCase(); if (!id) return;
+      var id = String(acc.value || "").trim().toUpperCase(); if (!id) { acc.focus(); return; }
       var seedAcct = (state.ml.seed && (state.ml.seed.accounts || []).filter(function (a) { return a.accountId === id; })[0]) || {};
       var payload = { accountId: id, accountName: seedAcct.accountName || id, region: seedAcct.region || "", segment: seedAcct.segment || "",
         scenarioName: name.value || "What-if scenario", predictedRiskProbability: seedAcct.predictedProbability || null,
-        assumptionNotes: notes.value || "", projectedRevenueAtRisk: Number(String(risk.value).replace(/[^0-9.]/g, "")) || 0, status: "Open", createdBy: state.persona };
+        assumptionNotes: notes.value || "", projectedRevenueAtRisk: Number(String(risk.value).replace(/[^0-9.]/g, "")) || 0, status: status.value || "Open", createdBy: by.value || state.persona };
       opsMutate("createScenario", payload, function () { state.ops.scenarios.unshift(Object.assign({ scenarioId: "local-" + Date.now(), createdTs: new Date().toISOString() }, payload)); });
+      state.ops.adding = false;
     });
-    return h("div", { class: "ops-form" }, [acc, name, risk, notes, add]);
+    wrap.appendChild(h("div", { class: "ops-addform-head" }, [h("span", {}, ["Add scenario row"]), cancel]));
+    wrap.appendChild(h("div", { class: "ops-grid" }, [
+      opsField("Account id", acc), opsField("Scenario name", name), opsField("Status", status), opsField("Created by", by), opsField("Projected rev at risk", risk)
+    ]));
+    wrap.appendChild(opsField("Assumptions", notes, true));
+    wrap.appendChild(add);
+    return wrap;
+  }
+  function opsField(label, control, full) {
+    return h("label", { class: "ops-fld" + (full ? " full" : "") }, [h("span", { class: "ops-fld-lab" }, [label]), control]);
   }
 
-  function newFeedbackForm() {
-    var acc = h("input", { class: "ops-in", type: "text", placeholder: "Account id" });
-    var verdict = h("select", { class: "ops-in sm" }, [h("option", {}, ["Agree"]), h("option", {}, ["Disagree"]), h("option", {}, ["Unsure"])]);
-    var comment = h("input", { class: "ops-in wide", type: "text", placeholder: "Comment" });
-    var add = h("button", { class: "pill-btn go solid" }, ["Add feedback"]);
-    add.addEventListener("click", function () {
-      var id = String(acc.value || "").trim().toUpperCase(); if (!id) return;
-      var seedAcct = (state.ml.seed && (state.ml.seed.accounts || []).filter(function (a) { return a.accountId === id; })[0]) || {};
-      var payload = { accountId: id, modelVersion: (state.ml.seed && state.ml.seed.model && state.ml.seed.model.version) || "10.0",
-        predictedRiskProbability: seedAcct.predictedProbability || null, humanVerdict: verdict.value, correctedLabel: "", comment: comment.value || "", createdBy: state.persona };
-      opsMutate("createFeedback", payload, function () { state.ops.feedback.unshift(Object.assign({ feedbackId: "local-" + Date.now(), createdTs: new Date().toISOString() }, payload)); });
-    });
-    return h("div", { class: "ops-form" }, [acc, verdict, comment, add]);
-  }
-
-  // Lakebase-parity "Operational State" header: the Hybrid Table connection
-  // facts + live row counts + a refresh/open toolbar.
+  // "Operational State" header — Hybrid Table connection facts (reference parity).
   function opsStateHeader() {
     var cfg = state.config || {};
-    var activeTable = state.ops.tab === "feedback" ? "PREDICTION_FEEDBACK" : "SCENARIO_RUNS";
-    var rows = state.ops.tab === "feedback" ? state.ops.feedback.length : state.ops.scenarios.length;
     var cards = [
-      ["Engine", "Hybrid Tables (OLTP)"],
+      ["Engine", "Hybrid Tables \u00b7 OLTP"],
       ["Database", cfg.database || "SNOWFLAKE_REVENUE_CC"],
       ["Schema", cfg.schema || "CORE"],
-      ["Active table", activeTable],
-      ["Rows", num(rows)]
+      ["Tables", "SCENARIO_RUNS \u00b7 PREDICTION_FEEDBACK"],
+      ["Access", "REVENUE_CC_READER \u2192 REVENUE_CC_WRITER"]
     ];
     var row = h("div", { class: "ops-state-cards" });
     cards.forEach(function (c) { row.appendChild(h("div", { class: "osc" }, [h("span", { class: "osc-k" }, [c[0]]), h("span", { class: "osc-v" }, [c[1]])])); });
-    var refresh = h("button", { class: "pill-btn ghost xs" }, ["\u21bb Refresh"]);
-    refresh.addEventListener("click", function () { state.ops.loaded = false; state.ops.selected = null; loadOps(); });
     return h("article", { class: "panel col-12 ops-state" }, [
       h("div", { class: "ops-state-l" }, [
+        h("span", { class: "ops-eyebrow" }, [h("img", { class: "eyebrow-mark", src: "./public/brand/snowflake-mark.svg", alt: "" }), "SNOWFLAKE HYBRID TABLES \u00b7 OPERATIONAL STATE"]),
         h("div", { class: "ops-state-title" }, [
-          h("img", { class: "brand-mark", src: "./public/brand/snowflake-mark.svg", alt: "" }),
           h("h2", {}, ["Operational State"]),
           h("span", { class: "ml-serve " + (state.ops.live ? "on" : "seed") }, [state.ops.live ? "live \u00b7 in-warehouse OLTP" : "sample"])
         ]),
+        h("p", { class: "ops-state-lead" }, ["Millisecond OLTP state inside Snowflake \u2014 what-if scenario runs and human feedback on the model, governed by the same Horizon roles as the analytics."]),
         row
-      ]),
-      h("div", { class: "ops-state-r" }, [refresh])
+      ])
     ]);
   }
 
-  // Selected scenario detail (ARGUMENTS + RESULTS), mirroring the Lakebase
-  // "selected run" inspector.
+  // Section toolbar: active-table facts + Open in Snowsight / Refresh / Add row.
+  function opsToolbar() {
+    var cfg = state.config || {};
+    var isFb = state.ops.tab === "feedback";
+    var table = isFb ? "PREDICTION_FEEDBACK" : "SCENARIO_RUNS";
+    var rows = isFb ? state.ops.feedback.length : state.ops.scenarios.length;
+    var fqn = (cfg.database || "SNOWFLAKE_REVENUE_CC") + "." + (cfg.schema || "CORE") + "." + table;
+    var refresh = h("button", { class: "pill-btn ghost xs" }, ["\u21bb Refresh"]);
+    refresh.addEventListener("click", function () { state.ops.loaded = false; state.ops.selected = null; state.ops.adding = false; loadOps(); });
+    var addBtn = h("button", { class: "pill-btn go solid xs" }, [state.ops.adding ? "\u00d7 Close" : "+ Add row"]);
+    addBtn.addEventListener("click", function () { state.ops.adding = !state.ops.adding; renderView(); });
+    return h("div", { class: "ops-toolbar" }, [
+      h("div", { class: "ops-tb-l" }, [
+        h("h3", {}, [isFb ? "Prediction Feedback" : "Scenario Runs", h("span", { class: "ops-tb-count" }, ["(" + num(rows) + ")"])]),
+        h("span", { class: "ops-tb-fqn" }, [num(rows) + " rows \u00b7 ", h("code", {}, [fqn])])
+      ]),
+      h("div", { class: "ops-tb-r" }, [
+        srcLink("Open in Snowsight", snowsightObjHref("table", table), "sf"),
+        refresh, addBtn
+      ])
+    ]);
+  }
+
+  // Selected scenario detail (ASSUMPTIONS + RESULTS + governed status control).
   function opsSelectedDetail() {
     var sc = state.ops.selected; if (!sc) return null;
-    var args = { accountId: sc.accountId, accountName: sc.accountName, region: sc.region, segment: sc.segment, scenarioName: sc.scenarioName, createdBy: sc.createdBy };
-    var results = { status: sc.status, predictedRiskProbability: Number(sc.predictedRiskProbability) || 0, projectedRevenueAtRisk: Number(sc.projectedRevenueAtRisk) || 0, assumptionNotes: sc.assumptionNotes || "" };
+    var assumptions = { accountId: sc.accountId, accountName: sc.accountName, region: sc.region, segment: sc.segment, scenarioName: sc.scenarioName, createdBy: sc.createdBy, assumptionNotes: sc.assumptionNotes || "" };
+    var results = { status: sc.status, predictedRiskProbability: Number(sc.predictedRiskProbability) || 0, projectedRevenueAtRisk: Number(sc.projectedRevenueAtRisk) || 0 };
+
+    var statusSel = h("select", { class: "ops-in sm" }, SCEN_STATUS.map(function (s) { var o = h("option", {}, [s]); if (s === sc.status) o.selected = true; return o; }));
+    statusSel.addEventListener("change", function () {
+      var next = statusSel.value;
+      opsMutate("updateScenarioStatus", { scenarioId: sc.scenarioId, status: next }, function () { sc.status = next; });
+    });
+    var closeBtn = h("button", { class: "mini-btn ghost" }, ["Close"]);
+    closeBtn.addEventListener("click", function () { state.ops.selected = null; renderView(); });
+
     return h("article", { class: "panel col-12 ops-selected" }, [
-      h("div", { class: "panel-head" }, [h("div", {}, [h("h2", {}, ["Selected run \u00b7 " + (sc.accountName || sc.accountId)]), h("p", {}, [(sc.scenarioName || "Scenario") + " \u00b7 " + (sc.scenarioId || "")])]),
-        (function () { var b = h("button", { class: "mini-btn ghost" }, ["Close"]); b.addEventListener("click", function () { state.ops.selected = null; renderView(); }); return b; })()],
-      ),
+      h("div", { class: "panel-head" }, [
+        h("div", {}, [h("h2", {}, ["Selected run \u00b7 " + (sc.scenarioName || "Scenario")]), h("p", {}, [(sc.accountName || sc.accountId || "") + " \u00b7 ", h("code", {}, [String(sc.scenarioId || "")])])]),
+        h("div", { class: "ops-sel-tools" }, [
+          h("label", { class: "ops-sel-status" }, [h("span", {}, ["Status"]), statusSel]),
+          srcLink("Open source table", snowsightObjHref("table", "SCENARIO_RUNS"), "sf"),
+          closeBtn
+        ])
+      ]),
       h("div", { class: "ops-sel-grid" }, [
-        h("div", {}, [h("div", { class: "insp-label" }, ["Arguments"]), h("pre", { class: "sql-block" }, [h("code", {}, [JSON.stringify(args, null, 2)])])]),
-        h("div", {}, [h("div", { class: "insp-label" }, ["Results"]), h("pre", { class: "sql-block" }, [h("code", {}, [JSON.stringify(results, null, 2)])])])
+        h("div", {}, [h("div", { class: "insp-label" }, ["Assumptions"]), h("pre", { class: "sql-block" }, [h("code", {}, [JSON.stringify(assumptions, null, 2)])])]),
+        h("div", {}, [h("div", { class: "insp-label" }, ["Results (writeback)"]), h("pre", { class: "sql-block" }, [h("code", {}, [JSON.stringify(results, null, 2)])])])
       ])
     ]);
   }
@@ -2240,45 +2298,48 @@
     if (state.ops.loading) { frag.appendChild(h("div", { class: "analyst-loading" }, [h("span", { class: "spinner" }), "Reading the Hybrid Tables (operational state)\u2026"])); return frag; }
 
     frag.appendChild(h("section", { class: "grid" }, [opsStateHeader()]));
+    if (state.ops.note) frag.appendChild(h("div", { class: "ops-note" }, [state.ops.note]));
 
-    if (state.ops.note) {
-      frag.appendChild(h("div", { class: "ops-note" }, [state.ops.note]));
-    }
-
-    // Sub-tabs
+    // Sub-tabs (table selector)
     var subtabs = h("div", { class: "ops-subtabs" });
-    [["scenarios", "Scenario runs", state.ops.scenarios.length], ["feedback", "Prediction feedback", state.ops.feedback.length]].forEach(function (t) {
+    [["scenarios", "Scenario Runs", state.ops.scenarios.length], ["feedback", "Prediction Feedback", state.ops.feedback.length]].forEach(function (t) {
       var b = h("button", { class: "ops-subtab" + (state.ops.tab === t[0] ? " active" : "") }, [t[1] + " (" + t[2] + ")"]);
-      b.addEventListener("click", function () { state.ops.tab = t[0]; renderView(); });
+      b.addEventListener("click", function () { state.ops.tab = t[0]; state.ops.adding = false; state.ops.selected = null; renderView(); });
       subtabs.appendChild(b);
     });
-    frag.appendChild(h("div", { class: "ops-head" }, [
-      h("div", {}, [h("h2", { class: "ops-title" }, ["Snowflake Ops \u00b7 Hybrid Tables"]),
-        h("p", { class: "ops-sub" }, ["Millisecond OLTP state inside Snowflake \u2014 what-if scenarios and human feedback on the model, governed by the same roles."])]),
-      subtabs
-    ]));
+    frag.appendChild(subtabs);
+
+    // The table lives inside one white bounding box (reference parity).
+    var panelKids = [opsToolbar()];
+    if (state.ops.adding) panelKids.push(opsAddForm());
 
     if (state.ops.tab === "scenarios") {
-      frag.appendChild(newScenarioForm());
-      var grid = h("div", { class: "scen-grid" });
-      if (!state.ops.scenarios.length) grid.appendChild(h("p", { class: "analyst-note" }, ["No scenarios yet. Accept a prediction on the Snowflake ML tab or add one above."]));
-      state.ops.scenarios.forEach(function (sc) { grid.appendChild(scenarioCard(sc)); });
-      frag.appendChild(grid);
-      var det = opsSelectedDetail(); if (det) frag.appendChild(h("section", { class: "grid" }, [det]));
+      if (!state.ops.scenarios.length) {
+        panelKids.push(h("div", { class: "ops-empty" }, ["No scenario runs yet. Accept a prediction on the Snowflake ML tab, or use ", h("b", {}, ["+ Add row"]), " to write one to the hybrid table."]));
+      } else {
+        var table = h("table", { class: "result-table ops-scen-table" });
+        var thead = h("thead"), htr = h("tr");
+        ["Scenario", "Status", "Created by", "Rev at risk", ""].forEach(function (c, i) { htr.appendChild(h("th", { class: i === 3 ? "num" : "" }, [c])); });
+        thead.appendChild(htr); table.appendChild(thead);
+        var tb = h("tbody"); state.ops.scenarios.forEach(function (sc) { tb.appendChild(scenarioRow(sc)); }); table.appendChild(tb);
+        panelKids.push(h("div", { class: "table-wrap" }, [table]));
+      }
     } else {
-      frag.appendChild(newFeedbackForm());
-      var table = h("table", { class: "result-table ops-table" });
-      var thead = h("thead"), htr = h("tr");
-      ["Account", "Verdict", "P(risk)", "Model", "Comment", "By"].forEach(function (c) { htr.appendChild(h("th", {}, [c])); });
-      thead.appendChild(htr); table.appendChild(thead);
-      var tb = h("tbody");
-      if (!state.ops.feedback.length) { var tr = h("tr"); tr.appendChild(h("td", { colspan: "6" }, ["No feedback yet."])); tb.appendChild(tr); }
-      state.ops.feedback.forEach(function (f) { tb.appendChild(feedbackRow(f)); });
-      table.appendChild(tb);
-      frag.appendChild(h("div", { class: "table-wrap" }, [table]));
+      if (!state.ops.feedback.length) {
+        panelKids.push(h("div", { class: "ops-empty" }, ["No prediction feedback yet. Capture a verdict on the Snowflake ML tab, or use ", h("b", {}, ["+ Add row"]), "."]));
+      } else {
+        var ftable = h("table", { class: "result-table ops-table" });
+        var fthead = h("thead"), fhtr = h("tr");
+        ["Account", "Verdict", "P(risk)", "Corrected", "Model", "Comment", "By"].forEach(function (c) { fhtr.appendChild(h("th", {}, [c])); });
+        fthead.appendChild(fhtr); ftable.appendChild(fthead);
+        var ftb = h("tbody"); state.ops.feedback.forEach(function (f) { ftb.appendChild(feedbackRow(f)); }); ftable.appendChild(ftb);
+        panelKids.push(h("div", { class: "table-wrap" }, [ftable]));
+      }
     }
+    frag.appendChild(h("article", { class: "panel col-12 ops-panel" }, panelKids));
 
-    // Provenance footnote
+    if (state.ops.tab === "scenarios") { var det = opsSelectedDetail(); if (det) frag.appendChild(h("section", { class: "grid" }, [det])); }
+
     frag.appendChild(h("p", { class: "ops-prov" }, [
       (state.ops.live ? "Live " : "Sample "), "\u00b7 ",
       h("code", {}, ["SCENARIO_RUNS"]), " + ", h("code", {}, ["PREDICTION_FEEDBACK"]),
@@ -3492,7 +3553,7 @@
     { plane: "Predict", surface: "Forecast Home + Snowflake ML", tech: "SNOWFLAKE.ML classification \u2192 PREDICT_RENEWAL_RISK", mark: "snowflake-mark.svg" },
     { plane: "Explain", surface: "Cortex Analyst + Cortex Workspace", tech: "REVENUE_CC_ANALYST semantic view + REVENUE_CC_SEARCH", mark: "snowflake-cortex.svg" },
     { plane: "Act", surface: "Cortex Workspace + Approvals", tech: "REVENUE_CC_AGENT \u2192 AGENT_ACTION_WRITEBACK (WRITER)", mark: "domo-approvals.svg" },
-    { plane: "Remember", surface: "Snowflake Ops", tech: "Hybrid Tables: SCENARIO_RUNS, PREDICTION_FEEDBACK", mark: "domo-data.svg" },
+    { plane: "Remember", surface: "Hybrid Tables", tech: "Hybrid Tables: SCENARIO_RUNS, PREDICTION_FEEDBACK", mark: "domo-data.svg" },
     { plane: "Govern", surface: "Horizon AI Readiness", tech: "RAP_REGION + MASK_ARR + Cortex guardrails/observability", mark: "domo-pdp.svg" }
   ];
 
@@ -3598,7 +3659,7 @@
   };
   var SURFACE_DESC = {
     home: "Forecast & KPIs", analyst: "Ask in natural language", ml: "Score renewal risk",
-    approvals: "Human-in-the-loop queue", ops: "Hybrid Tables workspace", readiness: "Horizon \u2194 Domo AI",
+    approvals: "Human-in-the-loop queue", ops: "Scenarios & model feedback", readiness: "Horizon \u2194 Domo AI",
     semantic: "Governed vocabulary", cowork: "Embedded CoWork agent", chat: "Domo Chat v2 agent", how: "Architecture & lineage"
   };
   // Surfaces rendered in the meta group (rail footer separator above).
@@ -4001,7 +4062,7 @@
         link: ["Score an account", function () { goto("ml"); }] },
       { cls: "good", title: "Operational state is captured",
         body: "Scenario runs and prediction feedback persist in Snowflake Hybrid Tables \u2014 the loop remembers across sessions.",
-        link: ["Open Snowflake Ops", function () { goto("ops"); }] }
+        link: ["Open Hybrid Tables", function () { goto("ops"); }] }
     ];
     var rail = h("div", { class: "insight-rail" });
     items.forEach(function (it) {
