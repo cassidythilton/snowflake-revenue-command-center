@@ -3791,7 +3791,7 @@
   var ICO = "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'>";
   var SURFACE_ICONS = {
     home: ICO + "<path d='M3 3v18h18'/><path d='M6 15l4-5 3 3 5-7'/></svg>",
-    analyst: ICO + "<path d='M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/><path d='M7 9h10M7 13h6'/></svg>",
+    analyst: "<img src='./public/brand/snowflake-cortex.svg' alt='' />",
     ml: ICO + "<rect x='6' y='6' width='12' height='12' rx='2'/><rect x='10' y='10' width='4' height='4'/><path d='M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3'/></svg>",
     approvals: ICO + "<path d='M22 11.1V12a10 10 0 1 1-5.9-9.1'/><path d='M22 4L12 14.02l-3-3'/></svg>",
     ops: ICO + "<ellipse cx='12' cy='5' rx='8' ry='3'/><path d='M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5'/><path d='M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6'/></svg>",

@@ -1281,13 +1281,13 @@
 }
 .rl-tile img { width: 21px; height: 21px; display: block; filter: brightness(0) invert(1); }
 .rl-word {
-  display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap;
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px;
+  min-width: 0; white-space: nowrap;
   opacity: 0; transform: translateX(-6px); transition: opacity .2s ease, transform .2s ease;
 }
 .nav-rail:hover .rl-word, .app-root.rail-pinned .rl-word { opacity: 1; transform: translateX(0); }
-.rl-domo { font-size: 21px; font-weight: 800; letter-spacing: -0.03em; color: var(--domo-blue-ink); line-height: 1; }
-.rl-plus { font-size: 11px; font-weight: 600; color: var(--n-300); text-transform: lowercase; }
-.rl-sf { font-size: 13.5px; font-weight: 700; letter-spacing: -0.01em; color: var(--muted); line-height: 1; }
+.rl-domo { font-size: 21px; font-weight: 800; letter-spacing: -0.03em; color: var(--domo-blue-ink); line-height: 1.02; }
+.rl-sf { font-size: 12.5px; font-style: italic; font-weight: 600; letter-spacing: -0.005em; color: var(--muted); line-height: 1.1; }
 
 .rail-pin {
   flex: none; width: 30px; height: 30px; border-radius: 8px;
@@ -1327,6 +1327,7 @@
 
 .rail-ico { flex: none; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; color: var(--n-500); transition: color .15s ease; }
 .rail-ico svg { width: 20px; height: 20px; }
+.rail-ico img { width: 20px; height: 20px; object-fit: contain; display: block; }
 .rail-item:hover .rail-ico { color: var(--domo-blue-deep); }
 .rail-item.active .rail-ico { color: var(--domo-blue-deep); }
 
