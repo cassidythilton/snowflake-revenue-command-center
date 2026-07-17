@@ -124,6 +124,7 @@
     return "$" + v.toFixed(0);
   }
   function num(v) { return (Number(v) || 0).toLocaleString("en-US"); }
+  function toNum(v) { return Number(v) || 0; }
   function regionOf(persona) {
     var p = String(persona || "").toLowerCase();
     if (p.indexOf("west") > -1) return "West";
@@ -206,28 +207,29 @@
   function ymOf(d) { return d.getFullYear() + "-" + pad2(d.getMonth() + 1); }
   function ymdOf(d) { return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }
 
-  function lowerKeys(o) { var r = {}; if (o) Object.keys(o).forEach(function (k) { r[String(k).toLowerCase()] = o[k]; }); return r; }
+  // Parse Domo's SQL API columnar response. The payload is wrapped in .body
+  // (or .data): { columns:[names], rows:[[...]] }. Keys are lower-cased so
+  // consumers can reference columns case-insensitively.
+  function parseColumnar(res) {
+    var b = (res && (res.body || res.data)) || res || {};
+    var rawCols = b.columns || [];
+    var rows = b.rows || [];
+    var cols = rawCols.map(function (c) {
+      var name = (c && typeof c === "object") ? (c.name || c.alias || c.label || c.columnName) : c;
+      return String(name).toLowerCase();
+    });
+    return rows.map(function (row) {
+      var o = {};
+      if (Array.isArray(row)) cols.forEach(function (c, i) { o[c] = row[i]; });
+      else Object.keys(row || {}).forEach(function (k) { o[String(k).toLowerCase()] = row[k]; });
+      return o;
+    });
+  }
 
-  // Run a SQL statement against a federated (Cloud Amplifier) dataset alias and
-  // return row objects keyed by lower-cased column name. Domo's SQL API may
-  // return { columns:[...], rows:[[...]] } (columns as strings or metadata
-  // objects) or an array of row objects; handle all shapes and normalize casing.
+  // Run SQL against a federated (Cloud Amplifier) dataset alias. The dataset is
+  // referenced by its alias as the table name in FROM (Domo SQL API convention).
   function amplifierQuery(alias, sql) {
-    return domo.post("/sql/v1/" + alias, sql, { contentType: "text/plain" })
-      .then(function (res) {
-        if (!res) return [];
-        if (Array.isArray(res)) return res.map(lowerKeys);
-        var rows = res.rows || res.data || [];
-        var rawCols = res.columns || res.metadata || res.rowType || [];
-        var cols = rawCols.map(function (c) {
-          var name = (c && typeof c === "object") ? (c.name || c.alias || c.label || c.columnName) : c;
-          return String(name).toLowerCase();
-        });
-        return rows.map(function (row) {
-          if (Array.isArray(row)) { var o = {}; cols.forEach(function (c, i) { o[c] = row[i]; }); return o; }
-          return lowerKeys(row);
-        });
-      });
+    return domo.post("/sql/v1/" + alias, sql, { contentType: "text/plain" }).then(parseColumnar);
   }
 
   function loadDataViaAmplifier(persona) {
@@ -246,39 +248,40 @@
     };
 
     var qAV = "SELECT `FISCAL_PERIOD` AS period, SUM(`NET_REVENUE`) AS actual, SUM(`DAILY_ARR`) AS forecast " +
-      "FROM table WHERE 1=1" + regClause + " GROUP BY `FISCAL_PERIOD` ORDER BY `FISCAL_PERIOD` DESC LIMIT 14";
-    var qRar = "SELECT SUM(`REVENUE_AT_RISK`) AS v FROM table WHERE `RISK_MONTH` = '" + monthStart + "'" + regClause;
-    var qProtected = "SELECT SUM(`ACTUAL_REVENUE_PROTECTED`) AS v FROM table WHERE `EXECUTION_STATUS` = 'Executed'" + regClause;
+      "FROM " + CA.rev + " WHERE 1=1" + regClause + " GROUP BY `FISCAL_PERIOD` ORDER BY `FISCAL_PERIOD` DESC LIMIT 14";
+    var qRar = "SELECT SUM(`REVENUE_AT_RISK`) AS v FROM " + CA.risk + " WHERE `RISK_MONTH` = '" + monthStart + "'" + regClause;
+    var qProtected = "SELECT SUM(`ACTUAL_REVENUE_PROTECTED`) AS v FROM " + CA.actions + " WHERE `EXECUTION_STATUS` = 'Executed'" + regClause;
     var qSla = "SELECT SUM(CASE WHEN `SLA_BREACHED_FLAG` = 'true' THEN 1 ELSE 0 END) AS breaches, COUNT(*) AS cases " +
-      "FROM table WHERE `DATE` >= '" + date90 + "'" + regClause;
-    var qForecast = "SELECT `PERIOD_MONTH`, `KIND`, `ACTUAL`, `FORECAST`, `LOWER_BOUND`, `UPPER_BOUND` FROM table ORDER BY `PERIOD_MONTH`";
-    var qRegional = "SELECT `REGION`, `SEGMENT`, ROUND(AVG(`RENEWAL_RISK_SCORE`),1) AS avgrisk, " +
+      "FROM " + CA.support + " WHERE `DATE` >= '" + date90 + "'" + regClause;
+    var qForecast = "SELECT `PERIOD_MONTH` AS period_month, `KIND` AS kind, `ACTUAL` AS actual, `FORECAST` AS forecast, " +
+      "`LOWER_BOUND` AS lower_bound, `UPPER_BOUND` AS upper_bound FROM " + CA.forecast + " ORDER BY `PERIOD_MONTH`";
+    var qRegional = "SELECT `REGION` AS region, `SEGMENT` AS segment, ROUND(AVG(`RENEWAL_RISK_SCORE`),1) AS avgrisk, " +
       "SUM(CASE WHEN `RISK_TIER` = 'High' THEN 1 ELSE 0 END) AS highrisk, SUM(`REVENUE_AT_RISK`) AS rar " +
-      "FROM table WHERE `RISK_MONTH` = '" + monthStart + "'" + regClause + " GROUP BY `REGION`, `SEGMENT` ORDER BY rar DESC LIMIT 12";
+      "FROM " + CA.risk + " WHERE `RISK_MONTH` = '" + monthStart + "'" + regClause + " GROUP BY `REGION`, `SEGMENT` ORDER BY rar DESC LIMIT 12";
     var qQueue = "SELECT SUM(CASE WHEN `APPROVAL_STATUS`='Pending' THEN 1 ELSE 0 END) AS pending, " +
       "SUM(CASE WHEN `APPROVAL_STATUS`='Approved' THEN 1 ELSE 0 END) AS approved, " +
       "SUM(CASE WHEN `EXECUTION_STATUS`='Executed' THEN 1 ELSE 0 END) AS executed, " +
       "SUM(CASE WHEN `APPROVAL_STATUS`='Rejected' THEN 1 ELSE 0 END) AS rejected, " +
       "SUM(CASE WHEN `APPROVAL_STATUS`='Not Required' THEN 1 ELSE 0 END) AS notrequired " +
-      "FROM table WHERE 1=1" + regClause;
+      "FROM " + CA.actions + " WHERE 1=1" + regClause;
     var qTop = "SELECT `RECOMMENDATION` AS action, COUNT(*) AS cnt, SUM(`EXPECTED_REVENUE_PROTECTED`) AS rar " +
-      "FROM table WHERE 1=1" + regClause + " GROUP BY `RECOMMENDATION` ORDER BY cnt DESC LIMIT 5";
+      "FROM " + CA.actions + " WHERE 1=1" + regClause + " GROUP BY `RECOMMENDATION` ORDER BY cnt DESC LIMIT 5";
 
     return amplifierQuery(CA.rev, qAV).then(function (av) {
       if (!av.length) throw new Error("no federated revenue rows");
-      var cur = num(av[0].actual), prior = av.length > 1 ? num(av[1].actual) : 0;
+      var cur = toNum(av[0].actual), prior = av.length > 1 ? toNum(av[1].actual) : 0;
       out.kpis.netRevenue = { label: "Net Revenue (MTD)", value: cur, priorValue: prior,
         deltaPct: prior ? Math.round(((cur - prior) / prior) * 1000) / 10 : 0, unit: "USD" };
-      out.actualVsForecast = av.slice().reverse().map(function (r) { return { period: r.period, actual: num(r.actual), forecast: num(r.forecast) }; });
+      out.actualVsForecast = av.slice().reverse().map(function (r) { return { period: r.period, actual: toNum(r.actual), forecast: toNum(r.forecast) }; });
       return amplifierQuery(CA.risk, qRar);
     }).then(function (rows) {
-      out.kpis.revenueAtRisk = { label: "Revenue at Risk", value: num(rows[0] && rows[0].v), unit: "USD", context: "current month" };
+      out.kpis.revenueAtRisk = { label: "Revenue at Risk", value: toNum(rows[0] && rows[0].v), unit: "USD", context: "current month" };
       return amplifierQuery(CA.actions, qProtected);
     }).then(function (rows) {
-      out.kpis.protectedRevenue = { label: "Protected Revenue", value: num(rows[0] && rows[0].v), unit: "USD", context: "executed agent actions" };
+      out.kpis.protectedRevenue = { label: "Protected Revenue", value: toNum(rows[0] && rows[0].v), unit: "USD", context: "executed agent actions" };
       return amplifierQuery(CA.support, qSla);
     }).then(function (rows) {
-      var r = rows[0] || {}; var breaches = num(r.breaches), cases = num(r.cases);
+      var r = rows[0] || {}; var breaches = toNum(r.breaches), cases = toNum(r.cases);
       out.kpis.slaBreachRate = { label: "SLA Breach Rate (90d)", value: cases ? Math.round((breaches / cases) * 1000) / 10 : 0, unit: "%", breaches: breaches, cases: cases };
       return amplifierQuery(CA.forecast, qForecast).catch(function () { return []; });
     }).then(function (rows) {
@@ -286,27 +289,26 @@
         var history = [], forecast = [];
         rows.forEach(function (r) {
           var period = String(r.period_month || "").slice(0, 7);
-          if (String(r.kind) === "forecast") forecast.push({ period: period, forecast: num(r.forecast), lower: num(r.lower_bound), upper: num(r.upper_bound) });
-          else history.push({ period: period, actual: num(r.actual) });
+          if (String(r.kind) === "forecast") forecast.push({ period: period, forecast: toNum(r.forecast), lower: toNum(r.lower_bound), upper: toNum(r.upper_bound) });
+          else history.push({ period: period, actual: toNum(r.actual) });
         });
         out.revenueForecast = { source: "SNOWFLAKE_REVENUE_CC.CORE.GOLD_REVENUE_FORECAST via Cloud Amplifier (SNOWFLAKE.ML.FORECAST)",
           grain: "month", unit: "USD", predictionInterval: 0.95, history: history, forecast: forecast };
       }
       return amplifierQuery(CA.risk, qRegional);
     }).then(function (rows) {
-      out.regionalRisk = rows.map(function (r) { return { region: r.region, segment: r.segment, avgRisk: num(r.avgrisk), highRiskAccounts: num(r.highrisk), revenueAtRisk: num(r.rar) }; });
+      out.regionalRisk = rows.map(function (r) { return { region: r.region, segment: r.segment, avgRisk: toNum(r.avgrisk), highRiskAccounts: toNum(r.highrisk), revenueAtRisk: toNum(r.rar) }; });
       return amplifierQuery(CA.actions, qQueue);
     }).then(function (rows) {
       var r = rows[0] || {};
-      out.actionQueue = { pending: num(r.pending), approved: num(r.approved), executed: num(r.executed), rejected: num(r.rejected), notRequired: num(r.notrequired), topActions: [] };
+      out.actionQueue = { pending: toNum(r.pending), approved: toNum(r.approved), executed: toNum(r.executed), rejected: toNum(r.rejected), notRequired: toNum(r.notrequired), topActions: [] };
       return amplifierQuery(CA.actions, qTop);
     }).then(function (rows) {
-      out.actionQueue.topActions = rows.map(function (r) { return { action: r.action, count: num(r.cnt), revenueAtRisk: num(r.rar) }; });
+      out.actionQueue.topActions = rows.map(function (r) { return { action: r.action, count: toNum(r.cnt), revenueAtRisk: toNum(r.rar) }; });
       // Guard: if the federation read parsed to empty/zero (e.g. an unexpected
       // response shape), reject so loadData falls back to the Code Engine bridge
       // rather than rendering a $0 / NaN dashboard.
-      var nr = out.kpis.netRevenue ? num(out.kpis.netRevenue.value) : 0;
-      if (!(nr > 0)) throw new Error("Cloud Amplifier returned empty/zero data");
+      if (!(toNum(out.kpis.netRevenue && out.kpis.netRevenue.value) > 0)) throw new Error("Cloud Amplifier returned empty/zero data");
       return out;
     });
   }
