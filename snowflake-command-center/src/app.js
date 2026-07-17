@@ -20,24 +20,20 @@
   // an on-brand placeholder so the shell is complete and never fakes a gated tab.
   var SURFACES = [
     { id: "home", label: "Forecast Home", sprint: null },
-    { id: "chat", label: "Domo Chat v2", sprint: 9, mark: "domo-ai-agent.svg", gated: true,
-      items: ["Conversational delivery layer across governed Domo + Snowflake context", "MCP client \u2192 the Snowflake-managed MCP server (same Agent/Analyst/Search tools)", "Enabled in the target Domo instance \u2014 never simulated here"] },
     { id: "analyst", label: "Cortex Analyst", sprint: 3, mark: "snowflake-cortex.svg",
       items: ["Ask \u201cwhy\u201d in natural language over the governed semantic view", "Answer + generated SQL + result rows", "Domo-side chart reconstruction + API inspector"] },
-    { id: "semantic", label: "Semantic Model", sprint: 3, mark: "snowflake-cortex.svg",
-      items: ["Live entity graph of the governed semantic view", "Verified-query gallery (the queries Cortex trusts)", "Model DDL builder \u2014 evolve dimensions, metrics, relationships"] },
-    { id: "agents", label: "Cortex Agent Queue", sprint: 4, mark: "snowflake-cortex.svg",
-      items: ["One Cortex Agent (Analyst + Search + tools)", "Recommendations with human-approval gates", "Animated agent\u21c4agent Action Journey"] },
-    { id: "approvals", label: "Approvals", sprint: 6, mark: "domo-approvals.svg",
-      items: ["Workflow approval queue (open / completed / voided)", "In-app Approve / Reject resumes the workflow", "Status writes back to Snowflake"] },
     { id: "ml", label: "Snowflake ML", sprint: 5, mark: "snowflake-mark.svg",
       items: ["Score any account live from the Model Registry", "Request / response inspector (SQL · curl · Python)", "Accept a prediction \u2192 seeds a scenario"] },
+    { id: "approvals", label: "Approvals", sprint: 6, mark: "domo-approvals.svg",
+      items: ["Native Domo Task Center approval queue", "In-app Approve / Reject resumes the workflow", "Cortex Agent save plays start governed approvals \u2014 status writes back to Snowflake"] },
     { id: "ops", label: "Snowflake Ops", sprint: 5, mark: "snowflake-mark.svg",
       items: ["Hybrid Tables workspace", "Browse / add / edit / delete scenario runs", "Prediction feedback CRUD (operational memory)"] },
     { id: "readiness", label: "Horizon AI Readiness", sprint: 7, mark: "domo-pdp.svg",
-      items: ["Two-persona parity test \u2014 same question, different governed rows", "Row-access + column-masking policies enforced at the query engine", "Guardrails / observability status + Domo AI Readiness parity"] },
-    { id: "cowork", label: "CoWork \u00b7 MCP", sprint: 8, mark: "snowflake-cortex.svg",
-      items: ["Snowflake CoWork (Deep Research, Skills) scoped by Horizon", "Snowflake-managed MCP outward", "Domo Essentials MCP outward (beta follow-on)"] },
+      items: ["Two-persona parity test \u2014 same question, different governed rows", "Row-access + column-masking policies enforced at the query engine", "Governed semantic model \u2014 entity graph, verified queries, DDL builder"] },
+    { id: "cowork", label: "Cortex Workspace", sprint: 8, mark: "snowflake-cortex.svg",
+      items: ["Embedded CoWork agent conversation (Genie analog) via the snowflakece bridge", "Deep Research + Skills scoped by Horizon", "Snowflake-managed MCP + Domo Essentials MCP outward"] },
+    { id: "chat", label: "Domo Chat v2", sprint: 9, mark: "domo-ai-agent.svg", gated: true,
+      items: ["Embedded native Domo Chat v2 agent", "MCP client \u2192 the Snowflake-managed MCP server (same Agent/Analyst/Search tools)", "Answers inherit REVENUE_CC_ANALYST semantics + Horizon policies"] },
     { id: "how", label: "How it works", sprint: 9, mark: "domo-pro-code.svg",
       items: ["Solution + technical architecture", "Clickable governed lineage", "The CoCo \u201chow it was built\u201d narrative"] }
   ];
@@ -1051,14 +1047,15 @@
    * via describeSemanticView; falls back to a captured seed offline. */
   function loadSemantic() {
     if (state.semantic.loaded || state.semantic.loading) return;
-    state.semantic.loading = true; renderView();
+    state.semantic.loading = true;
+    var refresh = function () { if (state.surface === "semantic" || state.surface === "readiness") renderView(); };
     var done = function (payload, live) {
       state.semantic.model = payload.model || null;
       state.semantic.view = payload.view || null;
       state.semantic.sql = payload.sql || null;
       state.semantic.live = !!live;
       state.semantic.loading = false; state.semantic.loaded = true;
-      if (state.surface === "semantic") renderView();
+      refresh();
     };
     var seed = function () {
       fetch("./public/mock/semantic-model.json").then(function (r) { return r.json(); }).then(function (s) { done(s, false); })
@@ -1344,9 +1341,16 @@
   }
 
   function renderSemantic() {
-    if (!state.semantic.loaded && !state.semantic.loading) loadSemantic();
     var frag = document.createDocumentFragment();
     var banner = connBanner(); if (banner) frag.appendChild(banner);
+    semanticSection(frag);
+    return frag;
+  }
+
+  // Governed semantic-model surface (entity graph, verified queries, DDL builder).
+  // Rendered standalone historically; now embedded inside Horizon AI Readiness.
+  function semanticSection(frag) {
+    if (!state.semantic.loaded && !state.semantic.loading) loadSemantic();
 
     if (state.semantic.loading && !state.semantic.model) {
       frag.appendChild(h("div", { class: "analyst-loading" }, [h("span", { class: "spinner" }), "Introspecting the governed semantic view (DESCRIBE SEMANTIC VIEW)\u2026"]));
@@ -1630,7 +1634,14 @@
     }
 
     var banner = connBanner(); if (banner) frag.appendChild(banner);
+    agentConsole(frag);
+    var q = recommendationQueue(); if (q) frag.appendChild(q);
+    return frag;
+  }
 
+  // Reusable Cortex Agent conversation console (ask bar + loading/error/result).
+  // Used by the Cortex Workspace (CoWork focal point) and the legacy Agent Queue view.
+  function agentConsole(frag) {
     var input = h("input", { class: "analyst-input", type: "text", placeholder: "Ask the Cortex Agent \u2014 it reasons over metrics + documents and cites its evidence\u2026", value: state.agent.question || "" });
     var askBtn = h("button", { class: "pill-btn primary analyst-ask" }, ["Ask the Agent"]);
     input.addEventListener("keydown", function (e) { if (e.key === "Enter") runAgent(input.value); });
@@ -1653,7 +1664,6 @@
     } else if (state.agent.result) {
       frag.appendChild(h("section", { class: "grid" }, [agentAnswerPanels(state.agent.result)]));
     }
-    var q = recommendationQueue(); if (q) frag.appendChild(q);
     return frag;
   }
 
@@ -2852,7 +2862,27 @@
     frag.appendChild(h("section", { class: "grid" }, [govMaskingPanel(), govPolicyPanel()]));
     frag.appendChild(h("section", { class: "grid" }, [govGuardPanel()]));
     frag.appendChild(h("section", { class: "grid" }, [govReadinessPanel()]));
+    // Governed semantic model (folded in from the former Semantic Model tab):
+    // the business vocabulary that Cortex Analyst + the Agent are governed against.
+    frag.appendChild(sectionDivider(
+      "Governed semantic model",
+      "The business vocabulary behind every answer \u2014 entities, relationships, and the verified queries Cortex trusts. This is the Snowflake analog of Unity Catalog's governed model.",
+      "snowflake-cortex.svg",
+      srcLink("Open REVENUE_CC_ANALYST", snowsightObjHref("view", "REVENUE_CC_ANALYST"), "sf")
+    ));
+    semanticSection(frag);
     return frag;
+  }
+
+  // Full-width labeled section divider used to fold multiple surfaces into one tab.
+  function sectionDivider(title, sub, mark, link) {
+    return h("div", { class: "sec-divider" }, [
+      h("div", { class: "sec-divider-l" }, [
+        mark ? h("img", { class: "sec-mark", src: "./public/brand/" + mark, alt: "" }) : null,
+        h("div", {}, [h("h2", {}, [title]), sub ? h("p", {}, [sub]) : null])
+      ]),
+      link || null
+    ]);
   }
 
   /* ------------- MCP fabric + CoWork (Sprint 8) / How It Works + CoCo (Sprint 9) ------------- */
@@ -2889,16 +2919,16 @@
     var c = state.cowork.cowork || {};
     var body = h("div", { class: "cw-launch-body" }, [
       h("div", {}, [
-        h("span", { class: "cw-eyebrow" }, ["Native Snowflake business experience"]),
+        h("span", { class: "cw-eyebrow" }, [h("img", { class: "eyebrow-mark", src: "./public/brand/snowflake-cortex.svg", alt: "" }), "Snowflake Intelligence \u00b7 CoWork agent \u2014 embedded"]),
         h("h2", {}, [c.experience || "Snowflake Intelligence / CoWork"]),
-        h("p", { class: "cw-lead" }, ["Opens the ", h("code", {}, [c.agent || "REVENUE_CC_AGENT"]), " \u2014 the ", h("strong", {}, ["same"]), " configured Cortex Agent behind the Agent Queue tab. No re-implementation, no unsupported embed."])
+        h("p", { class: "cw-lead" }, ["The ", h("code", {}, [c.agent || "REVENUE_CC_AGENT"]), " conversation, embedded in Domo through the ", h("strong", {}, ["snowflakece"]), " Code Engine bridge (key-pair JWT \u2192 Cortex Agents REST API). Same governed agent, same Horizon policies \u2014 delivered in the flow of work, with a one-click launch into the native Snowflake Intelligence surface."])
       ]),
-      h("div", { class: "cw-launch-side" }, [statChip(c.status || "Available")])
+      h("div", { class: "cw-launch-side" }, [statChip(c.status || "Available"), srcLink("Open in Snowflake Intelligence", snowsightAgentHref(), "sf")])
     ]);
     var meta = h("div", { class: "cw-meta" }, [
-      c.openPath ? h("div", { class: "cw-meta-row" }, [h("span", { class: "gi-lab" }, ["Open path"]), h("code", {}, [c.openPath])]) : null,
       c.scoping ? h("div", { class: "cw-meta-row" }, [h("span", { class: "gi-lab" }, ["Governance"]), h("span", {}, [c.scoping])]) : null,
-      c.sso ? h("div", { class: "cw-meta-row" }, [h("span", { class: "gi-lab" }, ["Identity / SSO"]), h("span", {}, [c.sso])]) : null
+      c.sso ? h("div", { class: "cw-meta-row" }, [h("span", { class: "gi-lab" }, ["Identity / SSO"]), h("span", {}, [c.sso])]) : null,
+      h("div", { class: "cw-meta-row" }, [h("span", { class: "gi-lab" }, ["Embed pattern"]), h("span", {}, ["Snowflake Intelligence is not cross-domain iframe-embeddable; the supported path is a middleware proxy to ", h("code", {}, ["/api/v2/\u2026/agents/{agent}:run"]), " \u2014 here fulfilled by Code Engine."])])
     ]);
     return h("article", { class: "panel col-12 cw-launch" }, [body, meta]);
   }
@@ -2982,43 +3012,39 @@
     var banner = connBanner(); if (banner) frag.appendChild(banner);
     if (!state.cowork.loaded && !state.cowork.loading) { loadCoWork(); }
     if (state.cowork.loading && !state.cowork.loaded) {
-      frag.appendChild(h("div", { class: "analyst-loading" }, [h("span", { class: "spinner" }), "Loading the MCP tool inventory + CoWork agent link\u2026"]));
+      frag.appendChild(h("div", { class: "analyst-loading" }, [h("span", { class: "spinner" }), "Loading the CoWork agent + MCP tool inventory\u2026"]));
       return frag;
     }
+    // Focal point: the embedded CoWork agent conversation (Genie analog).
     frag.appendChild(h("section", { class: "grid" }, [coworkLaunchpad()]));
+    if (!state.agent.seed && !state.agent.loading) {
+      loadAgentSeed().then(function (seed) {
+        if (!state.agent.result) state.agent.result = seedFeatured(seed);
+        if (state.surface === "cowork") renderView();
+      });
+    }
+    agentConsole(frag);
+    // Supporting wiring: Deep Research, managed MCP outward, Domo Essentials MCP.
     var dr = coworkDeepResearch(); if (dr) frag.appendChild(h("section", { class: "grid" }, [dr]));
     frag.appendChild(h("section", { class: "grid" }, [mcpManagedPanel()]));
     frag.appendChild(h("section", { class: "grid" }, [mcpDomoPanel()]));
     return frag;
   }
 
+  // Domo-registered agent embed for the Chat v2 surface.
+  var DOMO_CHAT_EMBED = "https://snowflake-demo.domo.com/embed/agents/private/A1Y49";
+
   function renderChat() {
     var frag = document.createDocumentFragment();
-    frag.appendChild(gatedBanner("Domo Chat v2 is enabled in the target Domo instance (gate G1). This surface documents the wiring honestly \u2014 it does not simulate a conversation or claim direct Cortex routing."));
-    // How Chat v2 fits: it is an MCP client to the Snowflake-managed MCP server.
-    var flow = h("div", { class: "chat-flow" }, [
-      h("div", { class: "cf-node" }, [h("span", { class: "cf-lab" }, ["Business user"]), h("span", { class: "cf-sub" }, ["asks in Domo"])]),
-      h("span", { class: "cf-arrow" }, ["\u2192"]),
-      h("div", { class: "cf-node domo" }, [h("span", { class: "cf-lab" }, ["Domo Chat v2"]), h("span", { class: "cf-sub" }, ["governed delivery context"])]),
-      h("span", { class: "cf-arrow" }, ["\u2192"]),
-      h("div", { class: "cf-node sf" }, [h("span", { class: "cf-lab" }, ["Managed MCP server"]), h("span", { class: "cf-sub" }, ["Agent \u00b7 Analyst \u00b7 Search"])]),
-      h("span", { class: "cf-arrow" }, ["\u2192"]),
-      h("div", { class: "cf-node sf" }, [h("span", { class: "cf-lab" }, ["Horizon"]), h("span", { class: "cf-sub" }, ["policies enforced"])])
-    ]);
-    var prompts = h("div", { class: "chat-prompts" });
-    CHAT_PROMPTS.forEach(function (p) { prompts.appendChild(h("div", { class: "chat-prompt" }, [h("span", { class: "cp-q" }, ["\u201c" + p + "\u201d"])])); });
-    frag.appendChild(h("section", { class: "grid" }, [
-      h("article", { class: "panel col-12" }, [
-        h("div", { class: "panel-head" }, [h("div", {}, [h("h2", {}, ["Where Chat v2 sits"]), h("p", {}, ["The third first-class conversation \u2014 a delivery-plane client of the same governed Snowflake tools"])]), statChip("Target-instance")]),
-        flow,
-        h("p", { class: "chat-note" }, ["Chat v2 reaches Snowflake through the ", h("strong", {}, ["same Snowflake-managed MCP server"]), " shown on the CoWork \u00b7 MCP tab \u2014 so answers inherit the ", h("code", {}, ["REVENUE_CC_ANALYST"]), " semantics and the ", h("code", {}, ["RAP_REGION"]), " / ", h("code", {}, ["MASK_ARR"]), " policies. Nothing here bypasses governance."])
-      ])
+    frag.appendChild(h("div", { class: "embed-head" }, [
+      h("div", { class: "embed-head-l" }, [
+        h("h2", {}, [h("img", { class: "head-mark", src: "./public/brand/domo-ai-agent.svg", alt: "" }), "Domo Chat v2 \u2014 Native Domo agent"]),
+        h("p", {}, ["Domo's conversational delivery layer, embedded in the app. It answers over governed Domo + Snowflake context and reaches Snowflake through the same managed MCP server (Agent \u00b7 Analyst \u00b7 Search) \u2014 inheriting ", h("code", {}, ["REVENUE_CC_ANALYST"]), " semantics and Horizon policies."])
+      ]),
+      srcLink("Open in Domo", DOMO_CHAT_EMBED, "domo")
     ]));
-    frag.appendChild(h("section", { class: "grid" }, [
-      h("article", { class: "panel col-12" }, [
-        h("div", { class: "panel-head" }, [h("div", {}, [h("h2", {}, ["Golden-path questions Chat v2 handles"]), h("p", {}, ["Same questions the Analyst + Agent answer \u2014 delivered in the flow of work"])])]),
-        prompts
-      ])
+    frag.appendChild(h("div", { class: "agent-embed-wrap" }, [
+      h("iframe", { class: "agent-embed", src: DOMO_CHAT_EMBED, frameborder: "0", marginheight: "0", marginwidth: "0", allow: "clipboard-write; clipboard-read", title: "Domo Chat v2" })
     ]));
     return frag;
   }
@@ -3026,8 +3052,8 @@
   // Narrative spine + technical architecture for the How It Works surface.
   var SPINE = [
     { plane: "Predict", surface: "Forecast Home + Snowflake ML", tech: "SNOWFLAKE.ML classification \u2192 PREDICT_RENEWAL_RISK", mark: "snowflake-mark.svg" },
-    { plane: "Explain", surface: "Cortex Analyst + Search", tech: "REVENUE_CC_ANALYST semantic view + REVENUE_CC_SEARCH", mark: "snowflake-cortex.svg" },
-    { plane: "Act", surface: "Cortex Agent Queue + Approvals", tech: "REVENUE_CC_AGENT \u2192 AGENT_ACTION_WRITEBACK (WRITER)", mark: "domo-approvals.svg" },
+    { plane: "Explain", surface: "Cortex Analyst + Cortex Workspace", tech: "REVENUE_CC_ANALYST semantic view + REVENUE_CC_SEARCH", mark: "snowflake-cortex.svg" },
+    { plane: "Act", surface: "Cortex Workspace + Approvals", tech: "REVENUE_CC_AGENT \u2192 AGENT_ACTION_WRITEBACK (WRITER)", mark: "domo-approvals.svg" },
     { plane: "Remember", surface: "Snowflake Ops", tech: "Hybrid Tables: SCENARIO_RUNS, PREDICTION_FEEDBACK", mark: "domo-data.svg" },
     { plane: "Govern", surface: "Horizon AI Readiness", tech: "RAP_REGION + MASK_ARR + Cortex guardrails/observability", mark: "domo-pdp.svg" }
   ];

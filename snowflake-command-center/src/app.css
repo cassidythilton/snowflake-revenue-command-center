@@ -447,9 +447,27 @@
 }
 .gb-tag { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; color: var(--status-warn); border: 1px solid #e7c9a0; border-radius: var(--r-pill); padding: 2px 9px; background: var(--surface); }
 
+/* Full-width section divider (folded surfaces) */
+.sec-divider { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin: 26px 0 4px; padding: 0 2px 12px; border-bottom: 2px solid var(--line-strong); }
+.sec-divider-l { display: flex; align-items: flex-start; gap: 11px; }
+.sec-divider-l .sec-mark { width: 22px; height: 22px; margin-top: 2px; }
+.sec-divider-l h2 { margin: 0 0 3px; font-size: 17px; }
+.sec-divider-l p { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.5; max-width: 82ch; }
+
+/* Embedded agent surfaces (Domo Chat v2 + CoWork focal point) */
+.embed-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 4px 2px 14px; }
+.embed-head-l h2 { display: flex; align-items: center; gap: 9px; margin: 0 0 4px; font-size: 17px; }
+.embed-head-l h2 .head-mark { width: 20px; height: 20px; }
+.embed-head-l p { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.5; max-width: 78ch; }
+.embed-head-l p code { font-family: var(--font-mono); font-size: 11.5px; color: var(--sf-blue-deep); }
+.agent-embed-wrap { border: 1px solid var(--line-strong); border-radius: var(--r-lg, 12px); overflow: hidden; background: var(--surface); box-shadow: var(--shadow-1, 0 1px 2px rgba(16,24,40,.06)); }
+.agent-embed { display: block; width: 100%; height: 1500px; border: 0; }
+
 /* CoWork launchpad */
 .cw-launch-body { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.cw-eyebrow { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; }
+.cw-launch-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.cw-eyebrow { display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; }
+.cw-eyebrow .eyebrow-mark { width: 14px; height: 14px; }
 .cw-launch h2 { margin: 4px 0 6px; }
 .cw-lead { font-size: 13px; color: var(--muted); margin: 0; line-height: 1.5; max-width: 70ch; }
 .cw-meta { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 7px; }
