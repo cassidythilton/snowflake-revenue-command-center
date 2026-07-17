@@ -633,6 +633,35 @@
 .sem-item-c { font-size: 11.5px; line-height: 1.45; color: var(--muted); margin: 3px 0 0; }
 .sem-item-e { display: block; font-family: var(--font-mono); font-size: 10.5px; color: var(--sf-blue-deep); background: var(--n-050); border-radius: 5px; padding: 3px 7px; margin-top: 4px; word-break: break-all; }
 
+/* Domo companion models linked inside the semantic detail panel */
+.sem-section h4.domo-h { color: #4B3FB5; }
+.sem-domo-link { display: flex; align-items: center; gap: 8px; padding: 7px 9px; margin-bottom: 6px; text-decoration: none; border: 1px solid var(--line); border-left: 3px solid #4B3FB5; border-radius: var(--r-md); background: rgba(75,63,181,0.04); transition: background .12s, box-shadow .12s; }
+.sem-domo-link:hover { background: rgba(75,63,181,0.09); box-shadow: var(--shadow-sm); }
+.sem-domo-link b { font-size: 12px; color: var(--n-700); }
+.sem-domo-link .sdl-open { margin-left: auto; color: #4B3FB5; font-weight: 800; }
+.sdl-role { font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: .05em; border-radius: var(--r-pill); padding: 1px 7px; }
+.sdl-role.hub { color: #4B3FB5; border: 1px solid #b7b1e6; background: rgba(75,63,181,0.08); }
+.sdl-role.fact { color: #7c3aed; border: 1px solid #d6c4f5; background: rgba(124,58,237,0.07); }
+
+/* Domo mirror strip beneath the Snowflake ERD (Entity Graph view) */
+.domo-mirror { margin-top: 18px; border: 1px solid var(--line); border-top: 3px solid #4B3FB5; border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-sm); padding: 16px 18px; }
+.domo-mirror-head { margin-bottom: 14px; }
+.dm-title { display: flex; align-items: center; gap: 9px; }
+.dm-title h3 { font-size: 14px; color: var(--n-700); margin: 0; }
+.dm-mark { width: 18px; height: 18px; }
+.domo-mirror-head p { font-size: 12.5px; color: var(--muted); margin: 5px 0 0; max-width: 780px; line-height: 1.5; }
+.domo-mirror-head code { font-family: var(--font-mono); font-size: 11px; color: var(--sf-blue-deep); }
+.domo-mirror-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.domo-mirror-card { display: flex; flex-direction: column; gap: 5px; text-decoration: none; border: 1px solid var(--line); border-left: 3px solid #4B3FB5; border-radius: var(--r-md); background: var(--n-050); padding: 12px 14px; transition: background .12s, box-shadow .12s, transform .12s; }
+.domo-mirror-card:hover { background: rgba(75,63,181,0.05); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
+.dmc-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.dmc-name { font-size: 13px; font-weight: 700; color: var(--n-700); }
+.dmc-open { font-family: var(--font-mono); font-size: 10px; font-weight: 700; color: #4B3FB5; }
+.dmc-hub { font-size: 11.5px; color: var(--muted); } .dmc-hub b { font-family: var(--font-mono); font-size: 11px; color: #4B3FB5; }
+.dmc-meta { font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+.dmc-note { font-size: 11.5px; line-height: 1.45; color: var(--muted); margin: 3px 0 0; }
+@media (max-width: 900px) { .domo-mirror-row { grid-template-columns: 1fr; } }
+
 .sem-panel { border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-sm); padding: 18px 20px; }
 .sem-panel-head { margin-bottom: 16px; }
 .sem-panel-head h3 { font-size: 15px; color: var(--n-700); }

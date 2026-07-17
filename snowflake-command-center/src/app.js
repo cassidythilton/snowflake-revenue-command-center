@@ -823,6 +823,18 @@
     d.appendChild(h("div", { class: "sem-dt-head" }, [h("h3", {}, [t.name]), h("span", { class: "erd-base" }, [t.database + "." + t.schema + "." + t.base])]));
     if (t.comment) d.appendChild(h("p", { class: "sem-dt-comment" }, [t.comment]));
     if ((t.primaryKey || []).length) d.appendChild(h("div", { class: "sem-pk" }, ["PK: " + t.primaryKey.join(" + ")]));
+    var domoHits = domoModelsForBase(t.base);
+    if (domoHits.length) {
+      var ds = h("div", { class: "sem-section" }, [h("h4", { class: "domo-h" }, ["In Domo (Cloud Amplifier) ", h("span", { class: "cnt" }, [String(domoHits.length)])])]);
+      domoHits.forEach(function (hit) {
+        ds.appendChild(h("a", { class: "sem-domo-link", href: domoModelHref(hit.model), target: "_blank", rel: "noopener" }, [
+          h("span", { class: "sdl-role " + hit.role }, [hit.role === "hub" ? "HUB" : "FACT"]),
+          h("b", {}, [hit.model.name]),
+          h("span", { class: "sdl-open" }, ["\u2197"])
+        ]));
+      });
+      d.appendChild(ds);
+    }
     if (rels.length) {
       var rl = h("div", { class: "sem-section" }, [h("h4", { class: "rel-h" }, ["Relationships ", h("span", { class: "cnt" }, [String(rels.length)])])]);
       rels.forEach(function (r) {
@@ -874,26 +886,46 @@
     return (d.data || []).map(function (row) { var o = {}; cols.forEach(function (c, i) { o[c] = row[i]; }); return o; });
   }
 
-  function renderDomoModels() {
-    var grid = h("div", { class: "vq-grid" });
+  function domoModelHref(m) { return DOMO_INSTANCE + "/datasources/" + m.id + "/details/overview"; }
+
+  // Which Domo companion models include a given Snowflake base table, and in
+  // what role (hub dimension vs joined fact). Used to link both sides.
+  function domoModelsForBase(base) {
+    var hits = [];
     DOMO_MODELS.forEach(function (m) {
-      var card = h("div", { class: "vq-card" });
-      card.appendChild(h("div", { class: "vq-top" }, [
-        h("span", { class: "vq-badge" }, ["DOMO DATA MODEL \u00b7 CLOUD AMPLIFIER"]),
-        h("h3", {}, [m.name])
-      ]));
-      card.appendChild(h("p", { class: "sem-dt-comment" }, [m.note]));
-      card.appendChild(h("div", { class: "sem-pk" }, ["Hub: " + m.hub + " \u00b7 " + m.rels + " relationships \u00b7 join on " + m.join]));
-      var tl = h("div", { class: "sem-section" }, [h("h4", { class: "dim-h" }, ["Tables ", h("span", { class: "cnt" }, [String(m.facts.length + 1)])])]);
-      tl.appendChild(h("div", { class: "sem-item" }, [h("div", { class: "sem-item-top" }, [h("span", { class: "sem-item-n" }, [m.hub]), h("span", { class: "sem-item-t" }, ["dimension"])])]));
-      m.facts.forEach(function (t) { tl.appendChild(h("div", { class: "sem-item" }, [h("div", { class: "sem-item-top" }, [h("span", { class: "sem-item-n" }, [t]), h("span", { class: "sem-item-t" }, ["fact \u2192 " + m.hub])])])); });
-      card.appendChild(tl);
-      card.appendChild(h("div", { class: "vq-actions" }, [
-        h("a", { class: "mini-btn primary", href: DOMO_INSTANCE + "/datasources/" + m.id + "/details/overview", target: "_blank", rel: "noopener" }, ["Open model in Domo \u2197"])
-      ]));
-      grid.appendChild(card);
+      if (m.hub === base) hits.push({ model: m, role: "hub" });
+      else if (m.facts.indexOf(base) !== -1) hits.push({ model: m, role: "fact" });
     });
-    return grid;
+    return hits;
+  }
+
+  // Coalesced into the Entity Graph view: the Snowflake semantic view (ERD
+  // above) and its Domo counterparts are one governed model. The same
+  // federated Snowflake tables are joined into three companion Domo data
+  // models via Cloud Amplifier (the beta Data Model API caps at 4 relationships
+  // per model, so the 14-relationship view is mirrored as account/tenant/product hubs).
+  function renderDomoMirror(model) {
+    var wrap = h("div", { class: "domo-mirror" });
+    wrap.appendChild(h("div", { class: "domo-mirror-head" }, [
+      h("div", { class: "dm-title" }, [
+        h("img", { class: "dm-mark", src: "./public/brand/domo-pro-code.svg", alt: "" }),
+        h("h3", {}, ["Mirrored in Domo via Cloud Amplifier"]),
+        h("span", { class: "live-badge on" }, ["FEDERATED"])
+      ]),
+      h("p", {}, ["The same Snowflake tables behind ", h("code", {}, [model.name || "REVENUE_CC_ANALYST"]),
+        " are federated into Domo (data stays in Snowflake) and joined into three governed star schemas. Select a table in the graph to see its Domo model; open any model to explore its canvas."])
+    ]));
+    var row = h("div", { class: "domo-mirror-row" });
+    DOMO_MODELS.forEach(function (m) {
+      var card = h("a", { class: "domo-mirror-card", href: domoModelHref(m), target: "_blank", rel: "noopener" });
+      card.appendChild(h("div", { class: "dmc-top" }, [h("span", { class: "dmc-name" }, [m.name]), h("span", { class: "dmc-open" }, ["Open \u2197"])]));
+      card.appendChild(h("div", { class: "dmc-hub" }, ["Hub ", h("b", {}, [m.hub])]));
+      card.appendChild(h("div", { class: "dmc-meta" }, [(m.facts.length + 1) + " tables \u00b7 " + m.rels + " rels \u00b7 join " + m.join]));
+      card.appendChild(h("p", { class: "dmc-note" }, [m.note]));
+      row.appendChild(card);
+    });
+    wrap.appendChild(row);
+    return wrap;
   }
 
   function renderVerifiedGallery(model) {
@@ -1023,7 +1055,7 @@
     ]));
 
     // Sub-tabs
-    var tabs = [["graph", "Entity Graph"], ["queries", "Verified Queries"], ["builder", "Model DDL"], ["models", "Domo Data Models"]];
+    var tabs = [["graph", "Entity Graph"], ["queries", "Verified Queries"], ["builder", "Model DDL"]];
     var tabRow = h("div", { class: "sem-tabs" });
     tabs.forEach(function (t) {
       var b = h("button", { class: "sem-tab" + (state.semantic.tab === t[0] ? " active" : "") }, [t[1]]);
@@ -1034,15 +1066,11 @@
 
     if (state.semantic.tab === "graph") {
       frag.appendChild(h("div", { class: "sem-graph" }, [renderSemanticERD(model), semanticDetail(model)]));
+      frag.appendChild(renderDomoMirror(model));
     } else if (state.semantic.tab === "queries") {
       frag.appendChild(h("div", { class: "sem-panel" }, [
         h("div", { class: "sem-panel-head" }, [h("h3", {}, ["Verified query gallery"]), h("p", {}, ["The queries Cortex Analyst trusts to answer natural-language questions about this model. Run them live through the governed bridge."])]),
         renderVerifiedGallery(model)
-      ]));
-    } else if (state.semantic.tab === "models") {
-      frag.appendChild(h("div", { class: "sem-panel" }, [
-        h("div", { class: "sem-panel-head" }, [h("h3", {}, ["Domo data models \u00b7 Cloud Amplifier"]), h("p", {}, ["The same Snowflake tables, federated into Domo via Cloud Amplifier and joined into governed star schemas that mirror ", h("code", {}, [model.name || "REVENUE_CC_ANALYST"]), ". Data stays in Snowflake \u2014 Domo queries it live. Open any model to explore its canvas in Domo."])]),
-        renderDomoModels()
       ]));
     } else {
       frag.appendChild(h("div", { class: "sem-panel" }, [
