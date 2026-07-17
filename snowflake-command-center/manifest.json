@@ -435,7 +435,7 @@
         {
           "name": "threadId",
           "displayName": "threadId",
-          "type": "number",
+          "type": "text",
           "value": null,
           "nullable": true,
           "isList": false,
@@ -446,7 +446,7 @@
         {
           "name": "parentMessageId",
           "displayName": "parentMessageId",
-          "type": "number",
+          "type": "text",
           "value": null,
           "nullable": true,
           "isList": false,
@@ -1322,7 +1322,7 @@
         {
           "name": "threadId",
           "displayName": "threadId",
-          "type": "number",
+          "type": "text",
           "value": null,
           "nullable": false,
           "isList": false,
@@ -1383,7 +1383,7 @@
         {
           "name": "threadId",
           "displayName": "threadId",
-          "type": "number",
+          "type": "text",
           "value": null,
           "nullable": false,
           "isList": false,
