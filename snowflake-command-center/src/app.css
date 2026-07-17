@@ -350,38 +350,30 @@
 .priv-chip.write { color: var(--sf-blue-deep); border: 1px solid var(--sf-blue); background: rgba(41,181,232,0.08); }
 .priv-arrow { color: var(--muted); font-weight: 700; }
 
-/* Compact protected-revenue stat strip (reference-aligned Approvals header) */
-.aps-strip {
-  display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
-  border: 1px solid var(--line); border-left: 3px solid var(--status-good); border-radius: var(--r-lg);
-  background: var(--surface); box-shadow: var(--shadow-sm); padding: 12px 20px; margin-bottom: 16px;
-}
-.aps-main { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.aps-lab { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; }
-.aps-total { font-size: 24px; font-weight: 800; color: var(--n-700); font-variant-numeric: tabular-nums; line-height: 1; }
-.aps-sub { font-size: 11px; color: var(--muted); font-family: var(--font-mono); }
-.aps-cells { display: flex; gap: 10px; margin-left: auto; }
-.aps-cell { display: flex; flex-direction: column; align-items: center; min-width: 74px; padding: 4px 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--n-050); }
-.aps-cell.hot { border-color: var(--sf-blue); background: rgba(41,181,232,0.07); }
-.aps-cell .aps-v { font-size: 18px; font-weight: 800; color: var(--n-700); font-variant-numeric: tabular-nums; line-height: 1.1; }
-.aps-cell .aps-k { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 700; }
-
-/* Action Center header right cluster + queue tag */
-.ac-head-r { display: flex; align-items: center; gap: 12px; white-space: nowrap; }
+/* Approvals · Action Center — live-queue-only, white bounding box (reference parity) */
+.action-center .ac-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.ac-head-r { display: flex; align-items: center; gap: 14px; white-space: nowrap; }
+.ac-back { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; color: var(--sf-blue-deep); text-decoration: none; }
+.ac-back:hover { text-decoration: underline; }
+.ac-back-arrow { font-size: 13px; line-height: 1; }
 .queue-tag {
-  display: inline-flex; align-items: center; gap: 5px; text-decoration: none;
+  display: inline-flex; align-items: center; gap: 6px; text-decoration: none;
   font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .02em;
   color: var(--sf-blue-deep); border: 1px solid var(--sf-blue); background: rgba(41,181,232,0.08);
-  border-radius: var(--r-pill); padding: 4px 10px;
+  border-radius: var(--r-pill); padding: 4px 11px;
 }
 .queue-tag:hover { background: rgba(41,181,232,0.15); }
 .queue-tag .src-arrow { color: var(--sf-blue-deep); }
 
-/* Slimmer secondary "send a save play" grid */
-.rec-section.start-approval { margin-top: 18px; }
-.rec-section.start-approval .rec-head h3 { font-size: 14px; color: var(--n-700); margin: 0; }
-.rec-grid.compact { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
-.rec-grid.compact .rec-card { padding: 12px 14px; }
+.analyst-loading.in-panel { justify-content: center; padding: 48px 12px; }
+.ac-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 42px 24px 48px; }
+.ac-empty-ico { width: 46px; height: 46px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; color: var(--sf-blue-deep); background: rgba(41,181,232,.1); border: 1px solid rgba(41,181,232,.25); }
+.ac-empty-ico.ok { color: var(--status-good); background: var(--status-good-bg); border-color: #b6e0c6; }
+.ac-empty-ico svg { width: 24px; height: 24px; }
+.ac-empty h3 { margin: 4px 0 0; font-size: 15px; font-weight: 800; color: var(--text); letter-spacing: -.01em; }
+.ac-empty p { margin: 0; max-width: 470px; font-size: 12.5px; line-height: 1.55; color: var(--muted); }
+.ac-empty p code { font-family: var(--font-mono); font-size: 11px; color: var(--sf-blue-deep); }
+.ac-empty .src-link { margin-top: 8px; }
 
 .rec-card.approved { border-left-color: var(--status-good); }
 

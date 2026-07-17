@@ -111,7 +111,7 @@
     ml: { accountId: "", loading: false, error: null, result: null, inspector: false, seed: null, codeTab: "curl", fbNote: "" },
     ops: { loading: false, loaded: false, error: null, scenarios: [], feedback: [], note: null, tab: "scenarios", selected: null },
     approvals: { loading: false, loaded: false, error: null, live: false, seed: null, pending: [], writeback: [], history: [], protected: null, byId: {}, active: null, note: null, busy: null,
-      tasks: [], tasksLoaded: false, tasksLive: false, busyTask: null, starting: null },
+      tasks: [], tasksLoaded: false, tasksLoading: false, tasksLive: false, busyTask: null, starting: null },
     governance: { loading: false, loaded: false, error: null, live: false, seed: null, parity: null, masking: null, rlSelected: null, synced: {}, wiped: {}, showDetail: false },
     cowork: { loading: false, loaded: false, error: null, live: false, mcp: null, cowork: null },
     cw: { threads: [], activeId: null, thinking: false, sending: false, draft: "", showWiring: false },
@@ -2341,9 +2341,12 @@
   }
 
   var APPROVAL_QUEUE_ID = "6383ccfa-54aa-4c23-b855-9f3fe619cad4";
+  // Canonical link out to the source Domo Task Center queue (matches the URL a
+  // reviewer would open natively).
+  function queueHref() { return DOMO_INSTANCE + "/queues/tasks?queueId=" + APPROVAL_QUEUE_ID; }
   function queueConsoleHref(status) {
-    var s = status ? String(status).toUpperCase() : "OPEN";
-    return DOMO_INSTANCE + "/queues/tasks?status=" + encodeURIComponent(s) + "&queueId=" + APPROVAL_QUEUE_ID;
+    if (!status) return queueHref();
+    return DOMO_INSTANCE + "/queues/tasks?status=" + encodeURIComponent(String(status).toUpperCase()) + "&queueId=" + APPROVAL_QUEUE_ID;
   }
   function fmtTaskDate(iso) {
     if (!iso) return "\u2014";
@@ -2351,38 +2354,20 @@
     return d.toLocaleString("en-US", { month: "numeric", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" });
   }
 
-  // Synthesize a populated Action Center table for sample mode so the queue
-  // reads like the live native Task Center (open + completed rows).
-  function sampleApprovalTasks() {
-    var seed = state.approvals.seed; if (!seed) return [];
-    var now = Date.now(), day = 86400000, out = [];
-    (seed.pending || []).forEach(function (a, i) {
-      out.push({ id: "TASK-" + String(a.actionId || i).replace(/[^0-9]/g, "").slice(-7),
-        title: "Approve renewal-risk retention", status: "OPEN", version: "1",
-        createdOn: new Date(now - (i + 1) * (day / 3)).toISOString(), completedOn: null,
-        account: a.accountName, recommendation: a.recommendation });
-    });
-    (seed.history || []).forEach(function (r, i) {
-      var done = r.completedTs ? new Date(r.completedTs).getTime() : (now - (i + 2) * day);
-      out.push({ id: "TASK-" + String(r.actionId || i).replace(/[^0-9]/g, "").slice(-7),
-        title: "Approve renewal-risk retention", status: "COMPLETED", version: "1",
-        createdOn: new Date(done - day).toISOString(), completedOn: new Date(done).toISOString(),
-        account: r.accountName, recommendation: r.recommendation });
-    });
-    return out.sort(function (a, b) { return new Date(b.createdOn) - new Date(a.createdOn); });
-  }
-
-  // Native Domo Task Center queue: the approval items shown in-app.
+  // Native Domo Task Center queue — the Action Center is powered ONLY by the
+  // live queue (via the snowflakece bridge). No synthetic rows: offline preview
+  // shows an honest empty state with a link out to the source queue.
   function loadApprovalTasks() {
-    if (!isLive()) { state.approvals.tasks = sampleApprovalTasks(); state.approvals.tasksLive = false; state.approvals.tasksLoaded = true; renderView(); return; }
+    state.approvals.tasksLoading = true;
+    if (!isLive()) { state.approvals.tasks = []; state.approvals.tasksLive = false; state.approvals.tasksLoaded = true; state.approvals.tasksLoading = false; renderView(); return; }
     domo.post(CE + "listApprovalTasks", { limit: 50 }).then(function (resp) {
       var d = unwrap(resp);
-      if (d && d.status === "SUCCEEDED" && (d.tasks || []).length) { state.approvals.tasksLive = true; state.approvals.tasks = d.tasks || []; }
-      else { state.approvals.tasksLive = false; state.approvals.tasks = sampleApprovalTasks(); }
-      state.approvals.tasksLoaded = true; renderView();
+      if (d && d.status === "SUCCEEDED") { state.approvals.tasksLive = true; state.approvals.tasks = d.tasks || []; }
+      else { state.approvals.tasksLive = false; state.approvals.tasks = []; }
+      state.approvals.tasksLoaded = true; state.approvals.tasksLoading = false; renderView();
     }).catch(function (err) {
-      console.warn("[app] listApprovalTasks failed, using seeded queue:", err);
-      state.approvals.tasksLive = false; state.approvals.tasks = sampleApprovalTasks(); state.approvals.tasksLoaded = true; renderView();
+      console.warn("[app] listApprovalTasks failed:", err);
+      state.approvals.tasksLive = false; state.approvals.tasks = []; state.approvals.tasksLoaded = true; state.approvals.tasksLoading = false; renderView();
     });
   }
 
@@ -2398,24 +2383,6 @@
       state.approvals.note = "Task " + decision.toLowerCase() + " \u2014 workflow resumed; status writing back to Snowflake under REVENUE_CC_WRITER.";
       loadApprovalTasks(); loadApprovals();
     }).catch(function (err) { state.approvals.busyTask = null; state.approvals.note = "Complete failed: " + (err && err.message ? err.message : err); renderView(); });
-  }
-
-  // Start the governed Domo Workflow for a Cortex Agent save play -> creates a
-  // human approval task in the native queue.
-  function startWorkflow(a) {
-    if (!isLive()) { state.approvals.note = "Sample mode \u2014 connect in Domo to start the governed workflow."; renderView(); return; }
-    state.approvals.starting = a.actionId; renderView();
-    var payload = { actionId: a.actionId, account: a.accountName || a.accountId, recommendation: a.recommendation || "",
-      persona: state.persona, protectedRevenue: Number(a.expectedRevenueProtected) || 0, sourceQuestion: a.sourceQuestion || "" };
-    domo.post(CE + "startRetentionWorkflow", payload).then(function (resp) {
-      var d = unwrap(resp);
-      state.approvals.starting = null;
-      if (!d || d.status !== "SUCCEEDED") { state.approvals.note = "Could not start workflow: " + ((d && d.error) || "unknown"); renderView(); return; }
-      state.approvals.active = a.actionId;
-      state.approvals.note = "Governed workflow started for " + (a.accountName || a.accountId) + " \u2014 the Cortex Agent is triaging; a human task will land in the queue above shortly.";
-      renderView();
-      setTimeout(function () { loadApprovalTasks(); loadApprovals(); }, 2800);
-    }).catch(function (err) { state.approvals.starting = null; state.approvals.note = "Start failed: " + (err && err.message ? err.message : err); renderView(); });
   }
 
   function taskRow(t) {
@@ -2443,237 +2410,64 @@
     ]);
   }
 
+  var QUEUE_ICON = "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M9 11l3 3L22 4'/><path d='M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11'/></svg>";
+
   function actionCenter() {
     var tasks = state.approvals.tasks || [];
-    var table = h("table", { class: "result-table task-table" });
-    var thead = h("thead"), htr = h("tr");
-    ["Task", "Status", "Created", "Completed", "Action"].forEach(function (c) { htr.appendChild(h("th", {}, [c])); });
-    thead.appendChild(htr); table.appendChild(thead);
-    var tb = h("tbody");
-    if (!tasks.length) {
-      tb.appendChild(h("tr", {}, [h("td", { colspan: "5", class: "task-empty" }, [
-        state.approvals.tasksLive
-          ? "No tasks in the queue yet. Send a Cortex Agent save play to the queue below \u2014 it routes through the governed workflow and lands here for approval."
-          : "Connect in Domo to load the native approval queue."
-      ])]));
-    } else {
-      tasks.forEach(function (t) { tb.appendChild(taskRow(t)); });
-    }
-    table.appendChild(tb);
-    var openCount = tasks.filter(function (t) { return String(t.status || "").toUpperCase() === "OPEN"; }).length;
-    var homeLink = h("a", { class: "src-link", href: "#" }, ["Forecast Home", h("span", { class: "src-arrow" }, ["\u2192"])]);
+    var live = state.approvals.tasksLive;
+    var loading = state.approvals.tasksLoading && !state.approvals.tasksLoaded;
+
+    var homeLink = h("a", { class: "ac-back", href: "#" }, [h("span", { class: "ac-back-arrow" }, ["\u2190"]), "Forecast Home"]);
     homeLink.addEventListener("click", function (e) { e.preventDefault(); goto("home"); });
-    return h("section", { class: "rec-section" }, [
-      h("div", { class: "rec-head" }, [
-        h("div", {}, [h("h2", {}, ["Approvals \u00b7 Action Center"]),
-          h("p", {}, ["Human-in-the-loop approval workflow \u2014 approve or reject here; the decision completes the native Domo ",
-            h("a", { class: "inline-link", href: queueConsoleHref("OPEN"), target: "_blank", rel: "noopener" }, ["Task Center"]),
-            " task, resumes the workflow, and writes status back to Snowflake."])]),
-        h("div", { class: "ac-head-r" }, [
-          homeLink,
-          h("a", { class: "queue-tag", href: queueConsoleHref("OPEN"), target: "_blank", rel: "noopener" }, ["RENEWAL_RISK_APPROVALS_QUEUE", h("span", { class: "src-arrow" }, ["\u2192"])])
-        ])
+
+    var head = h("div", { class: "panel-head ac-head" }, [
+      h("div", {}, [
+        h("h2", {}, ["Approvals \u00b7 Action Center"]),
+        h("p", {}, ["Human-in-the-loop approvals for the governed Renewal-Risk Retention workflow. Approve or reject here \u2014 the decision completes the native Domo ",
+          h("a", { class: "inline-link", href: queueHref(), target: "_blank", rel: "noopener" }, ["Task Center"]),
+          " task, resumes the workflow, and writes status back to Snowflake under ", h("code", {}, ["REVENUE_CC_WRITER"]), "."])
       ]),
-      h("div", { class: "table-wrap" }, [table])
+      h("div", { class: "ac-head-r" }, [
+        homeLink,
+        h("a", { class: "queue-tag", href: queueHref(), target: "_blank", rel: "noopener" }, ["RENEWAL RISK APPROVALS QUEUE", h("span", { class: "src-arrow" }, ["\u2197"])])
+      ])
     ]);
-  }
 
-  // kind: 'approve' | 'execute' | 'reject'
-  function actOn(actionId, kind) {
-    var info = state.approvals.byId[actionId] || {};
-    var payload = { actionId: actionId, accountId: info.accountId, accountName: info.accountName, region: info.region, recommendation: info.recommendation, approvedBy: state.persona };
-    if (kind === "approve") { payload.approvalStatus = "Approved"; payload.executionStatus = "Pending"; payload.actualRevenueProtected = null; }
-    else if (kind === "execute") { payload.approvalStatus = "Approved"; payload.executionStatus = "Executed"; payload.actualRevenueProtected = Number(info.expectedRevenueProtected) || 0; }
-    else { payload.approvalStatus = "Rejected"; payload.executionStatus = "Voided"; payload.actualRevenueProtected = null; }
-    state.approvals.active = actionId; state.approvals.busy = actionId + ":" + kind;
-
-    if (isLive()) {
-      renderView();
-      domo.post(CE + "writeActionStatus", payload).then(function (resp) {
-        var d = unwrap(resp);
-        state.approvals.busy = null;
-        if (!d || d.status !== "SUCCEEDED") { state.approvals.note = "Writeback failed: " + ((d && d.error) || "unknown"); renderView(); return; }
-        loadApprovals();
-      }).catch(function (err) { state.approvals.busy = null; state.approvals.note = "Writeback failed: " + (err && err.message ? err.message : err); renderView(); });
-      return;
+    var body;
+    if (loading) {
+      body = h("div", { class: "analyst-loading in-panel" }, [h("span", { class: "spinner" }), "Loading the live approval queue\u2026"]);
+    } else if (!live) {
+      body = h("div", { class: "ac-empty" }, [
+        h("div", { class: "ac-empty-ico", html: QUEUE_ICON }),
+        h("h3", {}, ["Live queue not connected"]),
+        h("p", {}, ["The Action Center is powered entirely by the live Domo Task Center queue through the ", h("code", {}, ["snowflakece"]), " bridge \u2014 there are no sample rows here. Connect in Domo, or open the source queue directly."]),
+        srcLink("Open the approvals queue in Domo", queueHref(), "domo")
+      ]);
+    } else if (!tasks.length) {
+      body = h("div", { class: "ac-empty" }, [
+        h("div", { class: "ac-empty-ico ok", html: QUEUE_ICON }),
+        h("h3", {}, ["Queue is clear"]),
+        h("p", {}, ["No approval tasks right now. Cortex Agent save plays land here as human tasks once the governed workflow routes them from the Agent Action Queue on Forecast Home."]),
+        srcLink("Open the approvals queue in Domo", queueHref(), "domo")
+      ]);
+    } else {
+      var table = h("table", { class: "result-table task-table" });
+      var thead = h("thead"), htr = h("tr");
+      ["Task", "Status", "Created", "Completed", "Action"].forEach(function (c) { htr.appendChild(h("th", {}, [c])); });
+      thead.appendChild(htr); table.appendChild(thead);
+      var tb = h("tbody"); tasks.forEach(function (t) { tb.appendChild(taskRow(t)); }); table.appendChild(tb);
+      body = h("div", { class: "table-wrap" }, [table]);
     }
-    // Sample mode: maintain a local writeback set
-    var wb = state.approvals.writeback;
-    var row = wb.filter(function (r) { return r.actionId === actionId; })[0];
-    if (!row) { row = { actionId: actionId, accountId: info.accountId, accountName: info.accountName, region: info.region, recommendation: info.recommendation }; wb.push(row); }
-    row.approvalStatus = payload.approvalStatus; row.executionStatus = payload.executionStatus; row.approvedBy = payload.approvedBy;
-    row.actualRevenueProtected = payload.actualRevenueProtected; row.completedTs = kind === "execute" ? new Date().toISOString() : null;
-    state.approvals.busy = null;
-    state.approvals.note = "Sample mode \u2014 writeback is local only. Connect the snowflakece bridge to persist to the AGENT_ACTION_WRITEBACK hybrid table under REVENUE_CC_WRITER.";
-    recomputeLocalProtected(); renderView();
-  }
 
-  function wbStatusFor(actionId) { return state.approvals.writeback.filter(function (r) { return r.actionId === actionId; })[0] || null; }
-
-  function protectedHero() {
-    var p = state.approvals.protected || { baseline: 0, writeback: 0, total: 0, approvedCount: 0, executedCount: 0 };
-    var hero = h("section", { class: "protected-hero" }, [
-      h("div", { class: "ph-main" }, [
-        h("span", { class: "ph-label" }, ["Protected revenue"]),
-        h("span", { class: "ph-total" }, [money(p.total)]),
-        h("span", { class: "ph-sub" }, ["baseline " + money(p.baseline) + (p.writeback ? "  +  " + money(p.writeback) + " this session" : "")])
-      ]),
-      h("div", { class: "ph-stats" }, [
-        metricChip("Approved", num(p.approvedCount)),
-        metricChip("Executed", num(p.executedCount)),
-        metricChip("Pending queue", num((state.approvals.pending || []).length))
-      ]),
-      h("div", { class: "ph-priv" }, [
-        h("span", { class: "priv-chip read" }, ["reads \u00b7 REVENUE_CC_READER"]),
-        h("span", { class: "priv-arrow" }, ["\u2192"]),
-        h("span", { class: "priv-chip write" }, ["writes \u00b7 REVENUE_CC_WRITER"])
-      ])
-    ]);
-    return hero;
-  }
-
-  function actionJourney() {
-    var id = state.approvals.active;
-    var wb = id ? wbStatusFor(id) : null;
-    var info = id ? state.approvals.byId[id] : null;
-    var approved = wb && (wb.approvalStatus === "Approved");
-    var rejected = wb && (wb.approvalStatus === "Rejected");
-    var executed = wb && (wb.executionStatus === "Executed");
-    var nodes = [
-      { plane: "Detect", label: "Risk flagged", sub: "Cortex Agent", state: "is-done", badge: true },
-      { plane: "Explain", label: "Root cause + play", sub: "Analyst + Search", state: "is-done", badge: true },
-      { plane: "Review", label: rejected ? "Rejected" : approved ? "Approved" : "Pending approval", sub: "Domo Task Center", state: rejected ? "alt is-bad" : approved ? "is-done" : "alt is-active", badge: approved },
-      { plane: "Act", label: executed ? "Writeback executed" : rejected ? "Voided" : "Awaiting execution", sub: executed ? "REVENUE_CC_WRITER \u2192 Snowflake" : "Separately privileged writeback", state: executed ? "is-done" : rejected ? "is-bad" : "is-todo", badge: executed }
-    ];
-    var tl = h("div", { class: "timeline" });
-    nodes.forEach(function (nd) {
-      var dot = h("span", { class: "tl-dot", html: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><path d='M4 12l5 5 11-11'/></svg>" });
-      if (nd.badge) dot.appendChild(h("span", { class: "tl-badge ok" }, ["\u2713"]));
-      tl.appendChild(h("div", { class: "tl-node " + nd.state }, [dot, h("span", { class: "tl-plane" }, [nd.plane]), h("span", { class: "tl-label" }, [nd.label]), h("span", { class: "tl-sub" }, [nd.sub])]));
-    });
-    var srcChips = h("div", { class: "journey-src" }, [
-      h("span", { class: "js-lab" }, ["Go to source"]),
-      h("span", { class: "src-chip" }, ["Cortex Agent run"]),
-      h("span", { class: "src-chip" }, ["Model trace"]),
-      h("span", { class: "src-chip" }, [wb ? "Writeback row " + String(id) : "Writeback (pending)"])
-    ]);
-    return h("article", { class: "panel col-12" }, [
-      h("div", { class: "panel-head" }, [h("div", {}, [h("h2", {}, ["Action Journey"]),
-        h("p", {}, [info ? (info.accountName + " \u00b7 " + (info.recommendation || "")) : "Select an action to trace it from detection to governed writeback"])])]),
-      tl, srcChips
-    ]);
-  }
-
-  function pendingCard(a) {
-    // Is there already a live queue task for this action? (matched loosely by account name in the title/attributes)
-    var starting = state.approvals.starting === a.actionId;
-    var acct = (a.accountName || a.accountId || "").toLowerCase();
-    var queued = (state.approvals.tasks || []).some(function (t) {
-      var hay = ((t.title || "") + " " + (t.attributes || []).join(" ")).toLowerCase();
-      return acct && hay.indexOf(acct) !== -1;
-    });
-    var startBtn = h("button", { class: "pill-btn go solid", disabled: (starting || queued) ? "true" : null },
-      [starting ? "Starting workflow\u2026" : queued ? "In queue \u2713" : "Send to approval queue"]);
-    if (!starting && !queued) startBtn.addEventListener("click", function () { startWorkflow(a); });
-    var hot = Number(a.riskScore) >= 85;
-    return h("article", { class: "rec-card" }, [
-      h("div", { class: "rec-top" }, [
-        h("div", {}, [h("span", { class: "rec-account" }, [a.accountName || a.accountId]), h("span", { class: "rec-seg" }, [(a.region || "") + " \u00b7 " + (a.segment || "") + " \u00b7 " + a.accountId])]),
-        a.riskScore != null ? h("span", { class: "rec-score" + (hot ? " hot" : "") }, ["risk " + num(a.riskScore)]) : null
-      ]),
-      h("div", { class: "rec-play" }, [a.recommendation || "Save play"]),
-      h("p", { class: "rec-rationale" }, [(a.sourceAgent ? a.sourceAgent + " \u00b7 " : "") + (a.sourceQuestion || "")]),
-      h("div", { class: "rec-foot" }, [
-        h("span", { class: "rec-risk" }, [h("span", { class: "rr-val" }, [money(a.expectedRevenueProtected)]), " protectable"])
-      ]),
-      h("div", { class: "rec-actions" }, [startBtn])
-    ]);
-  }
-
-  function inFlightCard(r) {
-    var info = state.approvals.byId[r.actionId] || {};
-    var busy = state.approvals.busy === r.actionId + ":execute";
-    var execBtn = h("button", { class: "pill-btn go solid", disabled: busy ? "true" : null }, [busy ? "Executing\u2026" : "Execute writeback"]);
-    execBtn.addEventListener("click", function () { actOn(r.actionId, "execute"); });
-    return h("article", { class: "rec-card approved" }, [
-      h("div", { class: "rec-top" }, [
-        h("div", {}, [h("span", { class: "rec-account" }, [r.accountName || info.accountName || r.actionId]), h("span", { class: "rec-seg" }, [(r.region || "") + " \u00b7 " + r.actionId])]),
-        h("span", { class: "approval good" }, ["Approved"])
-      ]),
-      h("div", { class: "rec-play" }, [r.recommendation || info.recommendation || "Save play"]),
-      h("p", { class: "rec-rationale" }, ["Approved by " + (r.approvedBy || state.persona) + " \u2014 awaiting the separately-privileged Snowflake writeback."]),
-      h("div", { class: "rec-foot" }, [h("span", { class: "rec-risk" }, [h("span", { class: "rr-val" }, [money(info.expectedRevenueProtected)]), " to protect"])]),
-      h("div", { class: "rec-actions" }, [execBtn])
-    ]);
-  }
-
-  function completedRow(r) {
-    return h("tr", {}, [
-      h("td", {}, [r.accountName || r.accountId]),
-      h("td", {}, [r.recommendation || "\u2014"]),
-      h("td", {}, [h("span", { class: "approval good" }, [r.executionStatus || "Executed"])]),
-      h("td", { class: "num" }, [money(r.actualRevenueProtected)]),
-      h("td", {}, [r.approvedBy || "\u2014"])
-    ]);
-  }
-
-  // Compact protected-revenue stat strip (slimmed from the old hero).
-  function approvalsStatStrip() {
-    var p = state.approvals.protected || { baseline: 0, writeback: 0, total: 0, approvedCount: 0, executedCount: 0 };
-    var tasks = state.approvals.tasks || [];
-    var open = tasks.filter(function (t) { return String(t.status || "").toUpperCase() === "OPEN"; }).length;
-    function stat(k, v, cls) { return h("div", { class: "aps-cell" + (cls ? " " + cls : "") }, [h("span", { class: "aps-v" }, [v]), h("span", { class: "aps-k" }, [k])]); }
-    return h("section", { class: "aps-strip" }, [
-      h("div", { class: "aps-main" }, [
-        h("span", { class: "aps-lab" }, ["Protected revenue"]),
-        h("span", { class: "aps-total" }, [money(p.total)]),
-        h("span", { class: "aps-sub" }, ["baseline " + money(p.baseline) + (p.writeback ? "  +  " + money(p.writeback) + " this session" : "")])
-      ]),
-      h("div", { class: "aps-cells" }, [
-        stat("Open queue", num(open), "hot"),
-        stat("Approved", num(p.approvedCount)),
-        stat("Executed", num(p.executedCount))
-      ]),
-      h("div", { class: "ph-priv" }, [
-        h("span", { class: "priv-chip read" }, ["reads \u00b7 REVENUE_CC_READER"]),
-        h("span", { class: "priv-arrow" }, ["\u2192"]),
-        h("span", { class: "priv-chip write" }, ["writes \u00b7 REVENUE_CC_WRITER"])
-      ])
-    ]);
+    return h("article", { class: "panel col-12 action-center" }, [head, body]);
   }
 
   function renderApprovals() {
     var frag = document.createDocumentFragment();
     var banner = connBanner(); if (banner) frag.appendChild(banner);
-    if (!state.approvals.loaded && !state.approvals.loading) { loadApprovals(); }
-    if (state.approvals.loading && !state.approvals.loaded) { frag.appendChild(h("div", { class: "analyst-loading" }, [h("span", { class: "spinner" }), "Loading the approval queue + protected-revenue rollup\u2026"])); return frag; }
-
-    if (!state.approvals.tasksLoaded) { loadApprovalTasks(); }
-
+    if (!state.approvals.tasksLoaded && !state.approvals.tasksLoading) { loadApprovalTasks(); }
     if (state.approvals.note) frag.appendChild(h("div", { class: "ops-note" }, [state.approvals.note]));
-
-    // Compact KPI strip (protected revenue + queue counts + role privilege).
-    frag.appendChild(approvalsStatStrip());
-
-    // Hero: the native Domo Task Center queue as one clean Action Center table
-    // (open + completed), mirroring the reference app.
-    frag.appendChild(actionCenter());
-
-    // Secondary (demo utility): send a Cortex Agent save play into the governed
-    // workflow so a fresh human task lands in the queue above.
-    var doneIds = {}; (state.approvals.writeback || []).forEach(function (r) { doneIds[r.actionId] = true; });
-    var pending = (state.approvals.pending || []).filter(function (a) { return !doneIds[a.actionId]; }).slice(0, 6);
-    if (pending.length) {
-      var pg = h("div", { class: "rec-grid compact" });
-      pending.forEach(function (a) { pg.appendChild(pendingCard(a)); });
-      frag.appendChild(h("section", { class: "rec-section start-approval" }, [
-        h("div", { class: "rec-head" }, [h("div", {}, [h("h3", {}, ["Send a save play to the queue"]),
-          h("p", {}, ["Cortex Agent recommendations (read as ", h("code", {}, ["REVENUE_CC_READER"]), ") \u2014 route one through the Domo Workflow and it lands as a human task above."])]),
-          h("span", { class: "panel-tag" }, [num(pending.length) + " plays"])]),
-        pg
-      ]));
-    }
-
+    frag.appendChild(h("section", { class: "grid" }, [actionCenter()]));
     return frag;
   }
 
@@ -4389,25 +4183,6 @@
         h("span", { class: "panel-tag" }, ["Cloud Amplifier \u00b7 Horizon-governed"])
       ]),
       grid
-    ]);
-  }
-
-  function journeyPanel() {
-    var nodes = [
-      { cls: "is-done", plane: "Detect", label: "Risk flagged", sub: "Cortex Agent", badge: true },
-      { cls: "is-done", plane: "Explain", label: "Root cause found", sub: "Cortex Analyst", badge: true },
-      { cls: "alt is-active", plane: "Review", label: "Pending approval", sub: "Domo Task Center" },
-      { cls: "is-todo", plane: "Act", label: "Writeback to Snowflake", sub: "Protected revenue updates" }
-    ];
-    var tl = h("div", { class: "timeline" });
-    nodes.forEach(function (nd) {
-      var dot = h("span", { class: "tl-dot", html: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><path d='M4 12l5 5 11-11'/></svg>" });
-      if (nd.badge) dot.appendChild(h("span", { class: "tl-badge ok" }, ["\u2713"]));
-      tl.appendChild(h("div", { class: "tl-node " + nd.cls }, [dot, h("span", { class: "tl-plane" }, [nd.plane]), h("span", { class: "tl-label" }, [nd.label]), h("span", { class: "tl-sub" }, [nd.sub])]));
-    });
-    return h("article", { class: "panel col-12" }, [
-      h("div", { class: "panel-head" }, [h("div", {}, [h("h2", {}, ["Action Journey"]), h("p", {}, ["How a flagged renewal risk moves from detection to governed action \u2014 agent \u21c4 agent"])])]),
-      tl
     ]);
   }
 
