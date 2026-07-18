@@ -1403,6 +1403,163 @@
         "entitySubType": null,
         "alias": "result"
       }
+    },
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "getHorizonReadinessState",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.6.0",
+      "functionName": "getHorizonReadinessState",
+      "parameters": [
+        {
+          "name": "view",
+          "displayName": "view",
+          "type": "text",
+          "value": null,
+          "nullable": false,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "view"
+        }
+      ],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
+    },
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "getDomoAiReadiness",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.6.0",
+      "functionName": "getDomoAiReadiness",
+      "parameters": [
+        {
+          "name": "datasetId",
+          "displayName": "datasetId",
+          "type": "text",
+          "value": null,
+          "nullable": false,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "datasetId"
+        }
+      ],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
+    },
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "syncDomoAiReadiness",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.6.0",
+      "functionName": "syncDomoAiReadiness",
+      "parameters": [
+        {
+          "name": "datasetId",
+          "displayName": "datasetId",
+          "type": "text",
+          "value": null,
+          "nullable": false,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "datasetId"
+        },
+        {
+          "name": "desiredState",
+          "displayName": "desiredState",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "desiredState"
+        },
+        {
+          "name": "columns",
+          "displayName": "columns",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "columns"
+        }
+      ],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
+    },
+    {
+      "name": "SnowflakeRevenueCommandCenter",
+      "alias": "wipeDomoAiReadiness",
+      "packageId": "f72f6d3d-fff6-45e9-bdb3-96d040cc5d47",
+      "version": "1.6.0",
+      "functionName": "wipeDomoAiReadiness",
+      "parameters": [
+        {
+          "name": "datasetId",
+          "displayName": "datasetId",
+          "type": "text",
+          "value": null,
+          "nullable": false,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "datasetId"
+        },
+        {
+          "name": "columns",
+          "displayName": "columns",
+          "type": "text",
+          "value": null,
+          "nullable": true,
+          "isList": false,
+          "children": [],
+          "entitySubType": null,
+          "alias": "columns"
+        }
+      ],
+      "output": {
+        "name": "result",
+        "displayName": "result",
+        "type": "object",
+        "value": null,
+        "nullable": true,
+        "isList": false,
+        "children": [],
+        "entitySubType": null,
+        "alias": "result"
+      }
     }
   ],
   "fileName": "manifest.json",

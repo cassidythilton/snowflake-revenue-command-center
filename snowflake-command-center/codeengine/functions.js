@@ -1200,6 +1200,197 @@ function getCortexThread(threadId) {
   }).catch(function (err) { return { response: { status: "FAILED", error: detail(err) } }; });
 }
 
+/* ------------------- AI Readiness: Horizon -> Domo sync ------------------- */
+/* Mirrors the reference package (getUcReadinessState / getDomoAiReadiness /
+ * syncDomoAiReadiness / wipeDomoAiReadiness), Snowflake-native:
+ *   - Source of truth = Snowflake Horizon: each governed gold-view column carries
+ *     a business COMMENT (context) + a DOMO_AI_SYNONYMS tag (synonyms), read live.
+ *   - Sync writes that context/synonyms into the Domo AI Readiness data
+ *     dictionary for the federated dataset ( /api/ai/readiness/v1/... ), via the
+ *     Code Engine session identity (tokenless) — Domo mirrors the source.
+ *   - Wipe clears the Domo dictionary entries (Horizon is untouched). */
+var AI_DICT = "/api/ai/readiness/v1/data-dictionary/dataset/";
+var SYNONYM_TAG = "DOMO_AI_SYNONYMS";
+
+function domoPut(path, body) { return Promise.resolve(codeengine.sendRequest("put", path, body === undefined ? {} : body)); }
+
+function parseMaybeJson(v, fallback) {
+  if (v === null || v === undefined || v === "") return fallback;
+  if (typeof v === "object") return v;
+  try { return JSON.parse(v); } catch (e) { return fallback; }
+}
+function selectedColumnSet(columns) {
+  var parsed = parseMaybeJson(columns, []);
+  if (!Array.isArray(parsed)) return {};
+  var out = {};
+  parsed.forEach(function (col) {
+    if (typeof col === "string") out[col] = true;
+    else if (col && col.name) out[col.name] = true;
+  });
+  return out;
+}
+function normalizeDomoReadiness(raw) {
+  var payload = raw;
+  if (Array.isArray(payload)) payload = payload[0] || {};
+  var dict = (payload && payload.dataDictionary) ? payload.dataDictionary : (payload || {});
+  var columns = dict.columns || [];
+  return {
+    id: dict.id || "",
+    datasetId: dict.datasetId || "",
+    name: dict.name || "",
+    description: dict.description || "",
+    unitOfAnalysis: dict.unitOfAnalysis || "",
+    columns: columns.map(function (col) {
+      return {
+        name: col.name,
+        description: col.description || "",
+        synonyms: col.synonyms || [],
+        agentEnabled: !!col.agentEnabled,
+        sampleValues: col.sampleValues || [],
+        subType: col.subType || null,
+        beastmodeId: col.beastmodeId || null
+      };
+    })
+  };
+}
+function getDomoAiReadiness(datasetId) {
+  var id = String(datasetId || "");
+  if (!id) return Promise.resolve({ response: { status: "FAILED", error: "Missing datasetId." } });
+  return domoGet(AI_DICT + id)
+    .then(function (data) { return { response: { status: "SUCCEEDED", readiness: normalizeDomoReadiness(data) } }; })
+    .catch(function (err) {
+      // A dataset with no dictionary yet reads as empty (first-time sync path).
+      var msg = detail(err);
+      if (/404|not.?found/i.test(String(msg))) return { response: { status: "SUCCEEDED", readiness: { datasetId: id, columns: [] }, notFound: true } };
+      return { response: { status: "SUCCEEDED", readiness: { datasetId: id, columns: [] }, warning: msg } };
+    });
+}
+function saveDomoReadiness(datasetId, payload) {
+  var path = AI_DICT + datasetId;
+  var method = payload.id ? "put" : "post";
+  var call = method === "put" ? domoPut(path, payload) : domoPost(path, payload);
+  return call.catch(function (err) {
+    var msg = detail(err);
+    if (method === "post" && /409|400|exist/i.test(String(msg))) {
+      return getDomoAiReadiness(datasetId).then(function (r) {
+        var ex = r.response && r.response.readiness;
+        if (ex && ex.id) { payload.id = ex.id; return domoPut(path, payload); }
+        throw err;
+      });
+    }
+    throw err;
+  });
+}
+function readinessColumnList(existing, desiredCols) {
+  var order = (existing.columns && existing.columns.length)
+    ? existing.columns.map(function (c) { return c.name; })
+    : desiredCols.map(function (c) { return c.name; });
+  desiredCols.forEach(function (c) { if (c.name && order.indexOf(c.name) === -1) order.push(c.name); });
+  return order;
+}
+function keepColumn(cur) {
+  return {
+    name: cur.name,
+    description: cur.description || "",
+    synonyms: cur.synonyms || [],
+    subType: cur.subType || null,
+    agentEnabled: !!cur.agentEnabled,
+    sampleValues: cur.sampleValues || [],
+    beastmodeId: cur.beastmodeId || null
+  };
+}
+function syncDomoAiReadiness(datasetId, desiredState, columns) {
+  var id = String(datasetId || "");
+  if (!id) return Promise.resolve({ response: { status: "FAILED", error: "Missing datasetId." } });
+  var desired = parseMaybeJson(desiredState, {});
+  var desiredCols = desired.columns || [];
+  var desiredByName = {}; desiredCols.forEach(function (c) { if (c && c.name) desiredByName[c.name] = c; });
+  var selected = selectedColumnSet(columns);
+  var selectAll = !Object.keys(selected).length;
+  return getDomoAiReadiness(id).then(function (resp) {
+    var existing = (resp.response && resp.response.readiness) || { columns: [] };
+    var existingByName = {}; (existing.columns || []).forEach(function (c) { existingByName[c.name] = c; });
+    var order = readinessColumnList(existing, desiredCols);
+    var payloadCols = order.map(function (name) {
+      var cur = existingByName[name] || { name: name };
+      var des = desiredByName[name];
+      if (des && (selectAll || selected[name])) {
+        return {
+          name: name,
+          description: des.context || des.description || "",
+          synonyms: des.synonyms || [],
+          subType: cur.subType || null,
+          agentEnabled: des.aiEnabled !== false,
+          sampleValues: cur.sampleValues || [],
+          beastmodeId: cur.beastmodeId || null
+        };
+      }
+      return keepColumn(cur);
+    });
+    var payload = {
+      datasetId: id,
+      name: existing.name || desired.name || "",
+      description: desired.datasetContext || existing.description || "",
+      unitOfAnalysis: existing.unitOfAnalysis || "",
+      columns: payloadCols
+    };
+    if (existing.id) payload.id = existing.id;
+    return saveDomoReadiness(id, payload).then(function (saved) {
+      return { response: { status: "SUCCEEDED", readiness: normalizeDomoReadiness(saved), datasetId: id } };
+    });
+  }).catch(function (err) { return { response: { status: "FAILED", error: detail(err), datasetId: id } }; });
+}
+function wipeDomoAiReadiness(datasetId, columns) {
+  var id = String(datasetId || "");
+  if (!id) return Promise.resolve({ response: { status: "FAILED", error: "Missing datasetId." } });
+  var selected = selectedColumnSet(columns);
+  var wipeAll = !Object.keys(selected).length;
+  return getDomoAiReadiness(id).then(function (resp) {
+    var existing = (resp.response && resp.response.readiness) || { columns: [] };
+    if (!existing.columns || !existing.columns.length) {
+      return { response: { status: "SUCCEEDED", readiness: existing, datasetId: id, noop: true } };
+    }
+    var payloadCols = existing.columns.map(function (cur) {
+      if (wipeAll || selected[cur.name]) {
+        return { name: cur.name, description: "", synonyms: [], subType: cur.subType || null, agentEnabled: false, sampleValues: cur.sampleValues || [], beastmodeId: cur.beastmodeId || null };
+      }
+      return keepColumn(cur);
+    });
+    var payload = { datasetId: id, name: existing.name || "", description: wipeAll ? "" : (existing.description || ""), unitOfAnalysis: existing.unitOfAnalysis || "", columns: payloadCols };
+    if (existing.id) payload.id = existing.id;
+    return saveDomoReadiness(id, payload).then(function (saved) {
+      return { response: { status: "SUCCEEDED", readiness: normalizeDomoReadiness(saved), datasetId: id } };
+    });
+  }).catch(function (err) { return { response: { status: "FAILED", error: detail(err), datasetId: id } }; });
+}
+/* Read the Horizon-prepared column context + synonyms for one governed gold view
+ * (comments via INFORMATION_SCHEMA.COLUMNS; synonyms via the DOMO_AI_SYNONYMS
+ * column tag). This is the source-of-truth side the app displays + syncs. */
+function getHorizonReadinessState(view) {
+  var v = String(view || "").toUpperCase().split(".").pop();
+  if (!v) return Promise.resolve({ response: { status: "FAILED", error: "Missing view." } });
+  var fqn = DATABASE + "." + SCHEMA + "." + v;
+  var colsSql = "SELECT column_name, data_type, comment FROM " + DATABASE + ".INFORMATION_SCHEMA.COLUMNS " +
+    "WHERE table_schema = '" + SCHEMA + "' AND table_name = '" + v + "' ORDER BY ordinal_position";
+  var tagsSql = "SELECT column_name, tag_value FROM TABLE(" + DATABASE + ".INFORMATION_SCHEMA.TAG_REFERENCES_ALL_COLUMNS('" + fqn + "', 'TABLE')) WHERE tag_name = '" + SYNONYM_TAG + "'";
+  var cols;
+  return runSql(colsSql, ROLE_READER).then(function (rs) {
+    cols = rowsToObjects(rs);
+    return runSql(tagsSql, ROLE_READER).then(function (trs) { return rowsToObjects(trs); }, function () { return []; });
+  }).then(function (tagRows) {
+    var synByCol = {};
+    (tagRows || []).forEach(function (r) {
+      synByCol[r.COLUMN_NAME] = String(r.TAG_VALUE == null ? "" : r.TAG_VALUE)
+        .split(",").map(function (s) { return s.replace(/^\s+|\s+$/g, ""); }).filter(function (s) { return !!s; });
+    });
+    var out = (cols || []).map(function (r) {
+      var ctx = r.COMMENT == null ? "" : r.COMMENT;
+      return { name: r.COLUMN_NAME, type: r.DATA_TYPE, context: ctx, synonyms: synByCol[r.COLUMN_NAME] || [], prepared: !!(ctx && String(ctx).replace(/^\s+|\s+$/g, "")) };
+    });
+    return { response: { status: "SUCCEEDED", view: v, columns: out } };
+  }).catch(function (err) { return { response: { status: "FAILED", error: detail(err), view: v } }; });
+}
+
 /* -------------------------------- utils ----------------------------------- */
 function detail(err) {
   try {
@@ -1239,5 +1430,9 @@ module.exports = {
   createCortexThread: createCortexThread,
   renameCortexThread: renameCortexThread,
   listCortexThreads: listCortexThreads,
-  getCortexThread: getCortexThread
+  getCortexThread: getCortexThread,
+  getHorizonReadinessState: getHorizonReadinessState,
+  getDomoAiReadiness: getDomoAiReadiness,
+  syncDomoAiReadiness: syncDomoAiReadiness,
+  wipeDomoAiReadiness: wipeDomoAiReadiness
 };

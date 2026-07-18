@@ -1,0 +1,862 @@
+{
+"datasets": [
+{
+"view": "GOLD_EXECUTIVE_REVENUE_HEALTH",
+"name": "executiveRevenueHealth",
+"dataSetId": "3cd5a0ac-e059-4dff-bbc2-ad639468dcab",
+"columns": [
+{
+"name": "DATE",
+"type": "DATE",
+"context": "Calendar date of the weekly revenue snapshot (week ending). Primary time grain for executive revenue trend and forecast comparison.",
+"synonyms": [
+"snapshot date",
+"week ending",
+"as of date"
+],
+"prepared": true,
+"synced": true
+},
+{
+"name": "FISCAL_YEAR",
+"type": "NUMBER(38,0)",
+"context": "Fiscal year the snapshot belongs to, for year-over-year executive reporting.",
+"synonyms": [
+"FY",
+"financial year"
+],
+"prepared": true,
+"synced": true
+},
+{
+"name": "QUARTER",
+"type": "VARCHAR(16777216)",
+"context": "Fiscal quarter label (e.g. Q3) used to group revenue for quarterly business reviews.",
+"synonyms": [
+"fiscal quarter",
+"qtr"
+],
+"prepared": true,
+"synced": true
+},
+{
+"name": "FISCAL_PERIOD",
+"type": "VARCHAR(16777216)",
+"context": "Fiscal period / month bucket within the quarter for period-level revenue analysis.",
+"synonyms": [
+"period",
+"fiscal month"
+],
+"prepared": true,
+"synced": true
+},
+{
+"name": "TENANT_ID",
+"type": "VARCHAR(16777216)",
+"context": "Governed tenant identifier that scopes the row for multi-tenant row-level security.",
+"synonyms": [
+"tenant",
+"customer tenant"
+],
+"prepared": true,
+"synced": true
+},
+{
+"name": "REGION",
+"type": "VARCHAR(16777216)",
+"context": "Sales region the revenue is attributed to (West, East, Central, South).",
+"synonyms": [
+"territory",
+"geo",
+"area"
+],
+"prepared": true,
+"synced": true
+},
+{
+"name": "SEGMENT",
+"type": "VARCHAR(16777216)",
+"context": "Customer segment (Enterprise, Mid-Market, SMB) for segment-level revenue mix.",
+"synonyms": [
+"customer segment",
+"tier"
+],
+"prepared": true,
+"synced": true
+},
+{
+"name": "NET_REVENUE",
+"type": "NUMBER(38,2)",
+"context": "Net recognized revenue for the segment/region on the snapshot date, after discounts and credits.",
+"synonyms": [
+"revenue",
+"net rev",
+"recognized revenue"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "GROSS_MARGIN",
+"type": "NUMBER(38,2)",
+"context": "Gross margin dollars for the revenue in the row, used for profitability views.",
+"synonyms": [
+"margin",
+"GM"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "EXPANSION_ARR",
+"type": "NUMBER(38,2)",
+"context": "Expansion ARR added from upsell/cross-sell within the period.",
+"synonyms": [
+"upsell ARR",
+"expansion",
+"growth ARR"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "CHURNED_ARR",
+"type": "NUMBER(38,2)",
+"context": "ARR lost to churn/downgrade within the period.",
+"synonyms": [
+"lost ARR",
+"churn",
+"contraction ARR"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "REVENUE_AT_RISK",
+"type": "NUMBER(38,2)",
+"context": "Probability-weighted revenue at risk of churn for the segment/region \u2014 the executive headline risk metric.",
+"synonyms": [
+"at-risk revenue",
+"revenue at risk",
+"ARR at risk"
+],
+"prepared": true,
+"synced": false
+}
+]
+},
+{
+"view": "GOLD_CUSTOMER_RENEWAL_RISK",
+"name": "customerRenewalRisk",
+"dataSetId": "9bba0fc2-9ec9-4ee1-8b1e-491cb8ddef7e",
+"columns": [
+{
+"name": "ACCOUNT_ID",
+"type": "NUMBER(38,0)",
+"context": "Unique account identifier (primary key) joining renewal risk to the account dimension.",
+"synonyms": [
+"account key",
+"customer id"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "ACCOUNT_NAME",
+"type": "NUMBER(38,0)",
+"context": "Customer account display name shown in renewal and retention views.",
+"synonyms": [
+"customer name",
+"account"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "TENANT_ID",
+"type": "VARCHAR(16777216)",
+"context": "Governed tenant identifier used for row-level security scoping.",
+"synonyms": [
+"tenant",
+"customer tenant"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "REGION",
+"type": "VARCHAR(16777216)",
+"context": "Sales region the account belongs to.",
+"synonyms": [
+"territory",
+"geo"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "SEGMENT",
+"type": "VARCHAR(16777216)",
+"context": "Customer segment classification (Enterprise, Mid-Market, SMB).",
+"synonyms": [
+"tier",
+"customer segment"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "INDUSTRY",
+"type": "VARCHAR(16777216)",
+"context": "Account industry vertical for cohort and benchmark analysis.",
+"synonyms": [
+"vertical",
+"sector"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "ACCOUNT_OWNER_ID",
+"type": "NUMBER(38,0)",
+"context": "Identifier of the owning account executive / CSM.",
+"synonyms": [
+"owner id",
+"AE id",
+"CSM id"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "ACCOUNT_OWNER_NAME",
+"type": "NUMBER(38,0)",
+"context": "Name of the owning account executive / CSM responsible for the renewal.",
+"synonyms": [
+"account owner",
+"AE",
+"CSM"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "ANNUAL_RECURRING_REVENUE",
+"type": "NUMBER(38,2)",
+"context": "Account annual recurring revenue (ARR) \u2014 the renewal value exposure.",
+"synonyms": [
+"ARR",
+"annual recurring revenue",
+"contract value"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "RENEWAL_DATE",
+"type": "DATE",
+"context": "Contract renewal date driving the renewal-risk time horizon.",
+"synonyms": [
+"renewal",
+"contract end",
+"expiry date"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "RENEWAL_RISK_SCORE",
+"type": "NUMBER(38,2)",
+"context": "Model renewal-risk score (0-100); higher means greater churn risk.",
+"synonyms": [
+"risk score",
+"churn score"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "RISK_TIER",
+"type": "VARCHAR(16777216)",
+"context": "Categorical risk tier (Low, Medium, High, Critical) derived from the risk score.",
+"synonyms": [
+"risk level",
+"risk band",
+"risk category"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "TOP_RISK_DRIVER",
+"type": "VARCHAR(16777216)",
+"context": "Primary explanatory driver of the renewal risk (e.g. SLA breaches, usage drop, negative sentiment).",
+"synonyms": [
+"risk driver",
+"top driver",
+"root risk factor"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "PREDICTED_CHURN_PROBABILITY",
+"type": "NUMBER(38,2)",
+"context": "Model-predicted probability the account churns at renewal.",
+"synonyms": [
+"churn probability",
+"churn likelihood",
+"P(churn)"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "REVENUE_AT_RISK",
+"type": "NUMBER(38,2)",
+"context": "Probability-weighted ARR at risk for the account (ARR x churn probability).",
+"synonyms": [
+"at-risk revenue",
+"ARR at risk"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "RECOMMENDED_ACTION",
+"type": "VARCHAR(16777216)",
+"context": "Governed recommended retention play for the account.",
+"synonyms": [
+"recommendation",
+"next best action",
+"save play"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "CASES_90D",
+"type": "NUMBER(38,0)",
+"context": "Count of support cases opened in the trailing 90 days.",
+"synonyms": [
+"support cases",
+"tickets 90d",
+"case count"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "SLA_BREACHES_90D",
+"type": "NUMBER(38,0)",
+"context": "Count of SLA breaches in the trailing 90 days \u2014 a leading churn indicator.",
+"synonyms": [
+"SLA misses",
+"SLA breaches",
+"missed SLAs"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "NEGATIVE_CASES_90D",
+"type": "NUMBER(38,0)",
+"context": "Count of support cases with negative sentiment in the trailing 90 days.",
+"synonyms": [
+"negative tickets",
+"unhappy cases"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "AVG_USAGE_SCORE_90D",
+"type": "NUMBER(38,2)",
+"context": "Average product usage/health score over the trailing 90 days.",
+"synonyms": [
+"usage score",
+"product health",
+"engagement score"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "USAGE_DROP_DAYS_90D",
+"type": "NUMBER(38,0)",
+"context": "Number of days in the trailing 90 with a material usage drop.",
+"synonyms": [
+"usage drop days",
+"declining usage days"
+],
+"prepared": true,
+"synced": false
+}
+]
+},
+{
+"view": "GOLD_INCIDENT_REVENUE_IMPACT",
+"name": "incidentRevenueImpact",
+"dataSetId": "eadda0cf-8bd1-4ad0-8f9c-c72cc36b7380",
+"columns": [
+{
+"name": "INCIDENT_ID",
+"type": "VARCHAR(16777216)",
+"context": "Unique reliability incident identifier (primary key).",
+"synonyms": [
+"incident key",
+"incident number"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "INCIDENT_DATE",
+"type": "DATE",
+"context": "Date the incident was declared.",
+"synonyms": [
+"date",
+"occurred on"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "PRODUCT_ID",
+"type": "VARCHAR(16777216)",
+"context": "Identifier of the affected product/service.",
+"synonyms": [
+"product key",
+"service id"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "REGION",
+"type": "VARCHAR(16777216)",
+"context": "Region most affected by the incident.",
+"synonyms": [
+"territory",
+"geo"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "SEVERITY",
+"type": "VARCHAR(16777216)",
+"context": "Incident severity level (e.g. SEV1-SEV4).",
+"synonyms": [
+"sev",
+"priority",
+"impact level"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "INCIDENT_CATEGORY",
+"type": "VARCHAR(16777216)",
+"context": "Classification of the incident (e.g. availability, performance, data).",
+"synonyms": [
+"category",
+"incident type"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "ROOT_CAUSE",
+"type": "VARCHAR(16777216)",
+"context": "Root cause summary from the post-incident review.",
+"synonyms": [
+"cause",
+"RCA",
+"root cause analysis"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "CUSTOMER_IMPACT_LEVEL",
+"type": "NUMBER(38,2)",
+"context": "Assessed level of customer impact for the incident.",
+"synonyms": [
+"impact",
+"customer impact"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "ESTIMATED_REVENUE_IMPACT",
+"type": "NUMBER(38,2)",
+"context": "Estimated revenue impact attributed to the incident.",
+"synonyms": [
+"revenue impact",
+"estimated impact"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "AFFECTED_ACCOUNT_COUNT",
+"type": "NUMBER(38,0)",
+"context": "Distinct number of accounts affected by the incident.",
+"synonyms": [
+"accounts affected",
+"impacted accounts"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "SUPPORT_CASE_COUNT",
+"type": "NUMBER(38,0)",
+"context": "Number of support cases linked to the incident.",
+"synonyms": [
+"case count",
+"tickets"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "SLA_BREACH_COUNT",
+"type": "NUMBER(38,0)",
+"context": "Number of SLA breaches tied to the incident.",
+"synonyms": [
+"SLA breaches",
+"SLA misses"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "NEGATIVE_CASE_COUNT",
+"type": "NUMBER(38,0)",
+"context": "Number of negative-sentiment cases tied to the incident.",
+"synonyms": [
+"negative cases",
+"unhappy tickets"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "RENEWAL_REVENUE_AT_RISK",
+"type": "NUMBER(38,2)",
+"context": "Renewal revenue at risk across accounts affected by the incident.",
+"synonyms": [
+"revenue at risk",
+"at-risk ARR"
+],
+"prepared": true,
+"synced": false
+}
+]
+},
+{
+"view": "GOLD_AGENT_ACTION_QUEUE",
+"name": "agentActionQueue",
+"dataSetId": "7715806a-4c6d-42a1-808c-046643ff1435",
+"columns": [
+{
+"name": "ACTION_ID",
+"type": "VARCHAR(16777216)",
+"context": "Unique identifier for the agent-proposed action (primary key).",
+"synonyms": [
+"action key",
+"action number"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "CREATED_TS",
+"type": "TIMESTAMP_NTZ",
+"context": "Timestamp the action was proposed by the agent.",
+"synonyms": [
+"created at",
+"proposed at"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "DATE",
+"type": "DATE",
+"context": "Business date the action belongs to.",
+"synonyms": [
+"action date"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "TENANT_ID",
+"type": "VARCHAR(16777216)",
+"context": "Governed tenant identifier for row-level security scoping.",
+"synonyms": [
+"tenant"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "ACCOUNT_ID",
+"type": "NUMBER(38,0)",
+"context": "Account the action targets.",
+"synonyms": [
+"account key",
+"customer id"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "REGION",
+"type": "VARCHAR(16777216)",
+"context": "Region of the target account.",
+"synonyms": [
+"territory",
+"geo"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "SEGMENT",
+"type": "VARCHAR(16777216)",
+"context": "Segment of the target account.",
+"synonyms": [
+"tier",
+"customer segment"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "ACCOUNT_OWNER_ID",
+"type": "NUMBER(38,0)",
+"context": "Owner (AE/CSM) responsible for the account.",
+"synonyms": [
+"owner id",
+"AE id"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "SOURCE_AGENT",
+"type": "VARCHAR(16777216)",
+"context": "Name of the Cortex agent that proposed the action.",
+"synonyms": [
+"agent",
+"proposing agent"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "SOURCE_QUESTION",
+"type": "VARCHAR(16777216)",
+"context": "The natural-language question that produced the recommendation.",
+"synonyms": [
+"prompt",
+"question",
+"ask"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "RECOMMENDATION",
+"type": "VARCHAR(16777216)",
+"context": "The proposed retention/save recommendation text.",
+"synonyms": [
+"recommendation",
+"save play",
+"next best action"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "APPROVAL_STATUS",
+"type": "VARCHAR(16777216)",
+"context": "Human approval status (Proposed, Approved, Rejected) from the governed Task Center.",
+"synonyms": [
+"approval",
+"review status"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "EXECUTION_STATUS",
+"type": "VARCHAR(16777216)",
+"context": "Execution status of the approved action (Pending, Executed, Voided).",
+"synonyms": [
+"exec status",
+"fulfillment status"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "WORKFLOW_NAME",
+"type": "VARCHAR(16777216)",
+"context": "Name of the Domo workflow that governs execution.",
+"synonyms": [
+"workflow",
+"process"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "APPROVED_BY",
+"type": "VARCHAR(16777216)",
+"context": "Identity of the approver who actioned the item.",
+"synonyms": [
+"approver",
+"reviewed by"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "COMPLETED_TS",
+"type": "TIMESTAMP_NTZ",
+"context": "Timestamp the action reached a terminal state.",
+"synonyms": [
+"completed at",
+"closed at"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "EXPECTED_REVENUE_PROTECTED",
+"type": "NUMBER(38,2)",
+"context": "Expected revenue protected if the action succeeds.",
+"synonyms": [
+"expected protected revenue",
+"projected save"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "ACTUAL_REVENUE_PROTECTED",
+"type": "NUMBER(38,2)",
+"context": "Actual revenue protected after execution.",
+"synonyms": [
+"protected revenue",
+"realized save"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "WORKFLOW_CYCLE_DAYS",
+"type": "NUMBER(38,0)",
+"context": "Days from proposal to completion \u2014 approval cycle time.",
+"synonyms": [
+"cycle time",
+"days to close",
+"SLA days"
+],
+"prepared": true,
+"synced": false
+}
+]
+},
+{
+"view": "GOLD_PORTAL_USER_SCOPE",
+"name": "portalUserScope",
+"dataSetId": "f00f292a-0fc5-41d7-a80d-996f58934859",
+"columns": [
+{
+"name": "USER_KEY",
+"type": "VARCHAR(16777216)",
+"context": "Unique key for the portal user (primary key).",
+"synonyms": [
+"user id",
+"user key"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "DISPLAY_NAME",
+"type": "VARCHAR(16777216)",
+"context": "Display name of the portal user.",
+"synonyms": [
+"name",
+"user name"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "PERSONA",
+"type": "VARCHAR(16777216)",
+"context": "Governed persona (e.g. Executive Sponsor, Regional VP) driving default scope.",
+"synonyms": [
+"role",
+"persona"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "TENANT_ID",
+"type": "VARCHAR(16777216)",
+"context": "Tenant the user belongs to, for multi-tenant isolation.",
+"synonyms": [
+"tenant"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "REGION",
+"type": "VARCHAR(16777216)",
+"context": "Region the user is entitled to see (row-level security).",
+"synonyms": [
+"territory",
+"geo scope"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "ACCOUNT_OWNER_ID",
+"type": "NUMBER(38,0)",
+"context": "Account-owner scope granted to the user.",
+"synonyms": [
+"owner id",
+"AE id"
+],
+"prepared": true,
+"synced": false
+},
+{
+"name": "ACCESS_LEVEL",
+"type": "VARCHAR(16777216)",
+"context": "Entitlement/access level controlling data visibility.",
+"synonyms": [
+"access",
+"entitlement",
+"permission level"
+],
+"prepared": true,
+"synced": false
+}
+]
+}
+]
+}

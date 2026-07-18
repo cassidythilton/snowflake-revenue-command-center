@@ -3,41 +3,32 @@ const puppeteer = require("puppeteer");
 (async () => {
   const browser = await puppeteer.launch({ headless: "new", args: ["--no-sandbox"] });
   const page = await browser.newPage();
-  await page.setViewport({ width: 1440, height: 1000, deviceScaleFactor: 2 });
-  const errs = [];
-  page.on("console", (m) => { if (m.type() === "error") errs.push(m.text()); });
-  page.on("pageerror", (e) => errs.push("PAGEERROR: " + e.message));
-
+  await page.setViewport({ width: 1280, height: 1400, deviceScaleFactor: 2 });
   await page.goto("http://localhost:8781/index.html", { waitUntil: "networkidle0" });
-  await new Promise((r) => setTimeout(r, 900));
+  await new Promise((r) => setTimeout(r, 800));
   await page.evaluate(() => {
-    const el = [...document.querySelectorAll(".rail-item")].find((b) => (b.title || "").indexOf("Snowflake ML") > -1);
-    if (el) el.click();
+    const items = Array.from(document.querySelectorAll(".rail-item"));
+    const t = items.find((el) => /Snowflake ML|ML Predictions|Score renewal/i.test(el.textContent));
+    if (t) t.click();
   });
-  await new Promise((r) => setTimeout(r, 900));
+  await new Promise((r) => setTimeout(r, 1200));
+  await page.screenshot({ path: "tools/ml-default.png" });
 
-  const dflt = await page.evaluate(() => ({
-    adhoc: !!document.querySelector(".ml-infer"),
-    predEmpty: !!document.querySelector(".ml-pred-empty"),
-    emptyHeading: (document.querySelector(".ml-pred-empty h3") || {}).textContent || "",
-    formFields: document.querySelectorAll(".ml-form-grid .mlf-field").length,
-    acctVal: (document.querySelector(".mlf-in.acct") || {}).value || "",
-    bareSpinner: !!document.querySelector("main > .analyst-loading"),
+  // Click Run prediction -> capture the scored result (seed fallback in preview).
+  await page.evaluate(() => {
+    const b = Array.from(document.querySelectorAll("button")).find((x) => /Run prediction/i.test(x.textContent));
+    if (b) b.click();
+  });
+  await new Promise((r) => setTimeout(r, 300));
+  await page.screenshot({ path: "tools/ml-scoring.png" });
+  await new Promise((r) => setTimeout(r, 1600));
+  await page.screenshot({ path: "tools/ml-scored.png" });
+
+  const probe = await page.evaluate(() => ({
+    facts: document.querySelectorAll(".ml-fact").length,
+    gauge: !!document.querySelector(".gauge.donut"),
+    drivers: document.querySelectorAll(".driver").length,
   }));
-  await page.screenshot({ path: "tools/ml-default.png", fullPage: true });
-
-  // Run a prediction
-  await page.evaluate(() => { const b = [...document.querySelectorAll(".ml-pred-empty .pill-btn")][0]; if (b) b.click(); });
-  await new Promise((r) => setTimeout(r, 2500));
-  const scored = await page.evaluate(() => ({
-    hasPred: !!document.querySelector(".pred-top"),
-    hasPayload: !!document.querySelector(".ml-payload"),
-    hasLog: !!document.querySelector(".ml-log"),
-  }));
-  await page.screenshot({ path: "tools/ml-scored.png", fullPage: true });
-
-  console.log("default:", JSON.stringify(dflt, null, 2));
-  console.log("scored:", JSON.stringify(scored, null, 2));
-  console.log("consoleErrors:", errs.length ? errs : "none");
+  console.log("probe:", JSON.stringify(probe));
   await browser.close();
 })();

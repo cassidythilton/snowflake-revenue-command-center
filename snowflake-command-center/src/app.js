@@ -82,6 +82,10 @@
   // Snowsight org/account for deep links into governed Snowflake objects
   // (org DOMOINC / account DOMOPARTNER on domopartner.us-east-1).
   var SNOWSIGHT_BASE = "https://app.snowflake.com/domoinc/domopartner";
+  // Snowflake Intelligence / CoWork app (where REVENUE_CC_AGENT is used).
+  var SI_BASE = "https://ai.snowflake.com/domoinc/domopartner";
+  // The governed Domo Workflow behind Approve & execute (Renewal Risk Retention).
+  var WORKFLOW_MODEL_ID = "9cf41b05-6fe5-4582-9299-dd9442196512";
 
   // The 5 governed gold views federated into Domo via Cloud Amplifier (the
   // reference app's "Governed Data Lineage"). dataSetId => manifest datasetsMapping.
@@ -110,6 +114,7 @@
     surface: "home",
     data: null,
     mode: "loading",
+    hydrating: false,
     dataSource: null,
     home: { range: 24, showBand: true },
     analyst: { input: "", loading: false, error: null, messages: [], conversationHistory: [], recent: [], recentLoaded: false, seq: 0,
@@ -119,8 +124,12 @@
     agent: { question: "", loading: false, error: null, result: null, queue: [], seed: null, inspector: false },
     ml: { accountId: "", loading: false, error: null, result: null, inspector: false, seed: null, codeTab: "curl", fbNote: "" },
     ops: { loading: false, loaded: false, error: null, scenarios: [], feedback: [], note: null, tab: "scenarios", selected: null, adding: false },
+    // AI Readiness control plane: real Horizon source context + Domo AI Readiness sync, per governed gold view.
+    rl: { selected: null, horizon: {}, domo: {}, busy: {}, note: null },
     approvals: { loading: false, loaded: false, error: null, live: false, seed: null, pending: [], writeback: [], history: [], protected: null, byId: {}, active: null, note: null, busy: null,
       tasks: [], tasksLoaded: false, tasksLoading: false, tasksLive: false, tasksError: null, busyTask: null, starting: null },
+    // Action Journey (cross-system agent→agent trace on the home Agent Action Queue).
+    journey: { active: null, runs: {}, executed: {}, rejected: {}, inspect: null, inspectCache: {}, instanceIds: {} },
     governance: { loading: false, loaded: false, error: null, live: false, seed: null, parity: null, masking: null, rlSelected: null, synced: {}, wiped: {}, showDetail: false },
     cowork: { loading: false, loaded: false, error: null, live: false, mcp: null, cowork: null },
     cw: { threads: [], activeId: null, thinking: false, sending: false, draft: "", showWiring: false, serverThreads: [], serverLoaded: false, serverLoading: false, replay: null, userName: "", userLoaded: false, userLoading: false },
@@ -162,10 +171,14 @@
     var seg = t === "table" ? "/table/" : (t === "semantic-view" || t === "semantic") ? "/semantic-view/" : "/view/";
     return base + seg + encodeURIComponent(name);
   }
-  function snowsightAgentHref() { return SNOWSIGHT_BASE + "/#/studio/agents"; }
+  // The agent lives in Snowflake Intelligence / CoWork (ai.snowflake.com), not the
+  // Snowsight studio index — that path 404s. Link to where the agent is used.
+  function snowsightAgentHref() { return SI_BASE + "/#/ai"; }
   function domoDatasetHref(id) { return DOMO_INSTANCE + "/datasources/" + id + "/details/overview"; }
   function domoAiReadinessHref(id) { return DOMO_INSTANCE + "/datasources/" + id + "/details/ai-readiness"; }
   function workflowHref(modelId, version) { return DOMO_INSTANCE + "/workflows/models/" + modelId + "/" + (version || "1.0.0"); }
+  // The governed Renewal Risk Retention workflow model page (runs live here).
+  function retentionWorkflowHref() { return DOMO_INSTANCE + "/workflows/models/" + WORKFLOW_MODEL_ID; }
   // Small "Open in Snowflake / Open Domo dataset" link element with an out arrow.
   function srcLink(label, href, cls) {
     return h("a", { class: "src-link" + (cls ? " " + cls : ""), href: href, target: "_blank", rel: "noopener" }, [label, h("span", { class: "src-arrow" }, ["\u2197"])]);
@@ -178,7 +191,9 @@
     if (attrs) Object.keys(attrs).forEach(function (k) {
       if (k === "class") node.className = attrs[k];
       else if (k === "html") node.innerHTML = attrs[k];
-      else node.setAttribute(k, attrs[k]);
+      // Skip null/undefined/false so `disabled: cond ? "true" : null` doesn't
+      // render disabled="null" (which is truthy and wrongly disables the node).
+      else if (attrs[k] != null && attrs[k] !== false) node.setAttribute(k, attrs[k]);
     });
     (kids || []).forEach(function (c) { if (c != null) node.appendChild(typeof c === "string" ? document.createTextNode(c) : c); });
     return node;
@@ -225,11 +240,9 @@
 
   /* ------------------------- CE diagnostics logging ----------------------- */
   // Transparently log every Code Engine call (function, status, latency, error)
-  // so bridge failures are visible in-app instead of silently degrading. A
-  // floating "CE" pill opens a panel with the recent calls.
+  // to the browser console so bridge failures are visible during debugging.
   function pushDiag(e) {
     var d = state.diag; d.entries.unshift(e); if (d.entries.length > 80) d.entries.pop();
-    updateDiagBadge(); if (d.open) renderDiagPanel();
   }
   function ceInstrument() {
     if (typeof domo === "undefined" || !domo || typeof domo.post !== "function" || domo.__ceInstrumented) return;
@@ -254,47 +267,6 @@
       });
     };
     domo.__ceInstrumented = true;
-  }
-  function ensureDiagWidget() {
-    if (el("ceDiagBtn")) return;
-    var btn = h("button", { id: "ceDiagBtn", class: "ce-diag-btn", title: "Code Engine call log" }, [
-      h("span", { class: "ce-diag-dot" }), "CE", h("span", { class: "ce-diag-count", id: "ceDiagCount" }, ["0"])
-    ]);
-    btn.addEventListener("click", function () { state.diag.open = !state.diag.open; renderDiagPanel(); });
-    document.body.appendChild(btn);
-    var panel = h("div", { id: "ceDiagPanel", class: "ce-diag-panel" });
-    document.body.appendChild(panel);
-    renderDiagPanel(); updateDiagBadge();
-  }
-  function updateDiagBadge() {
-    var c = el("ceDiagCount"), btn = el("ceDiagBtn"); if (!c || !btn) return;
-    var errs = state.diag.entries.filter(function (e) { return !e.ok; }).length;
-    c.textContent = String(state.diag.entries.length);
-    btn.classList.toggle("has-err", errs > 0);
-  }
-  function renderDiagPanel() {
-    var panel = el("ceDiagPanel"); if (!panel) return;
-    panel.classList.toggle("open", !!state.diag.open);
-    if (!state.diag.open) { panel.innerHTML = ""; return; }
-    panel.innerHTML = "";
-    var head = h("div", { class: "ce-diag-head" }, [
-      h("span", {}, ["Code Engine \u00b7 recent calls"]),
-      (function () { var b = h("button", { class: "ce-diag-x" }, ["\u00d7"]); b.addEventListener("click", function () { state.diag.open = false; renderDiagPanel(); }); return b; })()
-    ]);
-    panel.appendChild(head);
-    var body = h("div", { class: "ce-diag-body" });
-    if (!state.diag.entries.length) body.appendChild(h("p", { class: "ce-diag-empty" }, ["No Code Engine calls yet."]));
-    state.diag.entries.forEach(function (e) {
-      body.appendChild(h("div", { class: "ce-diag-row" + (e.ok ? "" : " err") }, [
-        h("span", { class: "ce-diag-fn" }, [e.fn]),
-        h("span", { class: "ce-diag-st" }, [e.status]),
-        h("span", { class: "ce-diag-ms" }, [e.ms + "ms"]),
-        e.shape ? h("div", { class: "ce-diag-shape" }, ["keys: " + e.shape]) : null,
-        e.error ? h("div", { class: "ce-diag-msg" }, [String(e.error).slice(0, 300)]) : null,
-        e.raw ? h("div", { class: "ce-diag-raw" }, [e.raw]) : null
-      ]));
-    });
-    panel.appendChild(body);
   }
 
   // Pretty-print generated SQL for the read-only "View generated SQL" blocks.
@@ -331,6 +303,22 @@
     document.body.removeChild(a); setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   }
 
+  /* ------------------------ persistent read cache ------------------------ */
+  /* Stale-while-revalidate: persist the last successful *live* payload per
+   * surface (namespaced by persona) to localStorage. On reopen we paint the
+   * cached data instantly, then the live read refreshes it behind the scenes.
+   * Cache is a hint only — a corrupt/absent entry just means no instant paint. */
+  var CACHE_PREFIX = "rcc_cache_";
+  function cacheKey(name) { return CACHE_PREFIX + name + ":" + (state.persona || "_"); }
+  function cacheGet(name) {
+    try { var s = localStorage.getItem(cacheKey(name)); if (!s) return null; var o = JSON.parse(s); return (o && "v" in o) ? o.v : null; }
+    catch (e) { return null; }
+  }
+  function cacheSet(name, val) {
+    if (val == null) return;
+    try { localStorage.setItem(cacheKey(name), JSON.stringify({ t: Date.now(), v: val })); } catch (e) { /* quota/serialize — non-fatal */ }
+  }
+
   /* --------------------------- AppDB (Domo datastores) ------------------- */
   /* Live: ryuu domo.get/post against /domo/datastores/v1/collections/<name>.
    * Offline: localStorage so the recent-query rail + config persist in preview. */
@@ -364,145 +352,41 @@
   }
 
   /* ------------------------------- data ---------------------------------- */
-  /* Forecast Home is powered by the Cloud Amplifier federated datasets: the
-   * same Snowflake tables (registered via Cloud Amplifier / Cobra Evo) queried
-   * live through Domo's SQL API — data never leaves Snowflake. Aliases are
-   * declared in manifest.datasetsMapping. If the federation read fails we fall
-   * back to the Code Engine bridge, then to the local sample seed. */
-  var CA = {
-    rev: "fact_revenue_daily",
-    risk: "fact_renewal_risk",
-    actions: "fact_agent_actions",
-    support: "fact_support_cases",
-    forecast: "gold_revenue_forecast"
-  };
-  function pad2(n) { return (n < 10 ? "0" : "") + n; }
-  function ymOf(d) { return d.getFullYear() + "-" + pad2(d.getMonth() + 1); }
-  function ymdOf(d) { return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }
+  /* Forecast Home reads the governed Snowflake data through the snowflakece
+   * Code Engine bridge (getForecastHome), which runs the aggregate queries
+   * server-side in a single round-trip. The gold/fact datasets in
+   * manifest.datasetsMapping are Cloud Amplifier *federated* (data stays in
+   * Snowflake) — the /sql/v1 app endpoint returns 404 for federated datasets,
+   * so we do NOT attempt a client-side federation read (that failed attempt was
+   * pure latency on every open). Live read → local sample seed fallback. */
 
-  // Parse Domo's SQL API columnar response. The payload is wrapped in .body
-  // (or .data): { columns:[names], rows:[[...]] }. Keys are lower-cased so
-  // consumers can reference columns case-insensitively.
-  function parseColumnar(res) {
-    var b = (res && (res.body || res.data)) || res || {};
-    var rawCols = b.columns || [];
-    var rows = b.rows || [];
-    var cols = rawCols.map(function (c) {
-      var name = (c && typeof c === "object") ? (c.name || c.alias || c.label || c.columnName) : c;
-      return String(name).toLowerCase();
-    });
-    return rows.map(function (row) {
-      var o = {};
-      if (Array.isArray(row)) cols.forEach(function (c, i) { o[c] = row[i]; });
-      else Object.keys(row || {}).forEach(function (k) { o[String(k).toLowerCase()] = row[k]; });
-      return o;
-    });
+  // Keep the Snowflake warehouse resumed so the first governed read isn't a cold
+  // start. Fired fire-and-forget on init and on a light interval while the app
+  // is open; ping is cheap and never blocks a render.
+  var warmTimer = null;
+  function warmWarehouse() {
+    if (!isLive()) return;
+    try { domo.post(CE + "ping", {}).catch(function () {}); } catch (e) { /* non-blocking */ }
   }
-
-  // Run SQL against a federated (Cloud Amplifier) dataset alias. The dataset is
-  // referenced by its alias as the table name in FROM (Domo SQL API convention).
-  function amplifierQuery(alias, sql) {
-    return domo.post("/sql/v1/" + alias, sql, { contentType: "text/plain" }).then(parseColumnar);
-  }
-
-  function loadDataViaAmplifier(persona) {
-    var region = regionOf(persona);
-    var regClause = region ? " AND `REGION` = '" + region + "'" : "";
-    var now = new Date();
-    var monthStart = ymOf(now) + "-01";
-    var date90 = ymdOf(new Date(now.getTime() - 90 * 864e5));
-
-    var out = {
-      status: "SUCCEEDED", mode: "LIVE", persona: persona || "Executive Sponsor",
-      regionScope: region || "All regions",
-      source: "Cloud Amplifier federation \u00b7 SNOWFLAKE_REVENUE_CC.CORE (live, data stays in Snowflake)",
-      generatedAt: new Date().toISOString(),
-      kpis: {}, actualVsForecast: [], revenueForecast: null, regionalRisk: [], actionQueue: {}, incident: null
-    };
-
-    var qAV = "SELECT `FISCAL_PERIOD` AS period, SUM(`NET_REVENUE`) AS actual, SUM(`DAILY_ARR`) AS forecast " +
-      "FROM " + CA.rev + " WHERE 1=1" + regClause + " GROUP BY `FISCAL_PERIOD` ORDER BY `FISCAL_PERIOD` DESC LIMIT 14";
-    var qRar = "SELECT SUM(`REVENUE_AT_RISK`) AS v FROM " + CA.risk + " WHERE `RISK_MONTH` = '" + monthStart + "'" + regClause;
-    var qProtected = "SELECT SUM(`ACTUAL_REVENUE_PROTECTED`) AS v FROM " + CA.actions + " WHERE `EXECUTION_STATUS` = 'Executed'" + regClause;
-    var qSla = "SELECT SUM(CASE WHEN `SLA_BREACHED_FLAG` = 'true' THEN 1 ELSE 0 END) AS breaches, COUNT(*) AS cases " +
-      "FROM " + CA.support + " WHERE `DATE` >= '" + date90 + "'" + regClause;
-    var qForecast = "SELECT `PERIOD_MONTH` AS period_month, `KIND` AS kind, `ACTUAL` AS actual, `FORECAST` AS forecast, " +
-      "`LOWER_BOUND` AS lower_bound, `UPPER_BOUND` AS upper_bound FROM " + CA.forecast + " ORDER BY `PERIOD_MONTH`";
-    var qRegional = "SELECT `REGION` AS region, `SEGMENT` AS segment, ROUND(AVG(`RENEWAL_RISK_SCORE`),1) AS avgrisk, " +
-      "SUM(CASE WHEN `RISK_TIER` = 'High' THEN 1 ELSE 0 END) AS highrisk, SUM(`REVENUE_AT_RISK`) AS rar " +
-      "FROM " + CA.risk + " WHERE `RISK_MONTH` = '" + monthStart + "'" + regClause + " GROUP BY `REGION`, `SEGMENT` ORDER BY rar DESC LIMIT 12";
-    var qQueue = "SELECT SUM(CASE WHEN `APPROVAL_STATUS`='Pending' THEN 1 ELSE 0 END) AS pending, " +
-      "SUM(CASE WHEN `APPROVAL_STATUS`='Approved' THEN 1 ELSE 0 END) AS approved, " +
-      "SUM(CASE WHEN `EXECUTION_STATUS`='Executed' THEN 1 ELSE 0 END) AS executed, " +
-      "SUM(CASE WHEN `APPROVAL_STATUS`='Rejected' THEN 1 ELSE 0 END) AS rejected, " +
-      "SUM(CASE WHEN `APPROVAL_STATUS`='Not Required' THEN 1 ELSE 0 END) AS notrequired " +
-      "FROM " + CA.actions + " WHERE 1=1" + regClause;
-    var qTop = "SELECT `RECOMMENDATION` AS action, COUNT(*) AS cnt, SUM(`EXPECTED_REVENUE_PROTECTED`) AS rar " +
-      "FROM " + CA.actions + " WHERE 1=1" + regClause + " GROUP BY `RECOMMENDATION` ORDER BY cnt DESC LIMIT 5";
-
-    return amplifierQuery(CA.rev, qAV).then(function (av) {
-      if (!av.length) throw new Error("no federated revenue rows");
-      var cur = toNum(av[0].actual), prior = av.length > 1 ? toNum(av[1].actual) : 0;
-      out.kpis.netRevenue = { label: "Net Revenue (MTD)", value: cur, priorValue: prior,
-        deltaPct: prior ? Math.round(((cur - prior) / prior) * 1000) / 10 : 0, unit: "USD" };
-      out.actualVsForecast = av.slice().reverse().map(function (r) { return { period: r.period, actual: toNum(r.actual), forecast: toNum(r.forecast) }; });
-      return amplifierQuery(CA.risk, qRar);
-    }).then(function (rows) {
-      out.kpis.revenueAtRisk = { label: "Revenue at Risk", value: toNum(rows[0] && rows[0].v), unit: "USD", context: "current month" };
-      return amplifierQuery(CA.actions, qProtected);
-    }).then(function (rows) {
-      out.kpis.protectedRevenue = { label: "Protected Revenue", value: toNum(rows[0] && rows[0].v), unit: "USD", context: "executed agent actions" };
-      return amplifierQuery(CA.support, qSla);
-    }).then(function (rows) {
-      var r = rows[0] || {}; var breaches = toNum(r.breaches), cases = toNum(r.cases);
-      out.kpis.slaBreachRate = { label: "SLA Breach Rate (90d)", value: cases ? Math.round((breaches / cases) * 1000) / 10 : 0, unit: "%", breaches: breaches, cases: cases };
-      return amplifierQuery(CA.forecast, qForecast).catch(function () { return []; });
-    }).then(function (rows) {
-      if (rows && rows.length) {
-        var history = [], forecast = [];
-        rows.forEach(function (r) {
-          var period = String(r.period_month || "").slice(0, 7);
-          if (String(r.kind) === "forecast") forecast.push({ period: period, forecast: toNum(r.forecast), lower: toNum(r.lower_bound), upper: toNum(r.upper_bound) });
-          else history.push({ period: period, actual: toNum(r.actual) });
-        });
-        out.revenueForecast = { source: "SNOWFLAKE_REVENUE_CC.CORE.GOLD_REVENUE_FORECAST via Cloud Amplifier (SNOWFLAKE.ML.FORECAST)",
-          grain: "month", unit: "USD", predictionInterval: 0.95, history: history, forecast: forecast };
-      }
-      return amplifierQuery(CA.risk, qRegional);
-    }).then(function (rows) {
-      out.regionalRisk = rows.map(function (r) { return { region: r.region, segment: r.segment, avgRisk: toNum(r.avgrisk), highRiskAccounts: toNum(r.highrisk), revenueAtRisk: toNum(r.rar) }; });
-      return amplifierQuery(CA.actions, qQueue);
-    }).then(function (rows) {
-      var r = rows[0] || {};
-      out.actionQueue = { pending: toNum(r.pending), approved: toNum(r.approved), executed: toNum(r.executed), rejected: toNum(r.rejected), notRequired: toNum(r.notrequired), topActions: [] };
-      return amplifierQuery(CA.actions, qTop);
-    }).then(function (rows) {
-      out.actionQueue.topActions = rows.map(function (r) { return { action: r.action, count: toNum(r.cnt), revenueAtRisk: toNum(r.rar) }; });
-      // Guard: if the federation read parsed to empty/zero (e.g. an unexpected
-      // response shape), reject so loadData falls back to the Code Engine bridge
-      // rather than rendering a $0 / NaN dashboard.
-      if (!(toNum(out.kpis.netRevenue && out.kpis.netRevenue.value) > 0)) throw new Error("Cloud Amplifier returned empty/zero data");
-      return out;
-    });
+  function startWarmLoop() {
+    if (warmTimer || !isLive()) return;
+    warmWarehouse();
+    warmTimer = setInterval(warmWarehouse, 240000);
   }
 
   function loadData(persona) {
     state.mode = "loading";
-    if (isLive()) {
-      return loadDataViaAmplifier(persona)
-        .then(function (d) { if (d && d.status === "SUCCEEDED") { state.mode = "live"; state.dataSource = "amplifier"; return d; } throw new Error("amplifier empty"); })
-        .catch(function (aerr) {
-          console.warn("[app] Cloud Amplifier read failed, trying Code Engine bridge:", aerr);
-          return domo.post(CE + "getForecastHome", { persona: persona })
-            .then(function (resp) {
-              var d = unwrap(resp);
-              if (d && d.status === "SUCCEEDED") { state.mode = "live"; state.dataSource = "codeengine"; return d; }
-              throw new Error(d && d.error ? d.error : "Code Engine returned no data");
-            })
-            .catch(function (err) { console.warn("[app] live read failed, using sample seed:", err); return sampleData(persona); });
-        });
-    }
-    return sampleData(persona);
+    if (!isLive()) return sampleData(persona);
+    // Direct to the working live read. The federated /sql/v1 path 404s, so
+    // attempting it first only added a failed request + a caught error on every
+    // open. getForecastHome batches the governed aggregates server-side.
+    return domo.post(CE + "getForecastHome", { persona: persona })
+      .then(function (resp) {
+        var d = unwrap(resp);
+        if (d && d.status === "SUCCEEDED") { state.mode = "live"; state.dataSource = "codeengine"; return d; }
+        throw new Error(d && d.error ? d.error : "Code Engine returned no data");
+      })
+      .catch(function (err) { console.warn("[app] live read failed, using sample seed:", err); return sampleData(persona); });
   }
   function sampleData(persona) {
     return fetch("./public/mock/forecast-home.json")
@@ -1203,6 +1087,7 @@
       state.semantic.sql = payload.sql || null;
       state.semantic.live = !!live;
       state.semantic.loading = false; state.semantic.loaded = true;
+      if (live) cacheSet("semantic", { model: state.semantic.model, view: state.semantic.view, sql: state.semantic.sql });
       refresh();
     };
     var seed = function () {
@@ -1839,7 +1724,8 @@
     if (!id) return;
     state.ml.accountId = id;
     state.ml.loading = true; state.ml.error = null; state.ml.result = null; state.ml.inspector = false; state.ml.fbNote = "";
-    renderView();
+    state.ml.step = 0; renderView();
+    setTimeout(mlStepTick, 620);
     var done = function (res) { state.ml.loading = false; state.ml.result = res; renderView(); };
     var fail = function (err) { state.ml.loading = false; state.ml.error = String(err && err.message ? err.message : err); renderView(); };
     if (isLive()) {
@@ -1866,21 +1752,20 @@
     loadMLSeed().then(function (s) { var r = mlFromSeed(s, id); r ? done(r) : fail("Offline preview ships scores for the seeded accounts only. Connect the snowflakece bridge to score any account."); });
   }
 
+  // Full-donut probability gauge (reference parity): a 360deg ring filled by the
+  // probability, colored by risk tier, with the value + label inside.
   function probGauge(p) {
     p = Math.max(0, Math.min(1, Number(p) || 0));
-    var svgNS = "http://www.w3.org/2000/svg", R = 46, C = Math.PI * R, cx = 60, cy = 58;
-    var svg = document.createElementNS(svgNS, "svg"); svg.setAttribute("class", "gauge"); svg.setAttribute("viewBox", "0 0 120 68"); svg.setAttribute("width", "120"); svg.setAttribute("height", "68");
-    function arc(cls, frac, color) {
-      var el2 = document.createElementNS(svgNS, "circle");
-      el2.setAttribute("cx", cx); el2.setAttribute("cy", cy); el2.setAttribute("r", R); el2.setAttribute("fill", "none");
-      el2.setAttribute("stroke", color); el2.setAttribute("stroke-width", "11"); el2.setAttribute("stroke-linecap", "round");
-      el2.setAttribute("stroke-dasharray", (C * frac) + " " + (C * (1 - frac) + C));
-      el2.setAttribute("transform", "rotate(180 " + cx + " " + cy + ")");
-      svg.appendChild(el2);
-    }
-    arc("track", 1, "var(--line)");
-    arc("val", p, p >= 0.5 ? "var(--status-bad)" : "var(--status-good)");
-    var t = document.createElementNS(svgNS, "text"); t.setAttribute("x", cx); t.setAttribute("y", cy - 6); t.setAttribute("text-anchor", "middle"); t.setAttribute("class", "gauge-val"); t.textContent = (p * 100).toFixed(1) + "%"; svg.appendChild(t);
+    var svgNS = "http://www.w3.org/2000/svg", R = 46, C = 2 * Math.PI * R, cx = 60, cy = 60;
+    var color = p >= 0.5 ? "var(--status-bad)" : (p >= 0.3 ? "var(--status-warn)" : "var(--status-good)");
+    var svg = document.createElementNS(svgNS, "svg"); svg.setAttribute("class", "gauge donut"); svg.setAttribute("viewBox", "0 0 120 120");
+    var track = document.createElementNS(svgNS, "circle");
+    track.setAttribute("cx", cx); track.setAttribute("cy", cy); track.setAttribute("r", R); track.setAttribute("fill", "none"); track.setAttribute("stroke", "var(--n-100)"); track.setAttribute("stroke-width", "12"); svg.appendChild(track);
+    var val = document.createElementNS(svgNS, "circle");
+    val.setAttribute("cx", cx); val.setAttribute("cy", cy); val.setAttribute("r", R); val.setAttribute("fill", "none"); val.setAttribute("stroke", color); val.setAttribute("stroke-width", "12"); val.setAttribute("stroke-linecap", "round");
+    val.setAttribute("stroke-dasharray", (C * p).toFixed(1) + " " + (C * (1 - p)).toFixed(1));
+    val.setAttribute("transform", "rotate(-90 " + cx + " " + cy + ")"); svg.appendChild(val);
+    var t = document.createElementNS(svgNS, "text"); t.setAttribute("x", cx); t.setAttribute("y", cy + 7); t.setAttribute("text-anchor", "middle"); t.setAttribute("class", "gauge-val"); t.textContent = (p * 100).toFixed(1) + "%"; svg.appendChild(t);
     return svg;
   }
 
@@ -1947,15 +1832,12 @@
           h("h2", {}, ["Renewal-Risk Model"]),
           h("span", { class: "ml-serve " + (serving ? "on" : "seed") }, [serving ? "Serving \u00b7 live v" + ver : "Bridge staged \u00b7 preview"])
         ]),
-        h("div", { class: "ml-status-facts" }, [
-          h("span", {}, [m.type || "SNOWFLAKE.ML.CLASSIFICATION"]),
-          h("span", { class: "dot-sep" }, ["\u00b7"]),
-          h("span", {}, ["endpoint ", h("code", {}, ["PREDICT_RENEWAL_RISK"])]),
-          h("span", { class: "dot-sep" }, ["\u00b7"]),
-          h("span", {}, ["target ", h("code", {}, [/=/.test(m.target || "") ? "IS_HIGH_RISK" : (m.target || "IS_HIGH_RISK")])]),
-          h("span", { class: "dot-sep" }, ["\u00b7"]),
-          h("span", {}, ["native warehouse inference \u00b7 governed by ",
-            srcLink("Horizon", snowsightObjHref("semantic-view", "REVENUE_CC_ANALYST"), "sf")])
+        h("p", { class: "ml-status-sub" }, ["Native in-warehouse inference \u2014 governed by ",
+          srcLink("Horizon", snowsightObjHref("semantic-view", "REVENUE_CC_ANALYST"), "sf"), ". No data leaves Snowflake."]),
+        h("div", { class: "ml-facts" }, [
+          h("span", { class: "ml-fact" }, [m.type || "SNOWFLAKE.ML.CLASSIFICATION"]),
+          h("span", { class: "ml-fact" }, [h("span", { class: "ml-fact-k" }, ["endpoint"]), h("code", {}, ["PREDICT_RENEWAL_RISK"])]),
+          h("span", { class: "ml-fact" }, [h("span", { class: "ml-fact-k" }, ["target"]), h("code", {}, [/=/.test(m.target || "") ? "IS_HIGH_RISK" : (m.target || "IS_HIGH_RISK")])])
         ])
       ]),
       h("div", { class: "ml-status-r" }, [
@@ -1964,6 +1846,35 @@
       ])
     ]);
     return head;
+  }
+
+  // Live scoring activity log (reference parity): steps reveal progressively with
+  // a spinner on the in-flight step, so clicking Score shows immediate activity
+  // instead of a dead screen while the warehouse scores.
+  var ML_STEPS = [
+    "Building feature vector from FACT_* \u00b7 governed read as REVENUE_CC_READER",
+    "POST \u2192 PREDICT_RENEWAL_RISK \u00b7 Code Engine bridge",
+    "SNOWFLAKE.ML in-warehouse inference \u00b7 REVENUE_CC_RISK_MODEL",
+    "Awaiting prediction \u2014 native warehouse inference (no data leaves Snowflake)",
+    "Parsing prediction \u2192 probability + risk class"
+  ];
+  function mlStepTick() {
+    if (!state.ml.loading) return;
+    if ((state.ml.step || 0) < ML_STEPS.length - 1) {
+      state.ml.step = (state.ml.step || 0) + 1;
+      if (state.surface === "ml") renderView();
+      setTimeout(mlStepTick, 620);
+    }
+  }
+  function mlProcessing() {
+    var cur = state.ml.step || 0;
+    var log = h("div", { class: "ml-log ml-log-live" });
+    ML_STEPS.forEach(function (s, i) {
+      var cls = i < cur ? "done" : (i === cur ? "active" : "pending");
+      var ico = i < cur ? h("span", { class: "mll-dot ok" }) : (i === cur ? h("span", { class: "mll-spin" }) : h("span", { class: "mll-dot pend" }));
+      log.appendChild(h("div", { class: "ml-log-line " + cls }, [ico, h("span", {}, [s])]));
+    });
+    return log;
   }
 
   // Dark inference-log terminal (mirrors the reference Model Serving log) —
@@ -2012,7 +1923,6 @@
       h("div", { class: "ml-acct-row" }, [acct, runBtn]),
       grid
     ];
-    if (opts.showLog !== false) children.push(mlInferenceLog(res));
     return h("article", { class: "panel col-5 ml-infer" }, children);
   }
 
@@ -2022,23 +1932,26 @@
     var loading = state.ml.loading;
     var head = h("div", { class: "panel-head" }, [
       h("div", {}, [h("h2", {}, ["Prediction"]), h("p", {}, ["Native in-warehouse inference \u00b7 Model Registry \u00b7 Horizon-governed"])]),
-      h("span", { class: "ml-serve seed" }, [loading ? "scoring\u2026" : "ready"])
+      h("span", { class: "ml-serve " + (loading ? "on" : "seed") }, [loading ? "scoring\u2026" : "ready"])
     ]);
+    if (loading) {
+      // Live activity log while the warehouse scores (reference parity).
+      return h("article", { class: "panel col-7 ml-pred" }, [head,
+        h("div", { class: "ml-scoring" }, [
+          h("span", { class: "ml-scoring-tag" }, ["Scoring", h("span", { class: "ml-scoring-dots" }, ["\u2026"])]),
+          mlProcessing()
+        ])
+      ]);
+    }
     var gaugeIco = "<svg viewBox='0 0 120 68' fill='none'><path d='M14 58a46 46 0 0 1 92 0' stroke='#dce4ea' stroke-width='11' stroke-linecap='round'/><path d='M14 58a46 46 0 0 1 20-36' stroke='#b1e5f7' stroke-width='11' stroke-linecap='round'/></svg>";
     var body = h("div", { class: "ml-pred-empty" }, [
-      loading
-        ? h("span", { class: "spinner lg" })
-        : h("span", { class: "ml-pred-empty-gauge", html: gaugeIco }),
-      h("h3", {}, [loading ? "Scoring the account\u2026" : "Run a prediction"]),
-      h("p", {}, [loading
-        ? "Building the feature vector from the governed FACT_* tables and calling PREDICT_RENEWAL_RISK in-warehouse \u2014 no data leaves Snowflake."
-        : "Enter an account and run the model to see its renewal-risk probability, top drivers, and the recommended save play."])
+      h("span", { class: "ml-pred-empty-gauge", html: gaugeIco }),
+      h("h3", {}, ["Run a prediction"]),
+      h("p", {}, ["Enter an account and run the model to see its renewal-risk probability, top drivers, and the recommended save play."])
     ]);
-    if (!loading) {
-      var runBtn = h("button", { class: "pill-btn go solid" }, ["Run prediction"]);
-      runBtn.addEventListener("click", function () { var el2 = document.querySelector(".mlf-in.acct"); runScore(el2 ? el2.value : (state.ml.accountId || "")); });
-      body.appendChild(runBtn);
-    }
+    var runBtn = h("button", { class: "pill-btn go solid" }, ["Run prediction"]);
+    runBtn.addEventListener("click", function () { var el2 = document.querySelector(".mlf-in.acct"); runScore(el2 ? el2.value : (state.ml.accountId || "")); });
+    body.appendChild(runBtn);
     return h("article", { class: "panel col-7 ml-pred" }, [head, body]);
   }
 
@@ -2060,11 +1973,11 @@
       h("div", { class: "panel-head" }, [h("div", {}, [h("h2", {}, ["Prediction"]), h("p", {}, ["Live score \u00b7 " + ((res.model && res.model.name) || "REVENUE_CC_RISK_MODEL") + " v" + ((res.model && res.model.version) || "\u2014")])]), h("span", { class: "ml-serve " + (res.live ? "on" : "seed") }, [res.live ? "live inference" : "preview"])])
     ]);
     var top = h("div", { class: "pred-top" }, [
-      h("div", { class: "gauge-wrap" }, [probGauge(res.predictedProbability), h("span", { class: "gauge-cap" }, ["renewal-risk prob."])]),
+      h("div", { class: "gauge-wrap" }, [probGauge(res.predictedProbability), h("span", { class: "gauge-cap" }, ["Renewal-risk prob."])]),
       h("div", { class: "pred-summary" }, [
         h("div", { class: "pred-tier tier-" + tier.cls }, [tier.tier + " risk"]),
         h("div", { class: "pred-risk" }, [money(atRisk), h("span", {}, [" revenue at risk"])]),
-        h("div", { class: "pred-action" }, [h("span", {}, ["Recommended"]), " " + tier.action])
+        h("div", { class: "pred-action" }, [h("span", { class: "pred-action-k" }, ["Recommended"]), h("span", { class: "pred-action-v" }, [tier.action])])
       ])
     ]);
     pred.appendChild(top);
@@ -2194,7 +2107,7 @@
   /* --------------------------- Snowflake Ops ----------------------------- */
   function loadOps() {
     state.ops.loading = true; renderView();
-    var done = function (sc, fb, live) { state.ops.loading = false; state.ops.loaded = true; state.ops.scenarios = sc; state.ops.feedback = fb; state.ops.live = live; renderView(); };
+    var done = function (sc, fb, live) { state.ops.loading = false; state.ops.loaded = true; state.ops.scenarios = sc; state.ops.feedback = fb; state.ops.live = live; if (live) cacheSet("ops", { scenarios: sc, feedback: fb }); renderView(); };
     if (isLive()) {
       domo.post(CE + "getOpsState", {})
         .then(function (resp) {
@@ -2411,7 +2324,7 @@
     var banner = connBanner(); if (banner) frag.appendChild(banner);
 
     if (!state.ops.loaded && !state.ops.loading) { loadOps(); }
-    if (state.ops.loading) { frag.appendChild(h("div", { class: "analyst-loading" }, [h("span", { class: "spinner" }), "Reading the Hybrid Tables (operational state)\u2026"])); return frag; }
+    if (state.ops.loading && !(state.ops.scenarios.length || state.ops.feedback.length)) { frag.appendChild(h("div", { class: "analyst-loading" }, [h("span", { class: "spinner" }), "Reading the Hybrid Tables (operational state)\u2026"])); return frag; }
 
     frag.appendChild(h("section", { class: "grid" }, [opsStateHeader()]));
     if (state.ops.note) frag.appendChild(h("div", { class: "ops-note" }, [state.ops.note]));
@@ -2494,7 +2407,17 @@
       state.approvals.seed = seed;
       state.approvals.history = seed.history || [];
       mergeById(seed.pending);
+      // Instant paint: if we cached a prior live queue read, show those real rows
+      // immediately while getApprovalQueue (slow, federated) refreshes behind.
       if (isLive()) {
+        var cachedQ = cacheGet("approvals_live");
+        if (cachedQ && cachedQ.pending) {
+          state.approvals.live = true;
+          state.approvals.pending = cachedQ.pending;
+          state.approvals.writeback = cachedQ.writeback || [];
+          state.approvals.protected = cachedQ.protected || seed.protected;
+          mergeById(cachedQ.pending);
+        }
         domo.post(CE + "getApprovalQueue", { persona: state.persona }).then(function (resp) {
           var d = unwrap(resp);
           if (d && d.status === "SUCCEEDED") {
@@ -2503,6 +2426,7 @@
             state.approvals.writeback = d.writeback || [];
             state.approvals.protected = d.protected || seed.protected;
             mergeById(d.pending);
+            cacheSet("approvals_live", { pending: d.pending || [], writeback: d.writeback || [], protected: d.protected || null });
           } else { throw new Error(d && d.error ? d.error : "queue read failed"); }
           state.approvals.loading = false; state.approvals.loaded = true; renderView();
         }).catch(function (err) {
@@ -2552,7 +2476,9 @@
   function completeTask(taskId, decision, version) {
     if (!isLive()) { state.approvals.note = "Sample mode \u2014 connect in Domo to complete native queue tasks."; renderView(); return; }
     state.approvals.busyTask = taskId + ":" + decision; renderView();
-    domo.post(CE + "completeApprovalTask", { taskId: taskId, decision: decision, version: version || "1" }).then(function (resp) {
+    // version param is declared text in the manifest; Domo task versions come back
+    // as numbers → coerce to string or Code Engine 400s on the type mismatch.
+    domo.post(CE + "completeApprovalTask", { taskId: String(taskId), decision: decision, version: String(version == null || version === "" ? "1" : version) }).then(function (resp) {
       var d = unwrap(resp);
       state.approvals.busyTask = null;
       if (!d || d.status !== "SUCCEEDED") { state.approvals.note = "Task " + decision.toLowerCase() + " failed: " + ((d && d.error) || "unknown"); renderView(); return; }
@@ -2665,6 +2591,7 @@
             if (d.parity && d.parity.roles && d.parity.roles.length) state.governance.parity = d.parity;
             if (d.masking && d.masking.sample && d.masking.sample.length) state.governance.masking = d.masking;
           } else { throw new Error(d && d.error ? d.error : "governance read failed"); }
+          cacheSet("governance", { parity: state.governance.parity, masking: state.governance.masking });
           state.governance.loading = false; state.governance.loaded = true; renderView();
         }).catch(function (err) {
           console.warn("[app] live governance failed, using seed:", err);
@@ -2869,31 +2796,42 @@
   }
   function rlBar(pct, cls) { return h("span", { class: "rl-track" }, [h("span", { class: "rl-fill" + (cls ? " " + cls : ""), style: "width:" + pct + "%" }, [])]); }
 
-  // Context-length donut (reference parity): ring filled by prepared %, char
-  // count in the center.
-  function rlDonut(chars, pct) {
+  // Context-length gauge (reference parity): a 270deg tri-color arc (green =
+  // rich, amber = adequate, red = sparse) with a value indicator dot positioned
+  // by character count on a 0..scale range, the char count in the center, and
+  // 0 / scale labels at the open ends.
+  var RL_GAUGE_SCALE = 6000;
+  function rlDonut(chars) {
     var svgNS = "http://www.w3.org/2000/svg";
-    var R = 29, C = 2 * Math.PI * R, cx = 38, cy = 38;
+    var cx = 60, cy = 58, r = 42, sw = 9, start = 135, sweep = 270;
+    function pt(deg) { var a = deg * Math.PI / 180; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; }
+    function arc(d0, d1) { var p0 = pt(d0), p1 = pt(d1), large = (d1 - d0) > 180 ? 1 : 0; return "M" + p0[0].toFixed(2) + "," + p0[1].toFixed(2) + " A" + r + "," + r + " 0 " + large + " 1 " + p1[0].toFixed(2) + "," + p1[1].toFixed(2); }
     var svg = document.createElementNS(svgNS, "svg");
-    svg.setAttribute("class", "rl-donut"); svg.setAttribute("viewBox", "0 0 76 76");
-    var track = document.createElementNS(svgNS, "circle");
-    track.setAttribute("cx", cx); track.setAttribute("cy", cy); track.setAttribute("r", R);
-    track.setAttribute("fill", "none"); track.setAttribute("stroke", "var(--n-100)"); track.setAttribute("stroke-width", "7");
-    svg.appendChild(track);
-    var arc = document.createElementNS(svgNS, "circle");
-    arc.setAttribute("cx", cx); arc.setAttribute("cy", cy); arc.setAttribute("r", R);
-    arc.setAttribute("fill", "none"); arc.setAttribute("stroke", "var(--sf-blue)"); arc.setAttribute("stroke-width", "7");
-    arc.setAttribute("stroke-linecap", "round");
-    arc.setAttribute("stroke-dasharray", (C * pct / 100).toFixed(1) + " " + (C * (1 - pct / 100)).toFixed(1));
-    arc.setAttribute("transform", "rotate(-90 " + cx + " " + cy + ")");
-    svg.appendChild(arc);
+    svg.setAttribute("class", "rl-gauge"); svg.setAttribute("viewBox", "0 0 120 100");
+    // Faint full track, then the three colored zones on top.
+    var base = document.createElementNS(svgNS, "path");
+    base.setAttribute("d", arc(start, start + sweep)); base.setAttribute("fill", "none"); base.setAttribute("stroke", "var(--n-100)"); base.setAttribute("stroke-width", sw); base.setAttribute("stroke-linecap", "round"); svg.appendChild(base);
+    [[0, 0.56, "var(--status-good)"], [0.56, 0.8, "var(--status-warn)"], [0.8, 1, "var(--status-bad)"]].forEach(function (s) {
+      var p = document.createElementNS(svgNS, "path");
+      p.setAttribute("d", arc(start + sweep * s[0] + (s[0] ? 1.5 : 0), start + sweep * s[1]));
+      p.setAttribute("fill", "none"); p.setAttribute("stroke", s[2]); p.setAttribute("stroke-width", sw); p.setAttribute("stroke-linecap", "round");
+      svg.appendChild(p);
+    });
+    var f = Math.max(0, Math.min(1, (Number(chars) || 0) / RL_GAUGE_SCALE));
+    var dp = pt(start + sweep * f);
+    var dot = document.createElementNS(svgNS, "circle");
+    dot.setAttribute("cx", dp[0]); dot.setAttribute("cy", dp[1]); dot.setAttribute("r", 5); dot.setAttribute("fill", "var(--sf-blue)"); dot.setAttribute("stroke", "#fff"); dot.setAttribute("stroke-width", 2.5); svg.appendChild(dot);
     var v = document.createElementNS(svgNS, "text");
-    v.setAttribute("class", "rl-donut-v"); v.setAttribute("x", cx); v.setAttribute("y", cy - 1); v.setAttribute("text-anchor", "middle");
-    v.textContent = (chars >= 1000 ? (chars / 1000).toFixed(1) + "k" : String(chars));
-    svg.appendChild(v);
+    v.setAttribute("class", "rl-gauge-v"); v.setAttribute("x", cx); v.setAttribute("y", cy + 1); v.setAttribute("text-anchor", "middle");
+    v.textContent = (chars >= 1000 ? (chars / 1000).toFixed(1) + "k" : String(chars || 0)); svg.appendChild(v);
     var k = document.createElementNS(svgNS, "text");
-    k.setAttribute("class", "rl-donut-k"); k.setAttribute("x", cx); k.setAttribute("y", cy + 12); k.setAttribute("text-anchor", "middle");
-    k.textContent = "chars"; svg.appendChild(k);
+    k.setAttribute("class", "rl-gauge-k"); k.setAttribute("x", cx); k.setAttribute("y", cy + 14); k.setAttribute("text-anchor", "middle");
+    k.textContent = "CHARACTERS"; svg.appendChild(k);
+    var lo = pt(start), hi = pt(start + sweep);
+    var t0 = document.createElementNS(svgNS, "text");
+    t0.setAttribute("class", "rl-gauge-s"); t0.setAttribute("x", lo[0]); t0.setAttribute("y", lo[1] + 13); t0.setAttribute("text-anchor", "middle"); t0.textContent = "0"; svg.appendChild(t0);
+    var t1 = document.createElementNS(svgNS, "text");
+    t1.setAttribute("class", "rl-gauge-s"); t1.setAttribute("x", hi[0]); t1.setAttribute("y", hi[1] + 13); t1.setAttribute("text-anchor", "middle"); t1.textContent = (RL_GAUGE_SCALE / 1000) + "k"; svg.appendChild(t1);
     return svg;
   }
 
@@ -3052,24 +2990,388 @@
     ]);
   }
 
+  /* ===================== AI Readiness Control Plane (v2) =====================
+   * Dataset-centric over the 5 governed gold views. Snowflake Horizon is the
+   * source of truth (column comments + DOMO_AI_SYNONYMS tags, read live via
+   * getHorizonReadinessState); Sync/Wipe write that context into the Domo AI
+   * Readiness data dictionary for the federated dataset (get/sync/wipe CE fns).
+   * "Synced" == the column carries a description in the Domo dictionary. */
+  var RL_DS_ICO = "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='4' width='18' height='16' rx='2'/><path d='M3 9h18M9 9v11'/></svg>";
+  function rlDatasets() { return LINEAGE_VIEWS; }
+  function rlName(view) {
+    return String(view || "").replace(/^GOLD_/i, "").toLowerCase().replace(/_([a-z])/g, function (_m, c) { return c.toUpperCase(); });
+  }
+  function rlFqn(view) { return (state.config.database + "." + state.config.schema + "." + String(view || "")).toLowerCase(); }
+  // Bundled fixture (offline editor preview only) so the layout renders when the
+  // live bridge isn't reachable. Production always uses the live CE result below.
+  function rlFixture(cb) {
+    if (state.rl._fixture) { cb(state.rl._fixture); return; }
+    if (state.rl._fixtureLoading) { setTimeout(function () { rlFixture(cb); }, 150); return; }
+    state.rl._fixtureLoading = true;
+    fetch("./public/mock/ai-readiness.json").then(function (r) { return r.json(); }).then(function (s) {
+      var byView = {}, byDs = {};
+      (s.datasets || []).forEach(function (d) { byView[d.view] = d; byDs[d.dataSetId] = d; });
+      state.rl._fixture = { byView: byView, byDs: byDs }; state.rl._fixtureLoading = false; cb(state.rl._fixture);
+    }).catch(function () { state.rl._fixture = { byView: {}, byDs: {} }; state.rl._fixtureLoading = false; cb(state.rl._fixture); });
+  }
+  function rlHorizonFromFixture(view) {
+    var d = state.rl._fixture && state.rl._fixture.byView[view];
+    return d ? (d.columns || []).map(function (c) { return { name: c.name, type: c.type, context: c.context, synonyms: c.synonyms || [], prepared: c.prepared !== false }; }) : [];
+  }
+  function rlDomoFromFixture(dsId) {
+    var d = state.rl._fixture && state.rl._fixture.byDs[dsId];
+    return d ? (d.columns || []).filter(function (c) { return c.synced; }).map(function (c) { return { name: c.name, description: c.context, synonyms: c.synonyms || [], agentEnabled: true }; }) : [];
+  }
+  // Horizon column metadata is the slowest read on this tab (2 INFORMATION_SCHEMA
+  // queries per view, serialized on the warehouse). Stale-while-revalidate: paint
+  // the last cached columns instantly, then refresh once in the background.
+  function rlLoadHorizon(view) {
+    var cur = state.rl.horizon[view];
+    if (cur && (cur.loading || cur.loaded)) return;
+    var cached = cacheGet("rl_hz_" + view);
+    state.rl.horizon[view] = (cached && cached.length)
+      ? { loading: false, loaded: true, columns: cached, stale: true }
+      : { loading: true, loaded: false, columns: [] };
+    domo.post(CE + "getHorizonReadinessState", { view: view }).then(function (resp) {
+      var d = unwrap(resp);
+      if (d && d.status === "SUCCEEDED" && d.columns) {
+        state.rl.horizon[view] = { loading: false, loaded: true, columns: d.columns };
+        cacheSet("rl_hz_" + view, d.columns);
+        if (state.surface === "readiness") renderView();
+      } else { throw new Error((d && d.error) || "No Horizon data"); }
+    }).catch(function () {
+      var keep = state.rl.horizon[view] && (state.rl.horizon[view].columns || []).length;
+      if (keep) { state.rl.horizon[view] = { loading: false, loaded: true, columns: state.rl.horizon[view].columns }; if (state.surface === "readiness") renderView(); return; }
+      rlFixture(function () { state.rl._degraded = true; state.rl.horizon[view] = { loading: false, loaded: true, columns: rlHorizonFromFixture(view) }; if (state.surface === "readiness") renderView(); });
+    });
+  }
+  function rlLoadDomo(dsId) {
+    var cur = state.rl.domo[dsId];
+    if (cur && (cur.loading || cur.loaded)) return;
+    var cached = cacheGet("rl_domo_" + dsId);
+    state.rl.domo[dsId] = (cached && cached.columns)
+      ? { loading: false, loaded: true, columns: cached.columns, id: cached.id || "", stale: true }
+      : { loading: true, loaded: false, columns: [] };
+    domo.post(CE + "getDomoAiReadiness", { datasetId: dsId }).then(function (resp) {
+      var d = unwrap(resp);
+      if (d && d.status === "SUCCEEDED" && d.readiness) {
+        var cols = d.readiness.columns || [], rid = d.readiness.id || "";
+        state.rl.domo[dsId] = { loading: false, loaded: true, columns: cols, id: rid };
+        cacheSet("rl_domo_" + dsId, { columns: cols, id: rid });
+        if (state.surface === "readiness") renderView();
+      } else { throw new Error((d && d.error) || "No Domo readiness"); }
+    }).catch(function () {
+      var keep = state.rl.domo[dsId] && (state.rl.domo[dsId].columns || []).length;
+      if (keep) { state.rl.domo[dsId] = { loading: false, loaded: true, columns: state.rl.domo[dsId].columns, id: state.rl.domo[dsId].id || "" }; if (state.surface === "readiness") renderView(); return; }
+      rlFixture(function () { state.rl._degraded = true; state.rl.domo[dsId] = { loading: false, loaded: true, id: "", columns: rlDomoFromFixture(dsId) }; if (state.surface === "readiness") renderView(); });
+    });
+  }
+  // BATCH: one governed runSql that returns column comments (prepared context) +
+  // DOMO_AI_SYNONYMS tags for ALL governed views in a single warehouse round-trip,
+  // instead of 2 metadata queries × 5 views serialized on the warehouse. Uses the
+  // already-released runSql bridge fn (no CE redeploy). Falls back to per-view.
+  function rlBatchSql(views) {
+    var db = (state.config && state.config.database) || "SNOWFLAKE_REVENUE_CC";
+    var sch = (state.config && state.config.schema) || "CORE";
+    var esc = function (s) { return String(s).replace(/'/g, "''"); };
+    var inList = views.map(function (v) { return "'" + esc(v.toUpperCase()) + "'"; }).join(",");
+    var parts = ["SELECT 'C' AS KIND, TABLE_NAME AS TBL, COLUMN_NAME AS COL, DATA_TYPE AS V1, COMMENT AS V2, ORDINAL_POSITION AS ORD FROM " + db + ".INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = '" + esc(sch) + "' AND TABLE_NAME IN (" + inList + ")"];
+    views.forEach(function (v) {
+      var fqn = db + "." + sch + "." + v.toUpperCase();
+      parts.push("SELECT 'T' AS KIND, '" + esc(v.toUpperCase()) + "' AS TBL, COLUMN_NAME AS COL, TAG_VALUE AS V1, NULL AS V2, 0 AS ORD FROM TABLE(" + db + ".INFORMATION_SCHEMA.TAG_REFERENCES_ALL_COLUMNS('" + esc(fqn) + "', 'TABLE')) WHERE TAG_NAME = 'DOMO_AI_SYNONYMS'");
+    });
+    return parts.join(" UNION ALL ") + " ORDER BY TBL, ORD";
+  }
+  function rlApplyBatch(rows, views) {
+    var up = {}, byU = {};
+    views.forEach(function (v) { up[v.toUpperCase()] = v; byU[v.toUpperCase()] = { cols: [], syn: {} }; });
+    (rows || []).forEach(function (r) {
+      var tbl = String(r.TBL || r.tbl || "").toUpperCase();
+      if (!byU[tbl]) byU[tbl] = { cols: [], syn: {} };
+      var kind = r.KIND || r.kind, col = r.COL || r.col, v1 = (r.V1 != null ? r.V1 : r.v1);
+      if (kind === "T") {
+        byU[tbl].syn[col] = String(v1 == null ? "" : v1).split(",").map(function (s) { return s.replace(/^\s+|\s+$/g, ""); }).filter(function (s) { return !!s; });
+      } else {
+        var ctx = (r.V2 != null ? r.V2 : r.v2); ctx = ctx == null ? "" : ctx;
+        byU[tbl].cols.push({ name: col, type: v1, context: ctx, prepared: !!(ctx && String(ctx).replace(/^\s+|\s+$/g, "")) });
+      }
+    });
+    Object.keys(byU).forEach(function (u) {
+      var e = byU[u], cols = e.cols.map(function (c) { c.synonyms = e.syn[c.name] || []; return c; });
+      var orig = up[u] || u;
+      state.rl.horizon[orig] = { loading: false, loaded: true, columns: cols };
+      cacheSet("rl_hz_" + orig, cols);
+    });
+  }
+  // runSql returns the raw Snowflake SQL-API result (no SUCCEEDED envelope), so
+  // find the { resultSetMetaData, data } object directly and build row objects
+  // keyed by column alias (KIND/TBL/COL/V1/V2/ORD). Returns null if not present.
+  function rlSqlRows(resp) {
+    function find(o, depth) {
+      if (!o || typeof o !== "object" || depth > 8) return null;
+      if (o.resultSetMetaData && (o.data || o.rows)) return o;
+      var ks = ["result", "response", "body"];
+      for (var i = 0; i < ks.length; i++) { if (o[ks[i]] && typeof o[ks[i]] === "object") { var r = find(o[ks[i]], depth + 1); if (r) return r; } }
+      if (o.data && typeof o.data === "object" && !Array.isArray(o.data)) return find(o.data, depth + 1);
+      return null;
+    }
+    var rs = find(resp, 0);
+    if (!rs) return null;
+    if (rs.rows && Array.isArray(rs.rows)) return rs.rows;
+    var meta = rs.resultSetMetaData || {}, cols = (meta.rowType || []).map(function (c) { return c.name; });
+    return (rs.data || []).map(function (row) { var o = {}; cols.forEach(function (c, i) { o[c] = row[i]; }); return o; });
+  }
+  function rlLoadAllHorizon() {
+    var views = rlDatasets().map(function (d) { return d.view; });
+    var need = views.filter(function (v) { var c = state.rl.horizon[v]; return !(c && (c.loading || c.loaded)); });
+    if (!need.length) return;
+    // Instant paint from cache while the batch refreshes behind.
+    need.forEach(function (v) {
+      var cached = cacheGet("rl_hz_" + v);
+      state.rl.horizon[v] = (cached && cached.length) ? { loading: false, loaded: true, columns: cached, stale: true } : { loading: true, loaded: false, columns: [] };
+    });
+    if (!isLive()) { need.forEach(function (v) { state.rl.horizon[v] = undefined; rlLoadHorizon(v); }); return; }
+    if (state.rl._batchInflight) return;
+    state.rl._batchInflight = true;
+    domo.post(CE + "runSql", { statement: rlBatchSql(need), role: (state.config && state.config.role) || "REVENUE_CC_READER" }).then(function (resp) {
+      state.rl._batchInflight = false;
+      var rows = rlSqlRows(resp);
+      if (!rows) throw new Error("batch failed");
+      rlApplyBatch(rows, need);
+      if (state.surface === "readiness") renderView();
+    }).catch(function () {
+      state.rl._batchInflight = false;
+      need.forEach(function (v) {
+        var c = state.rl.horizon[v];
+        if (c && c.stale) { state.rl.horizon[v] = { loading: false, loaded: true, columns: c.columns }; }
+        else { state.rl.horizon[v] = undefined; rlLoadHorizon(v); }
+      });
+      if (state.surface === "readiness") renderView();
+    });
+  }
+  function rlEnsureLoaded() {
+    rlLoadAllHorizon();
+    rlDatasets().forEach(function (ds) { rlLoadDomo(ds.dataSetId); });
+  }
+  function rlSyncedSet(dsId) {
+    var dd = state.rl.domo[dsId] || {}; var s = {};
+    (dd.columns || []).forEach(function (c) { if (String(c.description || "").replace(/^\s+|\s+$/g, "")) s[c.name] = true; });
+    return s;
+  }
+  function rlScore(ds) {
+    var hz = state.rl.horizon[ds.view] || {}; var cols = hz.columns || [];
+    var prepared = cols.filter(function (c) { return c.prepared; }).length;
+    var synced = rlSyncedSet(ds.dataSetId);
+    var syncedCount = cols.filter(function (c) { return synced[c.name]; }).length;
+    var synonyms = cols.reduce(function (a, c) { return a + ((c.synonyms && c.synonyms.length) || 0); }, 0);
+    return {
+      cols: cols, total: cols.length, prepared: prepared, syncedCount: syncedCount, synonyms: synonyms,
+      prepPct: cols.length ? Math.round(prepared / cols.length * 100) : 0,
+      domoPct: cols.length ? Math.round(syncedCount / cols.length * 100) : 0,
+      loading: hz.loading || (state.rl.domo[ds.dataSetId] || {}).loading
+    };
+  }
+  function rlContextChars(ds) {
+    var hz = state.rl.horizon[ds.view] || {};
+    return (hz.columns || []).reduce(function (a, c) {
+      return a + String(c.name || "").length + String(c.context || "").length + (c.synonyms || []).join("").length;
+    }, 0);
+  }
+  function rlDesiredState(ds) {
+    var hz = state.rl.horizon[ds.view] || {};
+    return {
+      name: rlName(ds.view),
+      datasetContext: ds.note || "",
+      columns: (hz.columns || []).filter(function (c) { return c.prepared; }).map(function (c) {
+        return { name: c.name, context: c.context, synonyms: c.synonyms || [], aiEnabled: true };
+      })
+    };
+  }
+  function rlApplyReadiness(dsId, d) {
+    if (d && d.status === "SUCCEEDED" && d.readiness) {
+      state.rl.domo[dsId] = { loading: false, loaded: true, columns: d.readiness.columns || [], id: d.readiness.id || "" };
+      state.rl.note = null;
+    } else {
+      state.rl.note = "Sync failed \u2014 " + ((d && d.error) || "unknown error");
+    }
+  }
+  function rlSync(ds, colNames) {
+    if (state.rl._degraded) { state.rl.note = "Sync runs live through the Code Engine bridge \u2014 open the published app to write into Domo AI Readiness."; renderView(); return; }
+    if (state.rl.busy[ds.dataSetId]) return;
+    state.rl.busy[ds.dataSetId] = colNames && colNames.length ? colNames[0] : "ALL";
+    state.rl.note = null; renderView();
+    domo.post(CE + "syncDomoAiReadiness", {
+      datasetId: ds.dataSetId,
+      desiredState: JSON.stringify(rlDesiredState(ds)),
+      columns: JSON.stringify(colNames || [])
+    }).then(function (resp) {
+      rlApplyReadiness(ds.dataSetId, unwrap(resp));
+      state.rl.busy[ds.dataSetId] = null; renderView();
+    }).catch(function (err) {
+      state.rl.note = "Sync failed \u2014 " + String(err && err.message ? err.message : err);
+      state.rl.busy[ds.dataSetId] = null; renderView();
+    });
+  }
+  function rlWipe(ds, colNames) {
+    if (state.rl._degraded) { state.rl.note = "Wipe runs live through the Code Engine bridge \u2014 open the published app."; renderView(); return; }
+    if (state.rl.busy[ds.dataSetId]) return;
+    state.rl.busy[ds.dataSetId] = colNames && colNames.length ? colNames[0] : "ALL";
+    state.rl.note = null; renderView();
+    domo.post(CE + "wipeDomoAiReadiness", {
+      datasetId: ds.dataSetId,
+      columns: JSON.stringify(colNames || [])
+    }).then(function (resp) {
+      rlApplyReadiness(ds.dataSetId, unwrap(resp));
+      state.rl.busy[ds.dataSetId] = null; renderView();
+    }).catch(function (err) {
+      state.rl.note = "Wipe failed \u2014 " + String(err && err.message ? err.message : err);
+      state.rl.busy[ds.dataSetId] = null; renderView();
+    });
+  }
+  function rlRail() {
+    var rail = h("div", { class: "rl-rail" });
+    var sel = state.rl.selected || rlDatasets()[0].view;
+    rlDatasets().forEach(function (ds) {
+      var sc = rlScore(ds);
+      var active = ds.view === sel;
+      var card = h("button", { class: "rl-ds" + (active ? " active" : "") }, [
+        h("div", { class: "rl-ds-top" }, [
+          h("span", { class: "rl-ds-namewrap" }, [h("span", { class: "rl-ds-ico", html: RL_DS_ICO }), h("span", { class: "rl-ds-name" }, [rlName(ds.view)])]),
+          sc.domoPct > 0 ? h("span", { class: "rl-ds-flag on" }) : h("span", { class: "rl-ds-flag" })
+        ]),
+        h("div", { class: "rl-ds-sub" }, ["GOVERNED DATASET"]),
+        h("div", { class: "rl-ds-metric" }, [h("span", { class: "rl-ds-lab" }, ["HORIZON"]), rlBar(sc.prepPct), h("span", { class: "rl-ds-pct" }, [sc.prepPct + "%"])]),
+        h("div", { class: "rl-ds-metric" }, [h("span", { class: "rl-ds-lab" }, ["DOMO"]), rlBar(sc.domoPct, "domo"), h("span", { class: "rl-ds-pct" }, [sc.domoPct + "%"])])
+      ]);
+      card.addEventListener("click", function () { state.rl.selected = ds.view; renderView(); });
+      rail.appendChild(card);
+    });
+    return rail;
+  }
+  function rlChip(kind, on, label) {
+    return h("span", { class: "rl-chip " + (on ? kind : (kind === "prep" ? "noprep" : "notsynced")) }, [h("span", { class: "rl-dot" }), label]);
+  }
+  function rlDetail(ds) {
+    var sc = rlScore(ds);
+    var hz = state.rl.horizon[ds.view] || {};
+    var dsId = ds.dataSetId;
+    var synced = rlSyncedSet(dsId);
+    var busy = state.rl.busy[dsId];
+    var links = h("div", { class: "rl-detail-links" }, [
+      dsId ? srcLink("Domo AI Readiness", domoAiReadinessHref(dsId), "domo") : null,
+      srcLink("Snowflake view", snowsightObjHref("table", ds.view), "sf")
+    ]);
+    var chars = rlContextChars(ds);
+    var meters = h("div", { class: "rl-meters" }, [
+      h("div", { class: "rl-ctx" }, [
+        h("span", { class: "rl-ctx-lab" }, ["Context length ", h("span", { class: "rl-ctx-i" }, ["\u24D8"])]),
+        rlDonut(chars),
+        h("div", { class: "rl-ctx-k" }, ["names \u00b7 context \u00b7 synonyms"])
+      ]),
+      h("div", { class: "rl-meter-col" }, [
+        h("div", { class: "rl-meter hz" }, [h("div", { class: "rl-gauge-top" }, [h("span", {}, ["Snowflake Horizon metadata prepared"]), h("strong", {}, [sc.prepPct + "%"])]), rlBar(sc.prepPct), h("span", { class: "rl-meter-sub" }, [num(sc.prepared) + " / " + num(sc.total) + " columns \u00b7 " + num(sc.synonyms) + " synonyms"])]),
+        h("div", { class: "rl-meter dm" }, [h("div", { class: "rl-gauge-top" }, [h("span", {}, ["Domo AI Readiness synced"]), h("strong", {}, [sc.domoPct + "%"])]), rlBar(sc.domoPct, "domo"), h("span", { class: "rl-meter-sub" }, [num(sc.syncedCount) + " / " + num(sc.total) + " columns synced into Domo"])])
+      ])
+    ]);
+
+    var syncAll = h("button", { class: "mini-btn primary", disabled: (busy || !sc.prepared) ? "true" : null }, [busy === "ALL" ? "Syncing\u2026" : "Sync all prepared"]);
+    syncAll.addEventListener("click", function () { rlSync(ds, []); });
+    var wipeAll = h("button", { class: "mini-btn ghost", disabled: (busy || !sc.syncedCount) ? "true" : null }, ["Wipe all from Domo"]);
+    wipeAll.addEventListener("click", function () { rlWipe(ds, []); });
+    var controls = h("div", { class: "rl-controls" }, [h("span", { class: "rl-controls-lab" }, ["Dataset controls"]), syncAll, wipeAll]);
+
+    var table = h("table", { class: "result-table rl-table" });
+    var thead = h("thead"), htr = h("tr");
+    ["Column", "Snowflake Horizon", "Domo AI Readiness", "Source context", "Sync / Wipe / Inspect"].forEach(function (c) { htr.appendChild(h("th", {}, [c])); });
+    thead.appendChild(htr); table.appendChild(thead);
+    var tb = h("tbody");
+    if (hz.loading) {
+      tb.appendChild(h("tr", {}, [h("td", { colspan: "5" }, [h("div", { class: "analyst-loading" }, [h("span", { class: "spinner" }), "Reading Horizon column context\u2026"])])]));
+    } else if (hz.error) {
+      tb.appendChild(h("tr", {}, [h("td", { colspan: "5" }, [h("span", { class: "ac-err" }, ["Could not read Horizon context: ", h("code", {}, [String(hz.error)])])])]));
+    }
+    (hz.columns || []).forEach(function (c) {
+      var prepared = !!c.prepared;
+      var isSynced = !!synced[c.name];
+      var rowBusy = busy && (busy === "ALL" || busy === c.name);
+      var syncBtn = h("button", { class: "rl-a sync" + (isSynced ? " is-done" : ""), disabled: (isSynced || !prepared || busy) ? "true" : null }, [rowBusy && !isSynced ? "\u2026" : (isSynced ? "Synced" : "Sync")]);
+      if (!isSynced && prepared && !busy) syncBtn.addEventListener("click", function () { rlSync(ds, [c.name]); });
+      var wipeBtn = h("button", { class: "rl-a wipe", disabled: (!isSynced || busy) ? "true" : null }, ["Wipe"]);
+      if (isSynced && !busy) wipeBtn.addEventListener("click", function () { rlWipe(ds, [c.name]); });
+      var inspectBtn = h("button", { class: "rl-a inspect" }, ["Inspect"]);
+      inspectBtn.addEventListener("click", function () { window.open(dsId ? domoAiReadinessHref(dsId) : snowsightObjHref("table", ds.view), "_blank"); });
+      var ctx = h("div", { class: "rl-ctx-cell" }, [
+        h("span", { class: "rl-ctx-txt" }, [c.context || "\u2014"]),
+        (c.synonyms && c.synonyms.length) ? h("span", { class: "rl-syn" }, [num(c.synonyms.length) + " synonym" + (c.synonyms.length > 1 ? "s" : "")]) : null
+      ]);
+      tb.appendChild(h("tr", {}, [
+        h("td", {}, [h("code", { class: "rl-col" }, [c.name]), h("span", { class: "rl-kind" }, [String(c.type || "").replace(/\(\d+\)/, "")])]),
+        h("td", {}, [rlChip("prep", prepared, prepared ? "Prepared" : "Not prepared")]),
+        h("td", {}, [rlChip("synced", isSynced, isSynced ? "Synced" : "Not synced")]),
+        h("td", { class: "rl-comment" }, [ctx]),
+        h("td", { class: "rl-act" }, [h("div", { class: "rl-acts" }, [syncBtn, wipeBtn, inspectBtn])])
+      ]));
+    });
+    table.appendChild(tb);
+    return h("div", { class: "rl-detail" }, [
+      h("div", { class: "rl-detail-head" }, [
+        h("div", {}, [h("span", { class: "rl-sel-lab" }, ["Selected dataset"]), h("h3", {}, [rlName(ds.view)]), h("code", { class: "rl-base" }, [rlFqn(ds.view)])]),
+        links
+      ]),
+      state.rl.note ? h("div", { class: "rl-note" }, [state.rl.note]) : null,
+      meters,
+      controls,
+      h("div", { class: "table-wrap" }, [table])
+    ]);
+  }
+  function rlControlPlane() {
+    rlEnsureLoaded();
+    var datasets = rlDatasets();
+    var sel = state.rl.selected || datasets[0].view;
+    var selDs = datasets.filter(function (d) { return d.view === sel; })[0] || datasets[0];
+    var anyLoaded = datasets.some(function (d) { return (state.rl.horizon[d.view] || {}).loaded; });
+    if (!anyLoaded) {
+      return h("article", { class: "panel col-12" }, [h("div", { class: "analyst-loading" }, [h("span", { class: "spinner" }), "Profiling Snowflake Horizon for AI readiness\u2026"])]);
+    }
+    var totalCols = 0, prep = 0, syn = 0, synonyms = 0;
+    datasets.forEach(function (ds) { var s = rlScore(ds); totalCols += s.total; prep += s.prepared; syn += s.syncedCount; synonyms += s.synonyms; });
+    var prepPct = totalCols ? Math.round(prep / totalCols * 100) : 0;
+    var domoPct = totalCols ? Math.round(syn / totalCols * 100) : 0;
+    return h("article", { class: "panel col-12 rl-plane" }, [
+      h("div", { class: "panel-head rl-plane-head" }, [h("div", {}, [
+        h("span", { class: "rl-eyebrow" }, [h("img", { class: "eyebrow-mark", src: "./public/brand/snowflake-mark.svg", alt: "" }), "SNOWFLAKE HORIZON \u00b7 SOURCE OF TRUTH"]),
+        h("h2", {}, ["AI Readiness Control Plane"]),
+        h("p", { class: "rl-plane-sub" }, ["Snowflake Horizon is the governed source of truth. Sync prepared column metadata into Domo AI Readiness \u2014 Domo mirrors the source. Editing source context is a separate, governed action."])
+      ]),
+      h("div", { class: "rl-plane-meters" }, [
+        h("div", { class: "rl-pm hz" }, [h("div", { class: "rl-pm-top" }, [h("span", {}, ["Snowflake Horizon prepared"]), h("strong", {}, [prepPct + "%"])]), rlBar(prepPct), h("span", { class: "rl-pm-sub" }, [num(prep) + " / " + num(totalCols) + " columns \u00b7 " + num(synonyms) + " synonyms across " + datasets.length + " datasets"])]),
+        h("div", { class: "rl-pm dm" }, [h("div", { class: "rl-pm-top" }, [h("span", {}, ["Domo AI Readiness synced"]), h("strong", {}, [domoPct + "%"])]), rlBar(domoPct, "domo"), h("span", { class: "rl-pm-sub" }, [num(syn) + " / " + num(totalCols) + " columns synced into Domo"])])
+      ])]),
+      h("div", { class: "rl-info-banner" }, [
+        state.rl._degraded
+          ? "Preview \u2014 sample of the Snowflake Horizon column metadata prepared for AI, alongside the columns synced into Domo AI Readiness. Sync runs live in the published app."
+          : "Snowflake Horizon column metadata that is prepared for AI, alongside the columns currently synced into Domo AI Readiness."
+      ]),
+      h("div", { class: "rl-body" }, [
+        h("div", { class: "rl-rail-wrap" }, [
+          h("div", { class: "rl-rail-lab" }, [h("span", { class: "rl-rail-ico", html: RL_DS_ICO }), "Governed datasets", h("span", { class: "rl-rail-count" }, [String(datasets.length)])]),
+          rlRail()
+        ]),
+        rlDetail(selDs)
+      ])
+    ]);
+  }
+
   function renderReadiness() {
     var frag = document.createDocumentFragment();
     var banner = connBanner(); if (banner) frag.appendChild(banner);
-    if (!state.governance.loaded && !state.governance.loading) { loadGovernance(); }
-    if (state.governance.loading && !state.governance.loaded) {
-      frag.appendChild(h("div", { class: "analyst-loading" }, [h("span", { class: "spinner" }), "Running the two-persona parity test at the query engine\u2026"]));
-      return frag;
-    }
-    if (state.governance.error) {
-      frag.appendChild(h("div", { class: "conn-banner" }, [h("div", {}, [h("span", { class: "cb-title" }, ["Governance error \u2014 "]), state.governance.error])]));
-      return frag;
-    }
-    // Hero: the AI Readiness Control Plane (reference parity) — no preamble box.
-    frag.appendChild(h("section", { class: "grid" }, [readinessControlPlane()]));
+    // Hero: the AI Readiness Control Plane (dataset-centric, real Horizon -> Domo sync).
+    frag.appendChild(h("section", { class: "grid" }, [rlControlPlane()]));
 
     // Everything else (parity test, masking, policies, guardrails, semantic
     // model) is governance depth — folded behind a toggle so the control plane
     // leads, matching the reference app.
+    if (!state.governance.loaded && !state.governance.loading && state.governance.showDetail) { loadGovernance(); }
     var open = !!state.governance.showDetail;
     var toggle = h("button", { class: "gov-detail-toggle" }, [
       h("span", { class: "gdt-ico" }, [open ? "\u2212" : "+"]),
@@ -3080,11 +3382,17 @@
     frag.appendChild(toggle);
 
     if (open) {
-      frag.appendChild(govIdentityBanner());
-      frag.appendChild(h("section", { class: "grid" }, [govParityPanel()]));
-      frag.appendChild(h("section", { class: "grid" }, [govMaskingPanel(), govPolicyPanel()]));
-      frag.appendChild(h("section", { class: "grid" }, [govGuardPanel()]));
-      frag.appendChild(h("section", { class: "grid" }, [govReadinessPanel()]));
+      if (state.governance.error) {
+        frag.appendChild(h("div", { class: "conn-banner" }, [h("div", {}, [h("span", { class: "cb-title" }, ["Governance error \u2014 "]), state.governance.error])]));
+      } else if (!state.governance.parity) {
+        frag.appendChild(h("div", { class: "analyst-loading" }, [h("span", { class: "spinner" }), "Running the two-persona parity test at the query engine\u2026"]));
+      } else {
+        frag.appendChild(govIdentityBanner());
+        frag.appendChild(h("section", { class: "grid" }, [govParityPanel()]));
+        frag.appendChild(h("section", { class: "grid" }, [govMaskingPanel(), govPolicyPanel()]));
+        frag.appendChild(h("section", { class: "grid" }, [govGuardPanel()]));
+        frag.appendChild(h("section", { class: "grid" }, [govReadinessPanel()]));
+      }
     }
     return frag;
   }
@@ -3318,7 +3626,10 @@
           .catch(function () { return 0; });
     return ensureThread.then(function (tid) {
       if (thread && tid) thread.serverThreadId = tid;
-      return domo.post(CE + "askCortexAgent", { question: question, persona: state.persona, threadId: tid || 0, parentMessageId: (thread && thread.parentMessageId) || 0 })
+      // threadId/parentMessageId are declared as text in the CE mapping, so send
+      // them as strings ("" when absent) — the CE fn coerces with Number().
+      // Passing a raw number here trips the CE proxy input validator (400).
+      return domo.post(CE + "askCortexAgent", { question: question, persona: state.persona, threadId: tid ? String(tid) : "", parentMessageId: (thread && thread.parentMessageId) ? String(thread.parentMessageId) : "" })
         .then(function (resp) {
           var d = unwrap(resp);
           if (d && d.status === "SUCCEEDED") {
@@ -3349,7 +3660,7 @@
   function cwOpenServerThread(threadId, title) {
     state.cw.replay = { threadId: threadId, title: title || "", loading: true, messages: [] };
     renderView();
-    domo.post(CE + "getCortexThread", { threadId: threadId }).then(function (r) {
+    domo.post(CE + "getCortexThread", { threadId: String(threadId || "") }).then(function (r) {
       var d = unwrap(r);
       if (d && d.status === "SUCCEEDED") state.cw.replay = { threadId: threadId, title: d.title || title || "", loading: false, messages: d.messages || [] };
       else state.cw.replay = { threadId: threadId, title: title || "", loading: false, error: (d && d.error) || "Could not load thread", messages: [] };
@@ -3382,6 +3693,9 @@
       amsg.res = res; amsg.text = res.answer || "\u2014"; amsg.steps = cwStatusSteps(res); amsg.status = "answering";
       renderView();
       requestAnimationFrame(function () { cwAnimate(amsg); });
+      // If the agent ran the Analyst tool, execute its SQL to plot the result
+      // (native CoWork renders a chart from the governed query output).
+      if (res && res.live && res.sql && res.toolsFired && res.toolsFired.analyst) cwLoadChart(amsg);
     }).catch(function (err) {
       amsg.status = "error"; amsg.text = "Agent error \u2014 " + (err && err.message ? err.message : err);
       state.cw.sending = false; renderView(); cwScrollBottom();
@@ -3414,6 +3728,79 @@
       setTimeout(function () { amsg.status = "done"; amsg.typed = amsg.text; state.cw.sending = false; renderView(); cwScrollBottom(); cwFocusComposer(); }, dur);
     }
     revealStep();
+  }
+
+  // Execute the agent's Analyst SQL (governed READER) so the answer can render a
+  // chart of the result, mirroring native CoWork. The chart streams in after the
+  // answer text; a failure just leaves the text + SQL (no chart).
+  // Locate the Snowflake SQL API ResultSet ({ resultSetMetaData, data }) inside
+  // whatever envelope the Code Engine proxy returns (shape varies by wrapper).
+  function cwResultSet(resp) {
+    var u = unwrap(resp) || {};
+    var cands = [resp, u, u.result, u.response,
+      resp && resp.result, resp && resp.result && resp.result.result,
+      resp && resp.response, resp && resp.body];
+    for (var i = 0; i < cands.length; i++) {
+      var c = cands[i];
+      if (c && typeof c === "object" && c.resultSetMetaData && c.resultSetMetaData.rowType) return c;
+    }
+    return null;
+  }
+  function cwLoadChart(amsg) {
+    var res = amsg.res;
+    if (!res || !res.sql || res.chart || res.chartLoading) return;
+    var sql = String(res.sql).replace(/^```[a-z]*\s*/i, "").replace(/```\s*$/, "").trim();
+    if (!sql) return;
+    res.chartLoading = true;
+    if (state.surface === "cowork") renderView();
+    domo.post(CE + "runSql", { statement: sql, role: (state.config && state.config.role) || "" })
+      .then(function (resp) {
+        var rs = cwResultSet(resp);
+        var cols = [], rows = [];
+        if (rs) {
+          cols = (rs.resultSetMetaData.rowType || []).map(function (c) { return { name: c.name, type: c.type }; });
+          rows = rowsFromResultSet(rs);
+        }
+        res.chartLoading = false;
+        if (cols.length && rows.length) { res.columns = cols; res.rows = rows; res.chart = { type: "bar" }; }
+        if (state.surface === "cowork") renderView();
+      })
+      .catch(function () { res.chartLoading = false; if (state.surface === "cowork") renderView(); });
+  }
+
+  function cwHumanizeCol(s) {
+    return String(s == null ? "" : s).toLowerCase().replace(/_/g, " ")
+      .replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+  }
+
+  // Result visualization card for a CoWork answer: chart (default) / table toggle,
+  // built from the governed query output using the shared chart primitives.
+  function cwChartCard(m) {
+    var res = m.res || {};
+    if (!(res.rows && res.rows.length)) return null;
+    var spec = chartSpec(res);
+    var cols = res.columns || [];
+    var title = spec ? (cwHumanizeCol(spec.valCol) + " by " + cwHumanizeCol(spec.labelCol))
+      : (num(res.rows.length) + " rows \u00b7 " + num(cols.length) + " columns");
+    m.chartTab = m.chartTab || (spec ? "chart" : "table");
+    if (!spec) m.chartTab = "table";
+    var card = h("div", { class: "cw-chart-card" });
+    var head = [h("span", { class: "cw-chart-title" }, [title])];
+    if (spec) {
+      var seg = h("div", { class: "cw-chart-tabs" });
+      ["chart", "table"].forEach(function (tb) {
+        var b = h("button", { class: "cw-chart-tab" + (m.chartTab === tb ? " active" : "") }, [tb === "chart" ? "Chart" : "Table"]);
+        b.addEventListener("click", function () { m.chartTab = tb; renderView(); });
+        seg.appendChild(b);
+      });
+      head.push(seg);
+    }
+    card.appendChild(h("div", { class: "cw-chart-head" }, head));
+    var bodyEl = h("div", { class: "cw-chart-body" });
+    if (m.chartTab === "chart" && spec) bodyEl.appendChild(buildChart({ res: res, chartType: "bar" }) || resultTable(res, 50));
+    else bodyEl.appendChild(resultTable(res, 50));
+    card.appendChild(bodyEl);
+    return card;
   }
 
   /* Minimal, safe markdown -> DOM for agent answers (bold, italics, inline code,
@@ -3518,7 +3905,7 @@
         list.appendChild(item);
       });
     } else if (isLive() && st.serverLoaded) {
-      list.appendChild(h("div", { class: "cw-thread-empty" }, ["Chats you start here are saved to Snowflake and appear as recent threads."]));
+      list.appendChild(h("div", { class: "cw-thread-empty" }, ["Chats you start in this workspace are saved to Snowflake and appear here. Your personal CoWork history lives under your own Snowflake sign-in and isn\u2019t listed here."]));
     }
     rail.appendChild(list);
     rail.appendChild(h("div", { class: "cw-threads-foot" }, [
@@ -3712,6 +4099,16 @@
     body.appendChild(h("div", { class: "cw-answer" }, done ? [cwMarkdown(m.text)] : []));
 
     if (done) {
+      // Result visualization (chart of the governed query output), like native CoWork.
+      if (res.rows && res.rows.length) {
+        var chartCard = cwChartCard(m);
+        if (chartCard) body.appendChild(chartCard);
+      } else if (res.chartLoading) {
+        body.appendChild(h("div", { class: "cw-chart-loading" }, [h("span", { class: "spinner" }), "Plotting the governed result\u2026"]));
+      }
+    }
+
+    if (done) {
       // Governed proposal beat.
       if (tools.propose) {
         var pcard = h("div", { class: "cw-propose" }, [
@@ -3866,22 +4263,234 @@
     return frag;
   }
 
-  // Narrative spine + technical architecture for the How It Works surface.
-  var SPINE = [
-    { plane: "Predict", surface: "Forecast Home + Snowflake ML", tech: "SNOWFLAKE.ML classification \u2192 PREDICT_RENEWAL_RISK", mark: "snowflake-mark.svg" },
-    { plane: "Explain", surface: "Cortex Analyst + Cortex Workspace", tech: "REVENUE_CC_ANALYST semantic view + REVENUE_CC_SEARCH", mark: "snowflake-cortex.svg" },
-    { plane: "Act", surface: "Cortex Workspace + Approvals", tech: "REVENUE_CC_AGENT \u2192 AGENT_ACTION_WRITEBACK (WRITER)", mark: "domo-approvals.svg" },
-    { plane: "Remember", surface: "Hybrid Tables", tech: "Hybrid Tables: SCENARIO_RUNS, PREDICTION_FEEDBACK", mark: "domo-data.svg" },
-    { plane: "Govern", surface: "Horizon AI Readiness", tech: "RAP_REGION + MASK_ARR + Cortex guardrails/observability", mark: "domo-pdp.svg" }
+  /* ============================================================================
+     How It Works — four switchable views (Shape C):
+       1. Solution Architecture (executive)  — 3 governed planes, clickable tiles
+       2. Technical Architecture (engineer)  — blueprint diagram, flow traces
+       3. User Guide (business)              — numbered walkthrough
+       4. Built with CoCo (builder)          — the Cortex CLI narrative
+     UI-only: no Code Engine calls; renders identically in sample + live.
+     ============================================================================ */
+
+  var SVGNS = "http://www.w3.org/2000/svg";
+  var HOW_Y_OFFSET = 38; // room for region headers above the node clusters
+
+  // Stroke glyphs (24x24, currentColor) — fallback when no brand mark exists.
+  var HGLY = "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'>";
+  var HOW_ICONS = {
+    data: HGLY + "<ellipse cx='12' cy='6' rx='7' ry='3'/><path d='M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6'/><path d='M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3'/></svg>",
+    sync: HGLY + "<path d='M4 11a8 8 0 0 1 13.7-5.7L20 7'/><path d='M20 13a8 8 0 0 1-13.7 5.7L4 17'/><path d='M20 4v3h-3'/><path d='M4 20v-3h3'/></svg>",
+    dataset: HGLY + "<path d='M12 3 3 7.5l9 4.5 9-4.5L12 3Z'/><path d='m3 12 9 4.5L21 12'/><path d='m3 16.5 9 4.5 9-4.5'/></svg>",
+    app: HGLY + "<rect x='3' y='4' width='18' height='16' rx='2'/><path d='M3 9h18'/></svg>",
+    genie: HGLY + "<path d='M20.5 12a8 8 0 0 1-11 7.4L4.5 20l.7-4.2A8 8 0 1 1 20.5 12Z'/><path d='m12 8 1 2.2 2.2 1-2.2 1L12 14.4l-1-2.2-2.2-1 2.2-1L12 8Z'/></svg>",
+    gateway: HGLY + "<path d='M12 3 5 6v5c0 4.3 3 7.5 7 9 4-1.5 7-4.7 7-9V6l-7-3Z'/><path d='m9 12 2 2 4-4'/></svg>",
+    action: HGLY + "<path d='M13 3 5 13h5l-1 8 8-10h-5l1-8Z'/></svg>",
+    model: HGLY + "<path d='M3 3v18h18'/><path d='m7 14 3-4 3 3 4-6'/><circle cx='20' cy='7' r='1.4' fill='currentColor' stroke='none'/></svg>",
+    lakebase: HGLY + "<ellipse cx='12' cy='5.5' rx='7' ry='2.6'/><path d='M5 5.5v13c0 1.5 3.1 2.6 7 2.6s7-1.1 7-2.6v-13'/><path d='M5 12c0 1.5 3.1 2.6 7 2.6s7-1.1 7-2.6'/><path d='m11 15 1.6 1.6L16 13'/></svg>",
+    agent: HGLY + "<rect x='4' y='8' width='16' height='11' rx='2.5'/><path d='M12 4.5V8'/><circle cx='12' cy='3.4' r='1.2' fill='currentColor' stroke='none'/><path d='M9.5 13h.01'/><path d='M14.5 13h.01'/><path d='M2.5 12v3'/><path d='M21.5 12v3'/></svg>",
+    approval: HGLY + "<circle cx='12' cy='8' r='3.2'/><path d='M5.5 20a6.5 6.5 0 0 1 9.2-5.9'/><path d='m15.5 18.5 1.8 1.8 3.2-3.6'/></svg>",
+    search: HGLY + "<circle cx='11' cy='11' r='7'/><path d='m21 21-4.3-4.3'/></svg>",
+    shield: HGLY + "<path d='M12 3 5 6v5c0 4.3 3 7.5 7 9 4-1.5 7-4.7 7-9V6l-7-3Z'/><path d='M12 8v4'/><path d='M12 15h.01'/></svg>"
+  };
+
+  // Brand marks that live in ./public/brand/ (Q3: reuse existing + glyph fallback).
+  var HOW_BRAND = {
+    snowflake: "snowflake-mark.svg",
+    "snowflake-full": "snowflake-full.svg",
+    cortex: "snowflake-cortex.svg",
+    horizon: "snowflake-horizon.png",
+    aiml: "snowflake-ml.png",
+    hybrid: "snowflake-hybrid-tables.png",
+    security: "cortex-guardrails.png",
+    "domo-cloud-amplifier": "domo-cloud-amplifier.svg",
+    "domo-mcp": "domo-mcp-integrations.svg",
+    "domo-pro-code": "domo-pro-code.svg",
+    "domo-workflows": "domo-workflows.svg",
+    "domo-approvals": "domo-approvals.svg",
+    "domo-ai-agent": "domo-ai-agent.svg",
+    "domo-pdp": "domo-pdp.svg",
+    "domo-data": "domo-data.svg"
+  };
+  function howMarker(brandKey, glyphKey, imgCls, glyphCls) {
+    if (brandKey && HOW_BRAND[brandKey]) {
+      return h("img", { class: imgCls, src: "./public/brand/" + HOW_BRAND[brandKey], alt: "", loading: "lazy" });
+    }
+    return h("span", { class: glyphCls, html: HOW_ICONS[glyphKey] || "" });
+  }
+
+  var HOW_SUBTABS = [
+    { id: "arch", tip: "Solution Architecture \u2014 executive view", icon: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='3' width='7' height='7' rx='1.5'/><rect x='14' y='3' width='7' height='7' rx='1.5'/><rect x='3' y='14' width='7' height='7' rx='1.5'/><rect x='14' y='14' width='7' height='7' rx='1.5'/></svg>" },
+    { id: "tech", tip: "Technical Architecture \u2014 engineer view", icon: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><circle cx='6' cy='12' r='2.4'/><circle cx='18' cy='6' r='2.4'/><circle cx='18' cy='18' r='2.4'/><path d='M8.1 11l7.8-3.8M8.1 13l7.8 3.8'/></svg>" },
+    { id: "guide", tip: "User Guide \u2014 business walkthrough", icon: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M5 4.5A1.5 1.5 0 0 1 6.5 3H19a1 1 0 0 1 1 1v14.5'/><path d='M6.5 18H20a0 0 0 0 1 0 0v2a1 1 0 0 1-1 1H6.5A1.5 1.5 0 0 1 5 19.5v-15'/><path d='M6.5 18A1.5 1.5 0 0 0 5 19.5'/></svg>" },
+    { id: "coco", tip: "Built with CoCo \u2014 the Cortex CLI", icon: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='4' width='18' height='16' rx='2'/><path d='m7 9 3 3-3 3'/><path d='M13 15h4'/></svg>" }
   ];
 
-  var ARCH = [
-    { layer: "Data plane (Snowflake Horizon)", status: "GA", items: ["Governed gold views + DIM/FACT model", "REVENUE_CC_ANALYST semantic view", "Row-access + masking policies"] },
-    { layer: "AI plane (Cortex)", status: "GA", items: ["Cortex Analyst (text-to-SQL)", "Cortex Search (incident notes)", "One Cortex Agent (Analyst+Search+SQL)", "Snowflake ML native inference"] },
-    { layer: "State (Hybrid Tables)", status: "GA", items: ["Scenario runs + prediction feedback", "Agent action writeback (idempotent MERGE)"] },
-    { layer: "Interop", status: "Mixed", items: ["Domo Code Engine snowflakece bridge (SQL API, key-pair JWT)", "Snowflake-managed MCP outward (private preview \u2014 target-instance)", "Domo Essentials MCP outward (beta \u2014 gated)"] },
-    { layer: "Delivery (Domo)", status: "Mixed", items: ["Pro-code App Studio app (this shell)", "Workflow + Task Center approval overlay", "Domo Chat v2 (target-instance \u2014 gated)"] }
+  /* ---- Solution Architecture (executive) data ---- */
+  var ARCH_CONTEXT = [
+    { label: "Industry", value: "B2B SaaS \u00b7 Revenue Operations" },
+    { label: "Primary users", value: "Exec sponsor \u00b7 Regional manager \u00b7 Account owner" },
+    { label: "Trigger", value: "Renewal risk elevated in West (incident INC-0001)" },
+    { label: "Outcome", value: "Forecast + governed, human-approved retention action" }
   ];
+  var ARCH_INGEST = [
+    { brand: "snowflake", icon: "data", name: "Synthetic generator (Cortex CLI)", sub: "Story-driven revenue / risk / incident data \u2192 Snowflake gold" },
+    { brand: "domo-cloud-amplifier", icon: "sync", name: "Cloud Amplifier live federation", sub: "Domo queries Snowflake gold live \u2014 no copy" }
+  ];
+  var ARCH_PLANES = [
+    {
+      id: "sf", title: "Snowflake \u00b7 Governed Intelligence",
+      items: [
+        { brand: "horizon", icon: "data", name: "Snowflake Horizon", sub: "Governance \u00b7 lineage \u00b7 RBAC \u00b7 masking",
+          d: { lead: "The single governed source of truth. Horizon enforces RBAC, row-access (RAP_REGION) and column-masking (MASK_ARR) policies, tags, and lineage across every gold view, the model, and Cortex.", bullets: ["Row-access + masking enforced at the query engine", "Object comments/tags double as the AI Readiness source", "One definition feeds Cortex, ML, and Domo \u2014 no metric drift"], input: "Silver tables", output: "Governed gold + policies", gov: "Snowflake Horizon \u2014 RBAC, RAP, masking, lineage" } },
+        { brand: "snowflake", icon: "dataset", name: "Gold views", sub: "Revenue \u00b7 risk \u00b7 incidents \u00b7 forecast \u00b7 actions",
+          d: { lead: "Gold views in SNOWFLAKE_REVENUE_CC.CORE define the whole story: executive revenue health, customer renewal risk, incident revenue impact, the forecast series, and the agent action queue.", bullets: ["Built over the governed DIM/FACT model", "Identical semantics feed Cortex Analyst, ML, and Domo", "Deep-linked to Snowsight for lineage"], input: "DIM/FACT model", output: "5 governed gold views", gov: "Snowflake Horizon" } },
+        { brand: "cortex", icon: "genie", name: "Cortex Analyst", sub: "NL \u2192 governed SQL over the semantic view",
+          d: { lead: "Cortex Analyst answers \u201cwhy did this change?\u201d in natural language over the REVENUE_CC_ANALYST semantic view, returning generated SQL and result rows the app charts.", bullets: ["Grounded on the governed semantic model + verified queries", "Called from Domo via snowflakece.askAnalyst", "Answers cite governed metrics + generated SQL"], input: "Question + semantic view", output: "Answer + SQL + rows", gov: "Horizon + semantic view" } },
+        { brand: "cortex", icon: "agent", name: "Cortex Agent", sub: "REVENUE_CC_AGENT \u00b7 Analyst + Search",
+          d: { lead: "One Cortex Agent orchestrates Analyst, Cortex Search, and SQL into a grounded retention recommendation with citations \u2014 the Snowflake agent the Domo Agent Catalyst tile calls.", bullets: ["Analyst + Search + SQL as governed tools", "Called via snowflakece.askCortexAgent / askRetentionAgent", "Every answer cites its governed sources"], input: "Account context + question", output: "Grounded recommendation + citations", gov: "Horizon + Cortex" } },
+        { brand: "cortex", icon: "search", name: "Cortex Search", sub: "REVENUE_CC_SEARCH \u00b7 incident notes",
+          d: { lead: "A Cortex Search service over incident and knowledge notes gives the agent retrieval grounding beyond the structured gold views.", bullets: ["Semantic retrieval over KNOWLEDGE_DOCS / incident notes", "A governed tool inside the Cortex Agent", "Same Horizon policies as the tables"], input: "Unstructured notes", output: "Ranked passages", gov: "Snowflake Horizon" } },
+        { brand: "aiml", icon: "model", name: "Snowflake ML", sub: "PREDICT_RENEWAL_RISK \u00b7 Model Registry",
+          d: { lead: "Snowflake predicts. A classification model registered in the Model Registry scores renewal risk with native in-warehouse inference \u2014 no data leaves Snowflake.", bullets: ["Trained on ML_RENEWAL_RISK_TRAINING; registered in the Model Registry", "Ad hoc scoring via snowflakece.runModelInference", "App shows the live request as SQL / cURL / Python"], input: "Account features", output: "Churn probability + revenue at risk", gov: "Horizon-governed model" } },
+        { brand: "hybrid", icon: "lakebase", name: "Hybrid Tables", sub: "OLTP state \u00b7 SCENARIO_RUNS \u00b7 PREDICTION_FEEDBACK",
+          d: { lead: "Snowflake remembers. App-owned operational state \u2014 saved what-if scenarios and human prediction feedback \u2014 lives in Snowflake Hybrid Tables (OLTP), governed by the same Horizon roles.", bullets: ["Millisecond OLTP reads/writes inside Snowflake", "CRUD via snowflakece (WRITER role)", "Operational memory next to the analytics \u2014 not a spreadsheet"], input: "Scenario saves + feedback", output: "Durable operational state", gov: "Horizon roles (READER/WRITER)" } },
+        { brand: "security", icon: "shield", name: "Cortex guardrails", sub: "Safety \u00b7 PII \u00b7 observability",
+          d: { lead: "The governance boundary for AI calls: Cortex guardrails apply content + PII safety on LLM reasoning, and query history / observability audits every call.", bullets: ["Input/output safety + PII handling on Cortex", "Usage + query history for audit", "Applies to Analyst, Agent, and reasoning calls"], input: "Model + LLM calls", output: "Governed, audited responses", gov: "Cortex guardrails + Horizon" } }
+      ]
+    },
+    {
+      id: "interop", title: "Interop & Governance", agent: true,
+      items: [
+        { brand: "domo-cloud-amplifier", icon: "sync", name: "Cloud Amplifier", sub: "BYOS live federation \u00b7 no copy",
+          d: { lead: "Domo queries the Snowflake gold views live through Cloud Amplifier (BYOS) \u2014 no data is copied into Domo storage.", bullets: ["Live federated read against Snowflake SQL", "domopartner.us-east-1 integration", "Auto-cache for UI speed"], input: "Snowflake gold views", output: "Federated Domo DataSets", gov: "Cloud Amplifier BYOS" } },
+        { brand: "domo-mcp", icon: "app", name: "snowflakece bridge", sub: "Code Engine \u00b7 SQL API \u00b7 key-pair JWT",
+          d: { lead: "The server-side bridge \u2014 a Domo Code Engine package (snowflakece) that runs every Snowflake call with the key-pair credential held server-side: Analyst, Agent, ML inference, Hybrid Table CRUD, workflow start, and writeback.", bullets: ["askAnalyst \u00b7 askCortexAgent \u00b7 runModelInference \u00b7 getOpsState", "writeActionStatus \u00b7 startRetentionWorkflow \u00b7 completeApprovalTask", "Key-pair JWT stays server-side; never in the browser"], input: "App requests (domo.post)", output: "Governed Snowflake results", gov: "Domo OAuth + server-side key-pair" } },
+        { brand: "domo-mcp", icon: "gateway", name: "MCP servers", sub: "Snowflake-managed + Domo Essentials",
+          d: { lead: "The outward MCP surface: a Snowflake-managed MCP server exposes the same Agent/Analyst/Search tools, and Domo Essentials MCP lets Domo agents reach governed Snowflake context.", bullets: ["Same governed tools, MCP-standard contract", "Consumed by Domo Chat v2 (gated)", "Governance travels with the tools"], input: "Agent tool calls", output: "Governed tool responses", gov: "Horizon + MCP" } },
+        { brand: "domo-pdp", icon: "gateway", name: "Shared identity", sub: "Domo SSO \u00b7 key-pair \u00b7 role assumption",
+          d: { lead: "Users sign in through Domo SSO; the snowflakece bridge assumes least-privilege Snowflake roles (READER/WRITER) per request via the key-pair credential.", bullets: ["Domo SSO at the front door", "Per-request role assumption in Snowflake", "Documented next step: per-user OBO into Snowflake"], input: "Domo SSO identity", output: "Governed Snowflake access", gov: "SSO + Snowflake roles" } }
+      ]
+    },
+    {
+      id: "domo", title: "Domo \u00b7 Activation & Action",
+      items: [
+        { brand: "domo-pro-code", icon: "app", name: "Pro-code App", sub: "App Studio command center",
+          d: { lead: "This application. A persona-scoped command center across Forecast Home, Cortex Analyst, Snowflake ML, Approvals, Hybrid Tables, Horizon AI Readiness, CoWork, and How It Works.", bullets: ["Reads DataSets by alias (Query API)", "Calls Snowflake server-side via Code Engine (snowflakece)", "Domo styleguide UI, Snowflake-governed data + intelligence"], input: "DataSets + Code Engine", output: "Executive command center", gov: "Domo SSO + PDP" } },
+        { brand: "domo-cloud-amplifier", icon: "dataset", name: "Federated DataSets", sub: "5 alias-mapped gold views",
+          d: { lead: "The gold views surface in Domo as direct-federated DataSets, mapped to the app by stable aliases.", bullets: ["executiveRevenueHealth \u00b7 customerRenewalRisk \u00b7 incidentRevenueImpact", "agentActionQueue \u00b7 portalUserScope", "PDP-ready for per-persona scoping"], input: "Cloud Amplifier connection", output: "5 alias-mapped DataSets", gov: "Domo PDP \u2194 Horizon row-access" } },
+        { brand: "domo-workflows", icon: "action", name: "Domo Workflow + approvals", sub: "Renewal Risk Retention \u00b7 sign-off \u2192 writeback",
+          d: { lead: "Approve & execute starts a governed Domo Workflow. Inside it, an Agent Catalyst tile calls the Cortex Agent for a retention recommendation; a human approves in Domo Tasks; a service task writes status back to Snowflake.", bullets: ["startRetentionWorkflow starts the workflow server-side", "Human approval routed through the Task Center queue", "writeActionStatus \u2192 AGENT_ACTION_WRITEBACK"], input: "Cortex reasoning + model scores", output: "Approved action + writeback", gov: "Domo RBAC + approval gate" } },
+        { brand: "domo-ai-agent", icon: "agent", name: "Agent Catalyst", sub: "Domo AI agent \u2192 Cortex Agent (agent \u21c4 agent)",
+          d: { lead: "Inside the workflow, a native Domo Agent Catalyst tile calls the Snowflake Cortex Agent to produce the retention recommendation a human then approves \u2014 the Domo half of agent \u21c4 agent.", bullets: ["Agent Catalyst \u2192 snowflakece.askRetentionAgent \u2192 Cortex Agent", "Bounded call with a fast guardrailed fallback", "Recommendation shown to the approver in the Domo task"], input: "Workflow context", output: "Recommendation in the approval task", gov: "Domo Workflow + Cortex" } },
+        { brand: "domo-approvals", icon: "approval", name: "Approvals \u00b7 Action Center", sub: "in-app approve / reject completes the task",
+          d: { lead: "A dedicated tab listing the workflow's approval queue. Approving or rejecting here completes the Domo task over the Task Center API, resumes the workflow, and writes status back to Snowflake.", bullets: ["listApprovalTasks + completeApprovalTask", "Click any task to go to source in the Domo queue", "Decision \u2192 writeActionStatus \u2192 AGENT_ACTION_WRITEBACK"], input: "Workflow approval task", output: "Completed task + writeback", gov: "Domo RBAC" } },
+        { brand: "aiml", icon: "model", name: "ML Predictions", sub: "Ad hoc scoring + SQL / cURL / Python",
+          d: { lead: "The Snowflake ML tab scores any account on demand and shows the exact live request as SQL, cURL, and Python so the call is fully transparent.", bullets: ["Calls native inference via snowflakece.runModelInference", "Accept a prediction \u2192 seeds a scenario", "Feedback persists to Hybrid Tables"], input: "Account features", output: "Churn probability + revenue at risk", gov: "Horizon model + guardrails" } },
+        { brand: "domo-pdp", icon: "data", name: "AI Readiness", sub: "Horizon \u2192 Domo AI Readiness control plane",
+          d: { lead: "Horizon column metadata (comments, tags, synonyms) is the source of truth; the AI Readiness tab syncs that prepared context into Domo's AI Readiness control plane per column or dataset.", bullets: ["Horizon comments/tags drive Domo AI Readiness", "Sync per column or whole dataset", "Editing Horizon source context is a separate, governed action"], input: "Horizon metadata", output: "Domo AI Readiness coverage", gov: "Horizon (write) + Domo AI Readiness" } },
+        { brand: "domo-pdp", icon: "gateway", name: "Domo PDP", sub: "Per-persona scope \u2194 Horizon row-access",
+          d: { lead: "Personalized Data Permissions scope every persona (exec sponsor, regional manager, account owner) to the rows they're entitled to \u2014 the Domo mirror of Horizon row-access policies.", bullets: ["Viewing as menu rescopes the whole app", "PDP policies align to RAP_REGION row-access", "Same governance, enforced on both platforms"], input: "Persona identity", output: "Row-scoped view", gov: "Domo PDP \u2194 Horizon RAP" } }
+      ]
+    }
+  ];
+  var BUILD_REQ = [
+    { icon: "gateway", k: "Identity", v: "Domo SSO \u00b7 key-pair JWT \u00b7 role assumption" },
+    { icon: "data", k: "Governance", v: "Horizon (RBAC \u00b7 RAP_REGION \u00b7 MASK_ARR) + Domo PDP" },
+    { icon: "shield", k: "Safety", v: "Cortex guardrails \u00b7 PII + content" },
+    { icon: "action", k: "Human-in-loop", v: "Workflow sign-off on writes" },
+    { icon: "model", k: "Observability", v: "Query history \u00b7 lineage \u00b7 model registry" },
+    { icon: "lakebase", k: "State", v: "Hybrid Tables scenarios/feedback \u00b7 writeback" }
+  ];
+
+  /* ---- User Guide (business) data ---- */
+  var GUIDE_STEPS = [
+    { title: "Choose your persona", desc: "Use the Viewing as menu. The view rescopes to your region or accounts \u2014 the same entitlement enforced by Horizon row-access (RAP_REGION) and Domo PDP." },
+    { title: "Read the Forecast Home", desc: "KPIs (Net Revenue, Revenue at Risk, Protected Revenue, SLA Breaches), the Actual-vs-Forecast hero with confidence band, and the Regional Renewal Risk hotspot give your scope at a glance." },
+    { title: "Score an account (Snowflake ML)", desc: "Snowflake predicts: enter account features and Run prediction. PREDICT_RENEWAL_RISK returns a churn probability via native in-warehouse inference; the payload panel shows the exact SQL / cURL / Python." },
+    { title: "Ask Cortex Analyst why", desc: "Cortex explains: ask the semantic view a natural-language question. It returns a cited answer and generated SQL over REVENUE_CC_ANALYST; Inspect shows the API call." },
+    { title: "Inspect the agent & act", desc: "On a pending action, Inspect agent shows the Cortex Agent reasoning (Analyst + Search grounded). Approve & execute starts a governed Domo Workflow \u2014 its Agent Catalyst tile calls that same Cortex Agent." },
+    { title: "Approve (Approvals tab)", desc: "Human-in-the-loop: the workflow routes an approval task. Approve or reject it in the Approvals tab; the decision completes the Domo task, resumes the workflow, and writes status back to AGENT_ACTION_WRITEBACK. Protected Revenue ticks up." },
+    { title: "Keep operational state (Hybrid Tables)", desc: "Save what-if scenarios and accept/adjust/reject prediction feedback. These persist in Snowflake Hybrid Tables (OLTP) next to the analytics, so context survives across sessions." },
+    { title: "Govern AI Readiness", desc: "Snowflake Horizon is the source of truth. Sync prepared column metadata into Domo AI Readiness per column or dataset; editing Horizon source context is a separate, governed action in the inspector drawer." },
+    { title: "Trust the governance", desc: "Lineage shows live federation via Cloud Amplifier \u2014 no copies. Horizon, Cortex guardrails, and Domo PDP enforce access end to end." }
+  ];
+
+  /* ---- Technical Architecture (engineer) data ---- */
+  var TA_NODES = [
+    { id: "datasets", plane: "domo", ic: "dataset", name: "Federated DataSets", sub: "5 alias-mapped views", x: 24, y: 34, d: { lead: "Gold views surfaced in Domo as direct-federated DataSets, mapped by stable aliases.", contract: "executiveRevenueHealth \u00b7 customerRenewalRisk \u00b7 incidentRevenueImpact \u00b7 agentActionQueue \u00b7 portalUserScope", gov: "Domo PDP \u2194 Horizon row-access", io: "Cloud Amplifier \u2192 DataSets" } },
+    { id: "app", plane: "domo", ic: "app", name: "Pro-code App", sub: "App Studio command center", x: 24, y: 150, d: { lead: "This portal. Persona-scoped command center; reads DataSets by alias and calls Snowflake via Code Engine.", contract: "App Studio \u00b7 snowflakece proxy", gov: "Domo SSO + PDP", io: "DataSets + Code Engine \u2192 experience" } },
+    { id: "agentcatalyst", plane: "domo", ic: "agent", name: "Agent Catalyst", sub: "Domo AI agent tile", x: 24, y: 300, d: { lead: "Inside the workflow, a Domo AI agent tile calls the Cortex Agent \u2014 the Domo half of agent \u21c4 agent.", contract: "\u2192 snowflakece.askRetentionAgent \u2192 Cortex Agent", gov: "Domo Workflow + Cortex guardrails", io: "Workflow context \u2192 recommendation" } },
+    { id: "workflow", plane: "domo", ic: "action", name: "Domo Workflow", sub: "Renewal Risk Retention", x: 24, y: 420, d: { lead: "Governed workflow started on Approve & execute; routes a human approval, then writes status back.", contract: "Renewal Risk Retention \u00b7 Task Center queue", gov: "Domo RBAC + approval gate", io: "Start \u2192 approval \u2192 writeback" } },
+    { id: "approvals", plane: "domo", ic: "approval", name: "Approvals", sub: "in-app approve / reject", x: 24, y: 540, d: { lead: "In-app tab over the workflow approval queue; completing a task resumes the workflow.", contract: "listApprovalTasks \u00b7 completeApprovalTask", gov: "Domo RBAC", io: "Task \u2192 completed + writeback" } },
+    { id: "pdp", plane: "domo", ic: "gateway", name: "Domo PDP", sub: "per-persona scope", x: 250, y: 560, d: { lead: "Personalized Data Permissions scope each persona to entitled rows \u2014 the Domo mirror of Horizon row-access.", contract: "PDP policies \u2194 RAP_REGION", gov: "Domo PDP", io: "Persona \u2192 row-scoped view" } },
+    { id: "amplifier", plane: "interop", ic: "sync", name: "Cloud Amplifier", sub: "live federation \u00b7 no copy", x: 320, y: 34, d: { lead: "Domo queries the gold views live inside Snowflake \u2014 no data copied into Domo storage.", contract: "BYOS integration \u00b7 domopartner.us-east-1", gov: "Cloud Amplifier BYOS", io: "Gold views \u21c4 federated DataSets" } },
+    { id: "identity", plane: "interop", ic: "gateway", name: "Shared identity", sub: "SSO \u00b7 key-pair \u00b7 roles", x: 480, y: 34, d: { lead: "Users sign in via Domo SSO; snowflakece assumes least-privilege Snowflake roles per request via the key-pair credential.", contract: "Domo SSO \u00b7 key-pair JWT \u00b7 READER/WRITER", gov: "SSO + Snowflake RBAC", io: "Domo identity \u2192 governed Snowflake access" } },
+    { id: "ce", plane: "interop", ic: "app", name: "snowflakece bridge", sub: "Code Engine \u00b7 SQL API", x: 470, y: 270, d: { lead: "The server-side bridge \u2014 a Domo Code Engine package (snowflakece). Every Snowflake call runs here with the key-pair credential held server-side: Analyst, Agent, ML inference, Hybrid Tables, workflow, writeback.", contract: "proxyId snowflakece \u00b7 SQL API v2 \u00b7 key-pair JWT", gov: "Domo OAuth + server-side key-pair", io: "App requests \u2192 governed Snowflake results" } },
+    { id: "mcp", plane: "interop", ic: "gateway", name: "MCP servers", sub: "managed + Domo Essentials", x: 470, y: 470, d: { lead: "The outward MCP surface exposing the same Agent/Analyst/Search tools to Domo Chat v2 and other MCP clients.", contract: "Snowflake-managed MCP \u00b7 Domo Essentials MCP", gov: "Horizon + MCP", io: "Tool calls \u2192 governed responses" } },
+    { id: "analyst", plane: "sf", ic: "genie", name: "Cortex Analyst", sub: "NL \u2192 governed SQL", x: 712, y: 120, d: { lead: "Natural-language reasoning over the semantic view; returns an answer, generated SQL, and rows.", contract: "REVENUE_CC_ANALYST \u00b7 Cortex Analyst API", gov: "Horizon + semantic view", io: "Question \u2192 answer + SQL + rows" } },
+    { id: "guardrails", plane: "sf", ic: "shield", name: "Cortex guardrails", sub: "safety \u00b7 PII \u00b7 audit", x: 712, y: 270, d: { lead: "Governance boundary for Cortex calls: content + PII safety, usage tracking, and query history.", contract: "Cortex guardrails + query history", gov: "Cortex + Horizon", io: "LLM calls \u2192 governed responses" } },
+    { id: "agent", plane: "sf", ic: "agent", name: "Cortex Agent", sub: "REVENUE_CC_AGENT", x: 712, y: 420, d: { lead: "One Cortex Agent orchestrates Analyst, Search, and SQL into a grounded retention recommendation \u2014 the Snowflake agent the Domo tile calls.", contract: "REVENUE_CC_AGENT \u00b7 Analyst + Search + SQL", gov: "Horizon + Cortex", io: "Context \u2192 grounded recommendation" } },
+    { id: "warehouse", plane: "sf", ic: "data", name: "Snowflake Warehouse", sub: "SQL engine \u00b7 federation", x: 712, y: 552, d: { lead: "Executes both the Cloud Amplifier federated reads and Cortex-generated SQL.", contract: "REVENUE_CC_WH", gov: "Snowflake Horizon", io: "SQL \u2192 result rows" } },
+    { id: "ml", plane: "sf", ic: "model", name: "Snowflake ML", sub: "PREDICT_RENEWAL_RISK", x: 952, y: 150, d: { lead: "A classification model registered in the Model Registry, served for native in-warehouse account scoring.", contract: "PREDICT_RENEWAL_RISK \u00b7 Model Registry", gov: "Horizon-governed model", io: "Account features \u2192 churn probability" } },
+    { id: "horizon", plane: "sf", ic: "data", name: "Snowflake Horizon", sub: "governance \u00b7 source of truth", x: 952, y: 300, d: { lead: "Single governed source of truth: RBAC, row-access (RAP_REGION), masking (MASK_ARR), tags, and lineage across every object.", contract: "SNOWFLAKE_REVENUE_CC.CORE \u00b7 RAP_REGION \u00b7 MASK_ARR", gov: "Snowflake Horizon", io: "Policies \u2192 every object" } },
+    { id: "gold", plane: "sf", ic: "dataset", name: "Gold views", sub: "+ AGENT_ACTION_WRITEBACK", x: 952, y: 440, d: { lead: "The governed gold views plus the writeback table; one definition feeds Cortex, the model, and Domo.", contract: "GOLD_* + AGENT_ACTION_WRITEBACK", gov: "Snowflake Horizon", io: "DIM/FACT \u2192 governed gold" } },
+    { id: "hybrid", plane: "sf", ic: "lakebase", name: "Hybrid Tables", sub: "operational state (OLTP)", x: 952, y: 575, d: { lead: "App-owned OLTP state inside Snowflake \u2014 what-if scenarios + prediction feedback.", contract: "SCENARIO_RUNS \u00b7 PREDICTION_FEEDBACK", gov: "Horizon roles (READER/WRITER)", io: "Scenario/feedback writes \u2192 durable state" } }
+  ];
+  var TA_EDGES = [
+    { f: "app", t: "datasets", p: "Query API (alias)", fl: ["F1"] },
+    { f: "datasets", t: "amplifier", p: "federation request", fl: ["F1"] },
+    { f: "amplifier", t: "warehouse", p: "Snowflake SQL \u00b7 no copy", fl: ["F1"] },
+    { f: "warehouse", t: "gold", p: "SELECT", fl: ["F1", "F2"] },
+    { f: "app", t: "ce", p: "domo.post \u00b7 proxyId", fl: ["F2", "F3", "F4", "F5", "F6"] },
+    { f: "ce", t: "analyst", p: "Cortex Analyst API", fl: ["F2"] },
+    { f: "analyst", t: "warehouse", p: "generated SQL", fl: ["F2"] },
+    { f: "analyst", t: "guardrails", p: "safety + PII", fl: ["F2"] },
+    { f: "ce", t: "ml", p: "SQL API \u00b7 PREDICT_RENEWAL_RISK", fl: ["F3"] },
+    { f: "ml", t: "gold", p: "features / training", fl: ["F3"] },
+    { f: "ce", t: "hybrid", p: "Hybrid Table CRUD", fl: ["F5"] },
+    { f: "ce", t: "workflow", p: "startRetentionWorkflow", fl: ["F4"] },
+    { f: "workflow", t: "agentcatalyst", p: "AI agent tile", fl: ["F4"] },
+    { f: "agentcatalyst", t: "agent", p: "askRetentionAgent \u2192 Cortex Agent", fl: ["F4"] },
+    { f: "agent", t: "analyst", p: "Analyst-grounded", fl: ["F4"] },
+    { f: "agent", t: "guardrails", p: "safety + PII", fl: ["F4"] },
+    { f: "workflow", t: "approvals", p: "approval task (Task Center)", fl: ["F4"] },
+    { f: "approvals", t: "ce", p: "completeApprovalTask", fl: ["F4"] },
+    { f: "ce", t: "gold", p: "writeActionStatus \u2192 writeback", fl: ["F4"] },
+    { f: "ce", t: "horizon", p: "readiness metadata", fl: ["F6"] },
+    { f: "ce", t: "mcp", p: "MCP outward" },
+    { f: "mcp", t: "agent", p: "Agent / Analyst / Search tools" },
+    { f: "identity", t: "app", p: "SSO", gov: true },
+    { f: "identity", t: "ce", p: "key-pair JWT / roles", gov: true },
+    { f: "pdp", t: "datasets", p: "row scope \u2194 Horizon", gov: true },
+    { f: "horizon", t: "gold", p: "row-access + masking", gov: true },
+    { f: "horizon", t: "warehouse", p: "policies", gov: true }
+  ];
+  var TA_FLOWS = [
+    { id: "F1", name: "Live federation", c: "--tf1" },
+    { id: "F2", name: "Ask Cortex Analyst", c: "--tf2" },
+    { id: "F3", name: "Score account", c: "--tf3" },
+    { id: "F4", name: "Agent \u21c4 Agent + writeback", c: "--tf4" },
+    { id: "F5", name: "Hybrid Table state", c: "--tf5" },
+    { id: "F6", name: "AI Readiness sync", c: "--tf6" }
+  ];
+  var TA_REGIONS = [
+    { id: "domo", name: "Domo", x: 24 },
+    { id: "interop", name: "Integration Hub", x: 320 },
+    { id: "sf", name: "Snowflake", x: 712 }
+  ];
+  var TA_BRAND = {
+    datasets: "domo-cloud-amplifier", app: "domo-pro-code", agentcatalyst: "domo-ai-agent",
+    workflow: "domo-workflows", approvals: "domo-approvals", pdp: "domo-pdp",
+    amplifier: "domo-cloud-amplifier", identity: "domo-pdp", ce: "domo-mcp", mcp: "domo-mcp",
+    analyst: "cortex", guardrails: "security", agent: "cortex", warehouse: "snowflake",
+    ml: "aiml", horizon: "horizon", gold: "snowflake", hybrid: "hybrid"
+  };
+  var TA_BYID = {};
+  TA_NODES.forEach(function (n) { TA_BYID[n.id] = n; });
+  var HOW_TA = { nodeEls: {} };
+  // One-time: keep blueprint edges aligned if fonts load late or the window resizes.
+  window.addEventListener("resize", function () { requestAnimationFrame(howDrawEdges); });
+  if (document.fonts && document.fonts.ready) { document.fonts.ready.then(function () { requestAnimationFrame(howDrawEdges); }); }
 
   function loadHow() {
     state.how.loading = true; renderView();
@@ -3890,37 +4499,280 @@
     });
   }
 
-  function howSpinePanel() {
-    var rail = h("div", { class: "spine-rail" });
-    SPINE.forEach(function (s, i) {
-      rail.appendChild(h("div", { class: "spine-node" }, [
-        h("img", { class: "spine-mark", src: "./public/brand/" + s.mark, alt: "" }),
-        h("span", { class: "spine-plane" }, [s.plane]),
-        h("span", { class: "spine-surface" }, [s.surface]),
-        h("code", { class: "spine-tech" }, [s.tech])
-      ]));
-      if (i < SPINE.length - 1) rail.appendChild(h("span", { class: "spine-arrow" }, ["\u2192"]));
+  /* ---- View switching ---- */
+  function howSubtabNav() {
+    var nav = h("nav", { class: "ha-subtabs", id: "howSubtabs", role: "tablist", "aria-label": "How It Works views" });
+    HOW_SUBTABS.forEach(function (t) {
+      var on = state.how.view === t.id;
+      var b = h("button", { class: "ha-subtab" + (on ? " active" : ""), type: "button", role: "tab", "aria-selected": on ? "true" : "false", title: t.tip, "data-guide": t.id, html: t.icon });
+      b.addEventListener("click", function () { howShowPane(t.id); });
+      nav.appendChild(b);
     });
-    return h("article", { class: "panel col-12" }, [
-      h("div", { class: "panel-head" }, [h("div", {}, [h("h2", {}, ["Solution architecture \u2014 one governed loop"]), h("p", {}, ["Predict \u2192 Explain \u2192 Act \u2192 Remember \u2192 Govern, mapped to surfaces + Snowflake objects"])])]),
-      rail
-    ]);
+    return nav;
+  }
+  var HOW_PANES = { arch: "howPaneArch", tech: "howPaneTech", guide: "howPaneGuide", coco: "howPaneCoco" };
+  function howShowPane(name) {
+    if (!HOW_PANES[name]) name = "arch";
+    state.how.view = name;
+    Object.keys(HOW_PANES).forEach(function (k) { var e = el(HOW_PANES[k]); if (e) e.classList.toggle("is-hidden", k !== name); });
+    var nav = el("howSubtabs");
+    if (nav) Array.prototype.forEach.call(nav.querySelectorAll(".ha-subtab"), function (t) {
+      var on = t.getAttribute("data-guide") === name;
+      t.classList.toggle("active", on); t.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    if (name === "tech") { requestAnimationFrame(howDrawEdges); setTimeout(howDrawEdges, 60); }
   }
 
-  function howArchPanel() {
-    var grid = h("div", { class: "arch-grid" });
-    ARCH.forEach(function (a) {
-      var ul = h("ul", { class: "arch-items" });
-      a.items.forEach(function (it) { ul.appendChild(h("li", {}, [it])); });
-      grid.appendChild(h("div", { class: "arch-card" }, [
-        h("div", { class: "arch-top" }, [h("span", { class: "arch-layer" }, [a.layer]), statChip(a.status)]),
-        ul
+  /* ---- Pane 1: Solution Architecture ---- */
+  function howPlaneLabel(pid) { return pid === "sf" ? "Snowflake" : pid === "domo" ? "Domo" : "Interop"; }
+  function howIoCell(k, v) { return h("div", { class: "io-cell" }, [h("div", { class: "io-k" }, [k]), h("div", { class: "io-v" }, [v])]); }
+  function howSelectCard(key) {
+    state.how.selCard = key;
+    var grid = el("howArchGrid");
+    if (grid) Array.prototype.forEach.call(grid.querySelectorAll(".ac-card"), function (c) {
+      c.classList.toggle("active", c.getAttribute("data-arch") === key);
+    });
+    var dash = key.lastIndexOf("-");
+    var pid = key.slice(0, dash), idx = Number(key.slice(dash + 1));
+    var plane = null; ARCH_PLANES.forEach(function (p) { if (p.id === pid) plane = p; });
+    if (!plane || !plane.items[idx]) return;
+    var it = plane.items[idx], d = it.d || {};
+    var detail = el("howArchDetail"); if (!detail) return;
+    detail.innerHTML = "";
+    var left = h("div", {}, [
+      h("span", { class: "ad-plane " + pid }, [howPlaneLabel(pid)]),
+      h("h3", {}, [it.name]),
+      h("p", { class: "lead" }, [d.lead || it.sub])
+    ]);
+    if (d.bullets && d.bullets.length) {
+      var ul = h("ul");
+      d.bullets.forEach(function (b) { ul.appendChild(h("li", {}, [b])); });
+      left.appendChild(ul);
+    }
+    detail.appendChild(left);
+    var io = h("div", { class: "flow-io" });
+    if (d.input) io.appendChild(howIoCell("Input", d.input));
+    if (d.output) io.appendChild(howIoCell("Output", d.output));
+    if (d.gov) io.appendChild(howIoCell("Governed by", d.gov));
+    if (io.childNodes.length) detail.appendChild(io);
+  }
+  function howBuildArchPane() {
+    var pane = h("div", { class: "guide-pane" + (state.how.view !== "arch" ? " is-hidden" : ""), id: "howPaneArch" });
+
+    var lineage = h("button", { class: "link-pill sf", type: "button" }, ["View Horizon lineage \u2192"]);
+    lineage.addEventListener("click", function () { window.open(snowsightObjHref("semantic-view", "REVENUE_CC_ANALYST"), "_blank", "noopener"); });
+    var head = h("div", { class: "guide-section-head flow-head" }, [
+      h("div", {}, [h("h2", {}, ["Solution Architecture"]), h("p", {}, ["Build with Snowflake \u00b7 Deliver with Domo \u00b7 govern everywhere. Click any tile to see what it does, how it's governed, and its inputs & outputs."])]),
+      lineage
+    ]);
+
+    var ctx = h("div", { class: "arch-context" });
+    ARCH_CONTEXT.forEach(function (c) { ctx.appendChild(h("div", { class: "ac-ctx" }, [h("span", { class: "ac-ctx-k" }, [c.label]), h("span", { class: "ac-ctx-v" }, [c.value])])); });
+
+    var ing = h("div", { class: "arch-ingest" }, [h("span", { class: "ac-ing-label" }, ["Sources & ingestion"])]);
+    ARCH_INGEST.forEach(function (c, i) {
+      if (i > 0) ing.appendChild(h("span", { class: "ac-ing-arrow", "aria-hidden": "true" }, ["\u2192"]));
+      ing.appendChild(h("div", { class: "ac-ing-card" }, [howMarker(c.brand, c.icon, "ac-logo", "ac-ic"), h("div", {}, [h("b", {}, [c.name]), h("span", {}, [c.sub])])]));
+    });
+
+    var grid = h("div", { class: "arch-planes", id: "howArchGrid" });
+    ARCH_PLANES.forEach(function (p) {
+      var planeEl = h("div", { class: "ac-plane " + p.id }, [h("div", { class: "ac-plane-head" }, [h("span", {}, [p.title])])]);
+      if (p.agent) planeEl.appendChild(h("div", { class: "ac-agent-tag" }, ["AGENT \u00a0\u21c4\u00a0 AGENT"]));
+      var cards = h("div", { class: "ac-cards" });
+      p.items.forEach(function (it, i) {
+        var key = p.id + "-" + i;
+        var btn = h("button", { class: "ac-card" + (key === state.how.selCard ? " active" : ""), type: "button", "data-arch": key }, [
+          howMarker(it.brand, it.icon, "ac-logo", "ac-ic"),
+          h("div", { class: "ac-card-t" }, [h("b", {}, [it.name]), h("span", {}, [it.sub])])
+        ]);
+        btn.addEventListener("click", function () { howSelectCard(key); });
+        cards.appendChild(btn);
+      });
+      planeEl.appendChild(cards);
+      grid.appendChild(planeEl);
+    });
+
+    var detail = h("div", { class: "flow-detail arch-detail", id: "howArchDetail" });
+
+    var req = h("div", { class: "req-row" }, [h("span", { class: "ac-req-label" }, ["Build requirements"])]);
+    BUILD_REQ.forEach(function (r) {
+      req.appendChild(h("div", { class: "req" }, [h("span", { class: "ac-ic", html: HOW_ICONS[r.icon] || "" }), h("div", {}, [h("b", {}, [r.k]), h("span", {}, [r.v])])]));
+    });
+
+    pane.appendChild(h("article", { class: "panel col-12 arch-diagram" }, [head, ctx, ing, grid, detail, req]));
+    return pane;
+  }
+
+  /* ---- Pane 2: Technical Architecture (blueprint) ---- */
+  function howTaPlaneLabel(p) { return p === "sf" ? "Snowflake" : p === "domo" ? "Domo" : "Integration Hub"; }
+  function howFlowColor(id) { var f = null; TA_FLOWS.forEach(function (x) { if (x.id === id) f = x; }); return f ? f.c : "--ta-line2"; }
+  function howTaAnchor(elm, side) {
+    var svg = el("howTaEdges"); var r = elm.getBoundingClientRect(), c = svg.getBoundingClientRect();
+    var x = r.left - c.left, y = r.top - c.top;
+    if (side === "l") return [x, y + r.height / 2];
+    if (side === "r") return [x + r.width, y + r.height / 2];
+    if (side === "t") return [x + r.width / 2, y];
+    return [x + r.width / 2, y + r.height];
+  }
+  function howTaSides(a, b) {
+    var ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+    var dx = (rb.left + rb.width / 2) - (ra.left + ra.width / 2);
+    var dy = (rb.top + rb.height / 2) - (ra.top + ra.height / 2);
+    return Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? ["r", "l"] : ["l", "r"]) : (dy >= 0 ? ["b", "t"] : ["t", "b"]);
+  }
+  function howTaPath(p1, s1, p2, s2) {
+    var x1 = p1[0], y1 = p1[1], x2 = p2[0], y2 = p2[1];
+    var c1x = x1, c1y = y1, c2x = x2, c2y = y2;
+    var k = Math.max(36, Math.abs(x2 - x1) / 2.1);
+    c1x += s1 === "r" ? k : s1 === "l" ? -k : 0;
+    c1y += s1 === "b" ? k : s1 === "t" ? -k : 0;
+    c2x += s2 === "r" ? k : s2 === "l" ? -k : 0;
+    c2y += s2 === "b" ? k : s2 === "t" ? -k : 0;
+    return "M" + x1 + "," + y1 + " C" + c1x + "," + c1y + " " + c2x + "," + c2y + " " + x2 + "," + y2;
+  }
+  function howDrawEdges() {
+    var svg = el("howTaEdges"), stage = el("howTaStage");
+    if (!svg || !stage || !stage.offsetParent) return; // hidden \u2192 skip
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var flow = state.how.activeFlow;
+    TA_EDGES.forEach(function (e) {
+      var a = HOW_TA.nodeEls[e.f], b = HOW_TA.nodeEls[e.t];
+      if (!a || !b) return;
+      var sides = howTaSides(a, b);
+      var p1 = howTaAnchor(a, sides[0]), p2 = howTaAnchor(b, sides[1]);
+      var path = document.createElementNS(SVGNS, "path");
+      path.setAttribute("d", howTaPath(p1, sides[0], p2, sides[1]));
+      path.setAttribute("class", "ta-edge" + (e.gov ? " gov" : ""));
+      var lit = flow && e.fl && e.fl.indexOf(flow) > -1;
+      if (lit) { path.classList.add("on"); path.style.setProperty("--c", "var(" + howFlowColor(flow) + ")"); }
+      svg.appendChild(path);
+      if (lit) {
+        var mx = (p1[0] + p2[0]) / 2, my = (p1[1] + p2[1]) / 2;
+        var tx = document.createElementNS(SVGNS, "text");
+        tx.setAttribute("x", mx); tx.setAttribute("y", my - 3);
+        tx.setAttribute("text-anchor", "middle"); tx.setAttribute("class", "ta-elabel on");
+        tx.textContent = e.p; svg.appendChild(tx);
+      }
+    });
+  }
+  function howSetFlow(id) {
+    state.how.activeFlow = id;
+    var flows = el("howTaFlows");
+    if (flows) Array.prototype.forEach.call(flows.querySelectorAll(".ta-chip[data-flow]"), function (c) {
+      c.classList.toggle("active", c.getAttribute("data-flow") === id);
+    });
+    var stage = el("howTaStage"); if (!stage) return;
+    stage.classList.toggle("flowing", !!id);
+    if (id) {
+      stage.style.setProperty("--c", "var(" + howFlowColor(id) + ")");
+      var set = {};
+      TA_EDGES.forEach(function (e) { if (e.fl && e.fl.indexOf(id) > -1) { set[e.f] = 1; set[e.t] = 1; } });
+      Object.keys(HOW_TA.nodeEls).forEach(function (k) { HOW_TA.nodeEls[k].classList.toggle("on", !!set[k]); });
+    } else {
+      Object.keys(HOW_TA.nodeEls).forEach(function (k) { HOW_TA.nodeEls[k].classList.remove("on"); });
+    }
+    howDrawEdges();
+  }
+  function howToggleGov() {
+    var stage = el("howTaStage"); if (!stage) return;
+    var on = stage.classList.toggle("govon");
+    state.how.govOn = on;
+    var b = el("howTaGov"); if (b) { b.classList.toggle("active", on); b.style.setProperty("--c", "var(--ta-info)"); }
+  }
+  function howSetTheme(theme) {
+    state.how.techTheme = theme;
+    var p = el("howTechArch"); if (p) p.classList.toggle("dark", theme === "dark");
+    var b = el("howTaTheme"); if (b) { b.textContent = theme === "dark" ? "\u2600 Light" : "\u25d0 Dark"; b.setAttribute("aria-pressed", String(theme === "dark")); }
+    try { localStorage.setItem("sf_how_techtheme", theme); } catch (e) {}
+    requestAnimationFrame(howDrawEdges);
+  }
+  function howSelectNode(id) {
+    var n = TA_BYID[id]; if (!n) return;
+    state.how.selNode = id;
+    Object.keys(HOW_TA.nodeEls).forEach(function (k) { HOW_TA.nodeEls[k].classList.toggle("sel", k === id); });
+    var detail = el("howTaDetail"); if (!detail) return;
+    detail.innerHTML = "";
+    detail.appendChild(h("div", { class: "ta-detail-top " + n.plane }, [h("span", { class: "ta-pl " + n.plane }, [howTaPlaneLabel(n.plane)])]));
+    detail.appendChild(h("h3", {}, [n.name]));
+    detail.appendChild(h("p", { class: "ta-lead" }, [n.d.lead]));
+    detail.appendChild(h("div", { class: "ta-row" }, [h("div", { class: "ta-k" }, ["Contract / id"]), h("div", { class: "ta-v" }, [h("code", {}, [n.d.contract])])]));
+    detail.appendChild(h("div", { class: "ta-row" }, [h("div", { class: "ta-k" }, ["Governed by"]), h("div", { class: "ta-v" }, [n.d.gov])]));
+    detail.appendChild(h("div", { class: "ta-row" }, [h("div", { class: "ta-k" }, ["In / Out"]), h("div", { class: "ta-v" }, [n.d.io])]));
+  }
+  function howBuildTechPane() {
+    var pane = h("div", { class: "guide-pane" + (state.how.view !== "tech" ? " is-hidden" : ""), id: "howPaneTech" });
+    var dark = state.how.techTheme === "dark";
+
+    var themeBtn = h("button", { class: "ta-theme", type: "button", id: "howTaTheme", "aria-pressed": String(dark) }, [dark ? "\u2600 Light" : "\u25d0 Dark"]);
+    themeBtn.addEventListener("click", function () { howSetTheme(state.how.techTheme === "dark" ? "light" : "dark"); });
+    var head = h("div", { class: "guide-section-head ta-head" }, [
+      h("div", {}, [h("h2", {}, ["Technical Architecture"]), h("p", {}, ["The real components, their integrations & protocols, and the end-to-end data flows. Pick a flow to trace its request path; click any node for its contract & governance."])]),
+      themeBtn
+    ]);
+
+    var flows = h("div", { class: "ta-toolbar", id: "howTaFlows" }, [h("span", { class: "ta-lbl" }, ["Trace a flow"])]);
+    TA_FLOWS.forEach(function (f) {
+      var b = h("button", { class: "ta-chip" + (state.how.activeFlow === f.id ? " active" : ""), type: "button", "data-flow": f.id }, [h("span", { class: "ta-dot" }), f.name]);
+      b.style.setProperty("--c", "var(" + f.c + ")");
+      b.addEventListener("click", function () { howSetFlow(state.how.activeFlow === f.id ? null : f.id); });
+      flows.appendChild(b);
+    });
+    var govBtn = h("button", { class: "ta-chip ta-gov" + (state.how.govOn ? " active" : ""), type: "button", id: "howTaGov" }, ["Governance boundaries"]);
+    if (state.how.govOn) govBtn.style.setProperty("--c", "var(--ta-info)");
+    govBtn.addEventListener("click", howToggleGov);
+    flows.appendChild(govBtn);
+
+    var stage = h("div", { class: "ta-stage" + (state.how.govOn ? " govon" : ""), id: "howTaStage" });
+    var svg = document.createElementNS(SVGNS, "svg");
+    svg.setAttribute("class", "ta-edges"); svg.setAttribute("id", "howTaEdges");
+    stage.appendChild(svg);
+    TA_REGIONS.forEach(function (r) {
+      var kids = [];
+      if (r.id === "sf") kids.push(h("img", { src: "./public/brand/snowflake-mark.svg", alt: "", loading: "lazy" }));
+      kids.push(h("span", {}, [r.name]));
+      var reg = h("div", { class: "ta-region " + r.id }, kids);
+      reg.style.left = r.x + "px";
+      stage.appendChild(reg);
+    });
+    HOW_TA.nodeEls = {};
+    TA_NODES.forEach(function (n) {
+      var btn = h("button", { class: "ta-node " + n.plane + (n.id === state.how.selNode ? " sel" : ""), type: "button", "data-tanode": n.id }, [
+        howMarker(TA_BRAND[n.id], n.ic, "ta-logo", "ta-ic"),
+        h("span", {}, [h("b", {}, [n.name]), h("em", {}, [n.sub])])
+      ]);
+      btn.style.left = n.x + "px";
+      btn.style.top = (n.y + HOW_Y_OFFSET) + "px";
+      btn.addEventListener("click", function () { howSelectNode(n.id); });
+      stage.appendChild(btn);
+      HOW_TA.nodeEls[n.id] = btn;
+    });
+
+    var layout = h("div", { class: "ta-layout" }, [
+      h("div", { class: "ta-stagewrap" }, [stage]),
+      h("div", { class: "ta-detail", id: "howTaDetail" })
+    ]);
+    var key = h("div", { class: "ta-planekey" }, [h("span", { class: "ta-pk-sep" }, ["Solid line = integration edge \u00b7 dashed line = governance / identity boundary \u00b7 pick a flow to trace its request path"])]);
+
+    pane.appendChild(h("article", { class: "panel techarch" + (dark ? " dark" : ""), id: "howTechArch" }, [head, flows, layout, key]));
+    return pane;
+  }
+
+  /* ---- Pane 3: User Guide ---- */
+  function howBuildGuidePane() {
+    var pane = h("div", { class: "guide-pane" + (state.how.view !== "guide" ? " is-hidden" : ""), id: "howPaneGuide" });
+    var grid = h("div", { class: "guide-grid" });
+    GUIDE_STEPS.forEach(function (st, i) {
+      grid.appendChild(h("div", { class: "guide-step" }, [
+        h("div", { class: "guide-num" }, [String(i + 1)]),
+        h("div", {}, [h("h3", {}, [st.title]), h("p", {}, [st.desc])])
       ]));
     });
-    return h("article", { class: "panel col-12" }, [
-      h("div", { class: "panel-head" }, [h("div", {}, [h("h2", {}, ["Technical architecture"]), h("p", {}, ["Every Snowflake object authored via the Cortex CLI \u00b7 maturity labeled honestly"])])]),
+    pane.appendChild(h("article", { class: "panel col-12 guide-section" }, [
+      h("div", { class: "guide-section-head" }, [h("h2", {}, ["User Guide \u2014 Using the Command Center"]), h("p", {}, ["A business-user walkthrough, from picking a persona to approving a governed action."])]),
       grid
-    ]);
+    ]));
+    return pane;
   }
 
   function howCocoPanel() {
@@ -3943,12 +4795,39 @@
     return h("article", { class: "panel col-12" }, inner);
   }
 
+  /* ---- Pane 4: Built with CoCo ---- */
+  function howBuildCocoPane() {
+    var pane = h("div", { class: "guide-pane" + (state.how.view !== "coco" ? " is-hidden" : ""), id: "howPaneCoco" });
+    pane.appendChild(howCocoPanel());
+    return pane;
+  }
+
   function renderHow() {
     var frag = document.createDocumentFragment();
     if (!state.how.loaded && !state.how.loading) { loadHow(); }
-    frag.appendChild(h("section", { class: "grid" }, [howSpinePanel()]));
-    frag.appendChild(h("section", { class: "grid" }, [howArchPanel()]));
-    frag.appendChild(h("section", { class: "grid" }, [howCocoPanel()]));
+    if (!state.how.view) state.how.view = "arch";
+    if (!state.how.selCard) state.how.selCard = "sf-0";
+    if (!state.how.selNode) state.how.selNode = "ce";
+    if (!state.how.techTheme) {
+      var saved = null; try { saved = localStorage.getItem("sf_how_techtheme"); } catch (e) {}
+      state.how.techTheme = saved === "light" ? "light" : "dark";
+    }
+    var wrap = h("div", { class: "col-12 how-wrap" }, [
+      howSubtabNav(),
+      howBuildArchPane(),
+      howBuildTechPane(),
+      howBuildGuidePane(),
+      howBuildCocoPane()
+    ]);
+    frag.appendChild(h("section", { class: "grid" }, [wrap]));
+    // Post-append work: hydrate the detail panels + draw the blueprint edges.
+    requestAnimationFrame(function () {
+      howSelectCard(state.how.selCard);
+      howSelectNode(state.how.selNode);
+      if (state.how.activeFlow) howSetFlow(state.how.activeFlow);
+      if (state.how.view === "tech") howDrawEdges();
+    });
+    setTimeout(function () { if (state.how.view === "tech") howDrawEdges(); }, 80);
     return frag;
   }
 
@@ -3967,7 +4846,7 @@
     analyst: "<svg viewBox='0 0 103 101' fill='none'><path d='M13.5825 67.9035L46.8644 16.5088L89.1237 43.9267L74.0306 86.0748L13.5825 67.9035Z' stroke='currentColor' stroke-width='5.2' stroke-miterlimit='10'/><path d='M46.8639 30.0911C54.3657 30.0911 60.447 24.0097 60.447 16.5079C60.447 9.00619 54.3657 2.9248 46.8639 2.9248C39.3622 2.9248 33.2808 9.00619 33.2808 16.5079C33.2808 24.0097 39.3622 30.0911 46.8639 30.0911Z' fill='currentColor'/><path d='M89.1239 57.511C96.6259 57.511 102.707 51.4296 102.707 43.9279C102.707 36.4261 96.6259 30.3447 89.1239 30.3447C81.6224 30.3447 75.5408 36.4261 75.5408 43.9279C75.5408 51.4296 81.6224 57.511 89.1239 57.511Z' fill='currentColor'/><path d='M74.0306 99.6584C81.5327 99.6584 87.6138 93.5773 87.6138 86.0753C87.6138 78.5739 81.5327 72.4922 74.0306 72.4922C66.5292 72.4922 60.4475 78.5739 60.4475 86.0753C60.4475 93.5773 66.5292 99.6584 74.0306 99.6584Z' fill='currentColor'/><path d='M13.5831 81.4864C21.0849 81.4864 27.1663 75.4053 27.1663 67.9033C27.1663 60.4018 21.0849 54.3203 13.5831 54.3203C6.08139 54.3203 0 60.4018 0 67.9033C0 75.4053 6.08139 81.4864 13.5831 81.4864Z' fill='currentColor'/></svg>",
     ml: ICO + "<rect x='6' y='6' width='12' height='12' rx='2'/><rect x='10' y='10' width='4' height='4'/><path d='M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3'/></svg>",
     approvals: ICO + "<path d='M22 11.1V12a10 10 0 1 1-5.9-9.1'/><path d='M22 4L12 14.02l-3-3'/></svg>",
-    ops: ICO + "<ellipse cx='12' cy='5' rx='8' ry='3'/><path d='M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5'/><path d='M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6'/></svg>",
+    ops: ICO + "<rect x='3' y='4' width='18' height='16' rx='2'/><path d='M3 9.5h18M3 14.5h18M9 4.5v15M15 4.5v15'/></svg>",
     readiness: ICO + "<path d='M12 2l8 4v6c0 5-3.4 8.5-8 10-4.6-1.5-8-5-8-10V6z'/><path d='M9 12l2 2 4-4'/></svg>",
     semantic: ICO + "<circle cx='5' cy='6' r='2.4'/><circle cx='19' cy='6' r='2.4'/><circle cx='12' cy='18' r='2.4'/><path d='M7 7.4l4 8.4M17 7.4l-4 8.4M7.4 6h9.2'/></svg>",
     cowork: ICO + "<rect x='4' y='8' width='16' height='11' rx='2.5'/><path d='M12 8V4.5M9.5 4.5h5'/><circle cx='9' cy='13.5' r='1'/><circle cx='15' cy='13.5' r='1'/><path d='M9.5 16.5h5'/></svg>",
@@ -4050,6 +4929,10 @@
 
   function connBanner() {
     if (state.mode === "live") return null;
+    // While the live governed read is in flight (instant-paint hydration), the
+    // "Loading" pill already communicates state — don't flash the sample/connect
+    // banner over data that's about to be replaced by live figures.
+    if (state.hydrating) return null;
     var b = h("div", { class: "conn-banner" });
     b.appendChild(h("div", {}, [
       h("span", { class: "cb-title" }, ["Sample data \u2014 "]),
@@ -4479,8 +5362,343 @@
     ]);
   }
 
+  /* ===================== Action Journey (agent → agent) =====================
+   * The home Agent Action Queue's "Approve & execute" launches the governed
+   * cross-system flow: Cortex Agent (recommendation) → Domo Workflow → Domo agent
+   * ⇄ Cortex Agent reasoning → human approval (Domo Task Center) → writeback to a
+   * Snowflake Hybrid Table. The Action Journey is a live 6-node trace of that flow,
+   * driven by the real workflow instance + Task Center + writeback (no fake timers
+   * in the live path). Backed by the snowflakece Code Engine bridge:
+   * startRetentionWorkflow, askRetentionAgent, listApprovalTasks, getApprovalQueue. */
+  var AJ_PLANES = { "p-sf": { label: "SNOWFLAKE" }, "p-domo": { label: "DOMO" }, "p-agent": { label: "AGENT \u21c4 AGENT" }, "p-human": { label: "HUMAN" } };
+  var AJ_PHRASES = [
+    "Connecting to REVENUE_CC_AGENT (Cortex Agent)\u2026",
+    "Cortex Analyst querying the governed semantic view\u2026",
+    "Pulling renewal-risk drivers\u2026",
+    "Scoring churn probability (Snowflake ML)\u2026",
+    "Cortex Search over incident & QBR notes\u2026",
+    "Cross-checking the renewal forecast\u2026",
+    "Synthesizing a retention recommendation\u2026",
+    "Drafting rationale & what-to-watch\u2026"
+  ];
+  var _ajReasonTimers = {}, _ajProgressTimers = {}, _ajLocalTimers = {};
+
+  function ajRerender() { if (state.surface === "home") renderView(); }
+
+  function ajFocus(actionId, meta) {
+    meta = meta || {};
+    var J = state.journey, run = J.runs[actionId] || {};
+    var keep = J.active && J.active.actionId === actionId ? J.active.showReasoning : false;
+    var instanceId = meta.instanceId || run.instanceId || J.instanceIds[actionId] || "";
+    if (instanceId) J.instanceIds[actionId] = instanceId;
+    J.active = { actionId: actionId, account: meta.account || run.account || "", recommendation: meta.recommendation || run.recommendation || "", instanceId: instanceId, version: meta.version || run.version || "", showReasoning: keep };
+  }
+
+  function ajPhrase(run) {
+    if (!run) return AJ_PHRASES[0];
+    var i = (run.reasonTick || 0) % AJ_PHRASES.length;
+    var elapsed = run.startedAt ? Math.max(0, Math.round((Date.now() - run.startedAt) / 1000)) : 0;
+    return AJ_PHRASES[i] + (elapsed ? " \u00b7 " + elapsed + "s" : "");
+  }
+
+  // The 6-node cross-system model + per-node status/links, derived from live run state.
+  function ajSteps(actionId) {
+    var J = state.journey, run = J.runs[actionId] || null;
+    var executed = Object.prototype.hasOwnProperty.call(J.executed, actionId);
+    var rejected = !!J.rejected[actionId];
+    var pending = !!(run && run.status === "PENDING");
+    var decided = executed || rejected;
+    var stage = decided ? 3 : (run && typeof run.stage === "number" ? run.stage : (run ? 0 : -1));
+    var instanceId = (run && run.instanceId) || (J.active && J.active.instanceId) || J.instanceIds[actionId] || "";
+    var stat = function (activeAt) { return decided ? "done" : stage > activeAt ? "done" : stage === activeAt ? "active" : "todo"; };
+    return [
+      { key: "rec", plane: "p-sf", brand: "snowflake-cortex.svg", label: "Cortex Agent recommended the play", sub: "REVENUE_CC_AGENT \u00b7 Cortex Analyst + Search", status: "done", links: [{ kind: "agent", label: "Open agent \u2197" }] },
+      { key: "wf", plane: "p-domo", brand: "domo-workflows.svg", label: "Domo Workflow started", sub: stage < 0 ? "Renewal Risk Retention" : stage === 0 ? "starting\u2026" : (instanceId ? "instance " + String(instanceId).slice(0, 8) : "Renewal Risk Retention"), status: stat(0), links: [{ kind: "wf", label: "Workflow run \u2197" }] },
+      { key: "reason", plane: "p-agent", brand: "domo-snowflake-logo.svg", label: "Domo agent \u21c4 Cortex Agent reasoned", sub: stage === 1 ? ajPhrase(run) : "Grounded in the governed semantic view", working: stage === 1, status: stat(1), links: [{ kind: "activity", label: "Open in CoWork \u2197" }], reasoning: true },
+      { key: "approval", plane: "p-human", brand: "domo-approvals.svg", label: (pending && stage >= 2) ? "Awaiting your approval" : "Human approval", sub: (pending && stage >= 2) ? "Review & sign off to continue" : executed ? "Approved" : rejected ? "Rejected" : "Routes to Domo Tasks", status: decided ? "done" : (pending && stage >= 2) ? "active" : "todo", links: (pending && stage >= 2) ? [{ kind: "approvals", label: "Review & approve \u2192" }, { kind: "queue", label: "Open queue \u2197" }] : [] },
+      { key: "decision", plane: "p-human", brand: "domo-approvals.svg", label: executed ? "Approved" : rejected ? "Rejected" : "Approved / Rejected", sub: executed ? "Human signed off" : rejected ? "Declined by approver" : "Pending decision", status: executed ? "approved" : rejected ? "rejected" : "todo", links: decided ? [{ kind: "approvals", label: "Approvals \u2192" }] : [] },
+      { key: "writeback", plane: "p-sf", brand: "hybrid-tables.png", label: "Written back to Snowflake", sub: "AGENT_ACTION_WRITEBACK (Hybrid Table)", status: decided ? "done" : "todo", links: [{ kind: "writeback", label: "Writeback table \u2197" }] }
+    ];
+  }
+
+  function ajLink(l) {
+    if (l.kind === "agent") return h("a", { class: "link-btn", href: snowsightAgentHref(), target: "_blank", rel: "noopener" }, [l.label]);
+    if (l.kind === "wf") return h("a", { class: "link-btn", href: retentionWorkflowHref(), target: "_blank", rel: "noopener" }, [l.label]);
+    if (l.kind === "activity") return h("a", { class: "link-btn", href: coworkHomeHref(), target: "_blank", rel: "noopener" }, [l.label]);
+    if (l.kind === "queue") return h("a", { class: "link-btn", href: queueHref(), target: "_blank", rel: "noopener" }, [l.label]);
+    if (l.kind === "writeback") return h("a", { class: "link-btn", href: snowsightObjHref("table", "AGENT_ACTION_WRITEBACK"), target: "_blank", rel: "noopener" }, [l.label]);
+    if (l.kind === "approvals") { var b = h("button", { class: "link-btn" }, [l.label]); b.addEventListener("click", function () { goto("approvals"); }); return b; }
+    return h("span");
+  }
+
+  function ajNode(s, active) {
+    var plane = AJ_PLANES[s.plane] || { label: "" };
+    var dotKids = [];
+    if (s.status === "active") dotKids.push(h("span", { class: "aj-pulse" }));
+    dotKids.push(h("img", { class: "aj-logo", src: "./public/brand/" + s.brand, alt: "" }));
+    if (s.status === "approved" || s.status === "done") dotKids.push(h("span", { class: "aj-badge ok" }, ["\u2713"]));
+    else if (s.status === "rejected") dotKids.push(h("span", { class: "aj-badge no" }, ["\u2715"]));
+    var subKids = [];
+    if (s.working) subKids.push(h("span", { class: "aj-dots" }, [h("i"), h("i"), h("i")]));
+    subKids.push(s.sub || "");
+    var linkEls = (s.links || []).map(ajLink);
+    if (s.reasoning) {
+      var t = h("button", { class: "aj-reason-toggle link-btn" }, [active && active.showReasoning ? "Hide reasoning \u25b4" : "Show reasoning \u25be"]);
+      t.addEventListener("click", ajToggleReasoning);
+      linkEls.push(t);
+    }
+    var body = [h("span", { class: "aj-plane" }, [plane.label]), h("span", { class: "aj-label" }, [s.label]), h("span", { class: "aj-sub" }, subKids)];
+    if (linkEls.length) body.push(h("div", { class: "aj-links" }, linkEls));
+    return h("div", { class: "aj-node " + s.plane + " is-" + s.status }, [h("span", { class: "aj-dot" }, dotKids), h("div", { class: "aj-node-body" }, body)]);
+  }
+
+  function ajToggleReasoning() {
+    var J = state.journey; if (!J.active) return;
+    J.active.showReasoning = !J.active.showReasoning;
+    if (J.active.showReasoning) ajEnsureReasoning(J.active.actionId, J.active.account, J.active.recommendation, J.active.instanceId);
+    ajRerender();
+  }
+
+  // Minimal markdown → DOM for the agent transcript (headings, bold/italic/code,
+  // bullet + ordered lists, hr). Builds real nodes (no innerHTML) so the reasoning
+  // reads like formatted prose instead of raw ** and ## markup.
+  function mdInline(text) {
+    var s = String(text == null ? "" : text), nodes = [];
+    var re = /(\*\*([^*]+)\*\*|__([^_]+)__|`([^`]+)`|\*([^*]+)\*)/g, last = 0, m;
+    while ((m = re.exec(s))) {
+      if (m.index > last) nodes.push(s.slice(last, m.index));
+      if (m[2] != null) nodes.push(h("strong", {}, [m[2]]));
+      else if (m[3] != null) nodes.push(h("strong", {}, [m[3]]));
+      else if (m[4] != null) nodes.push(h("code", {}, [m[4]]));
+      else if (m[5] != null) nodes.push(h("em", {}, [m[5]]));
+      last = m.index + m[0].length;
+    }
+    if (last < s.length) nodes.push(s.slice(last));
+    return nodes.length ? nodes : [s];
+  }
+  function mdToNodes(md) {
+    var lines = String(md == null ? "" : md).replace(/\r\n/g, "\n").split("\n");
+    var blocks = [], listBuf = null;
+    var flush = function () { if (listBuf) { blocks.push(h("ul", { class: "agi-ul" }, listBuf)); listBuf = null; } };
+    for (var i = 0; i < lines.length; i++) {
+      var t = lines[i].trim();
+      if (!t) { flush(); continue; }
+      if (/^#{1,6}\s+/.test(t)) { flush(); var lvl = t.match(/^#+/)[0].length; var tag = lvl <= 2 ? "h4" : lvl === 3 ? "h5" : "h6"; blocks.push(h(tag, {}, mdInline(t.replace(/^#+\s+/, "")))); continue; }
+      if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) { flush(); blocks.push(h("hr", { class: "agi-hr" })); continue; }
+      if (/^[-*+]\s+/.test(t)) { if (!listBuf) listBuf = []; listBuf.push(h("li", {}, mdInline(t.replace(/^[-*+]\s+/, "")))); continue; }
+      if (/^\d+[.)]\s+/.test(t)) { if (!listBuf) listBuf = []; listBuf.push(h("li", {}, mdInline(t.replace(/^\d+[.)]\s+/, "")))); continue; }
+      flush(); blocks.push(h("p", {}, mdInline(t)));
+    }
+    flush();
+    return blocks;
+  }
+
+  function ajReasoningBody(active) {
+    var r = state.journey.inspect && state.journey.inspect.actionId === active.actionId ? state.journey.inspect : null;
+    if (!r || r.loading) return h("div", { class: "agi-think" }, [h("span", { class: "agi-dots" }, [h("i"), h("i"), h("i")]), h("span", {}, ["Cortex Agent reasoning over the governed semantic view \u2014 scoring renewal risk for ", h("strong", {}, [active.account || "this account"]), "\u2026"])]);
+    if (r.error) return h("div", { class: "agi-body err" }, ["Agent reasoning isn't available in this context (" + String(r.error).slice(0, 150) + "). Open it in CoWork to view the live run."]);
+    var badge = h("span", { class: "gw-badge sf" }, ["\u25c6 Cortex Agent \u00b7 semantic-view grounded"]);
+    var nodes = mdToNodes(r.transcript || "");
+    return h("div", {}, [h("div", { class: "agi-meta" }, [badge]), h("div", { class: "agi-body md" }, nodes.length ? nodes : [h("p", {}, [String(r.transcript || "")])])]);
+  }
+
+  function renderActionJourney() {
+    var J = state.journey, active = J.active;
+    if (!active) return null;
+    var aid = active.actionId, run = J.runs[aid] || null;
+    var executed = Object.prototype.hasOwnProperty.call(J.executed, aid);
+    var rejected = !!J.rejected[aid];
+    var pending = !!(run && run.status === "PENDING");
+    var stg = run && typeof run.stage === "number" ? run.stage : 2;
+    var statusTag;
+    if (pending && stg < 2) statusTag = h("span", { class: "aj-status pending" }, [h("span", { class: "wf-live" }), stg === 0 ? "Starting workflow\u2026" : "Agents reasoning\u2026"]);
+    else if (pending) statusTag = h("span", { class: "aj-status pending" }, [h("span", { class: "wf-live" }), "Awaiting your approval" + (run && run.polling ? " \u00b7 listening\u2026" : "")]);
+    else if (executed) statusTag = h("span", { class: "aj-status approved" }, ["Complete \u00b7 approved"]);
+    else if (rejected) statusTag = h("span", { class: "aj-status rejected" }, ["Complete \u00b7 rejected"]);
+    else statusTag = h("span", { class: "aj-status" }, ["In progress"]);
+    var close = h("button", { class: "agi-close link-btn" }, ["\u2715"]);
+    close.addEventListener("click", function () { state.journey.active = null; ajRerender(); });
+    var head = h("div", { class: "aj-head" }, [
+      h("div", { class: "aj-head-main" }, [
+        h("img", { class: "aj-bot-img", src: "./public/brand/domo-snowflake-logo.svg", alt: "" }),
+        h("div", { class: "aj-head-text" }, [
+          h("div", { class: "aj-title" }, ["Action Journey \u00b7 ", h("strong", {}, [active.account || ""])]),
+          active.recommendation ? h("div", { class: "aj-rec" }, [active.recommendation]) : null
+        ])
+      ]),
+      h("div", { class: "aj-head-side" }, [statusTag, close])
+    ]);
+    var track = h("div", { class: "aj-track" }, ajSteps(aid).map(function (s) { return ajNode(s, active); }));
+    var kids = [head, track];
+    if (run && run.startError) kids.push(h("div", { class: "aj-note warn" }, ["Workflow start wasn't confirmed here (" + String(run.startError).slice(0, 140) + "). A human-approval task may still exist \u2014 check the Approvals tab."]));
+    if (active.showReasoning) kids.push(h("div", { class: "aj-reason" }, [ajReasoningBody(active)]));
+    return h("div", { class: "action-journey" }, kids);
+  }
+
+  // Approve & execute → start the governed Domo Workflow and HOLD the real awaiting-
+  // approval state. We never optimistically flip to Executed; the decision arrives via
+  // polling the writeback + Task Center (or the Approvals tab). Preview animates locally.
+  function ajExecute(actionId, meta) {
+    var J = state.journey, amt = Number(meta.protectedRevenue) || 0;
+    if (!isLive()) {
+      J.runs[actionId] = { status: "PENDING", stage: 0, protectedAmt: amt, account: meta.account, recommendation: meta.recommendation, startedAt: Date.now(), instanceId: "" };
+      ajFocus(actionId, meta); ajRerender(); ajAdvanceLocal(actionId);
+      return;
+    }
+    J.runs[actionId] = { status: "PENDING", stage: 1, protectedAmt: amt, account: meta.account, recommendation: meta.recommendation, startedAt: Date.now(), instanceId: "", version: "", starting: true };
+    ajFocus(actionId, meta); ajRerender();
+    domo.post(CE + "startRetentionWorkflow", { actionId: actionId, account: meta.account || "", recommendation: meta.recommendation || "", persona: state.persona, protectedRevenue: amt, sourceQuestion: meta.sourceQuestion || "Why did renewal risk increase for this account this quarter?" })
+      .then(unwrap).then(function (d) {
+        var run = J.runs[actionId]; if (!run) return;
+        run.starting = false;
+        if (d && d.status === "SUCCEEDED") { run.instanceId = d.instanceId || d.instance || ""; run.version = d.version || ""; if (run.instanceId) J.instanceIds[actionId] = run.instanceId; }
+        else { run.startError = (d && d.error) ? String(d.error) : "start unconfirmed"; }
+        ajFocus(actionId, meta);
+        ajEnsureReasoning(actionId, meta.account, meta.recommendation, run.instanceId);
+        ajStartProgress(actionId); ajStartReasonTicker(actionId); ajRerender();
+      }).catch(function (err) {
+        var run = J.runs[actionId]; if (run) { run.starting = false; run.startError = String(err && err.message ? err.message : err); }
+        ajEnsureReasoning(actionId, meta.account, meta.recommendation, "");
+        ajStartProgress(actionId); ajStartReasonTicker(actionId); ajRerender();
+      });
+  }
+
+  function ajAdvanceLocal(actionId) {
+    if (_ajLocalTimers[actionId]) _ajLocalTimers[actionId].forEach(clearTimeout);
+    var timers = [], setStage = function (stage, delay) { timers.push(setTimeout(function () { var r = state.journey.runs[actionId]; if (!r || r.status !== "PENDING") return; r.stage = stage; ajRerender(); }, delay)); };
+    setStage(1, 1300); setStage(2, 3000);
+    timers.push(setTimeout(function () { var r = state.journey.runs[actionId]; if (!r || r.status !== "PENDING") return; ajApplyDecision(actionId, "approved"); }, 5200));
+    _ajLocalTimers[actionId] = timers;
+    ajStartReasonTicker(actionId);
+  }
+
+  function ajStopReasonTicker(id) { if (_ajReasonTimers[id]) { clearInterval(_ajReasonTimers[id]); delete _ajReasonTimers[id]; } }
+  function ajStartReasonTicker(id) {
+    ajStopReasonTicker(id);
+    _ajReasonTimers[id] = setInterval(function () {
+      var r = state.journey.runs[id];
+      if (!r || r.status !== "PENDING" || r.stage !== 1) { ajStopReasonTicker(id); return; }
+      r.reasonTick = (r.reasonTick || 0) + 1;
+      if (state.journey.active && state.journey.active.actionId === id) ajRerender();
+    }, 2500);
+  }
+
+  function ajApplyDecision(actionId, decision) {
+    var J = state.journey, run = J.runs[actionId], amt = run ? (Number(run.protectedAmt) || 0) : 0;
+    ajStopProgress(actionId); ajStopReasonTicker(actionId);
+    if (String(decision).toLowerCase() === "rejected") { J.rejected[actionId] = true; delete J.runs[actionId]; ajRerender(); return; }
+    J.executed[actionId] = amt; delete J.runs[actionId]; ajRerender();
+  }
+
+  function ajEnsureReasoning(actionId, account, rec, instance) {
+    var J = state.journey;
+    if (J.inspectCache[actionId]) { J.inspect = Object.assign({ actionId: actionId, account: account, instance: instance }, J.inspectCache[actionId]); ajRerender(); return; }
+    if (J.inspect && J.inspect.actionId === actionId && J.inspect.loading) return;
+    J.inspect = { actionId: actionId, account: account, instance: instance, loading: true }; ajRerender();
+    if (!isLive()) { J.inspect = { actionId: actionId, account: account, error: "Open the published app to inspect the live agent" }; ajRerender(); return; }
+    var prompt = "At-risk account: " + account + ". Recommended retention action under review: \"" + rec + "\". Analyze this account's renewal-risk drivers using the governed semantic view and recommend the best retention action with a short rationale and what to watch after executing.";
+    domo.post(CE + "askRetentionAgent", { prompt: prompt }).then(unwrap).then(function (d) {
+      if (d && d.status === "SUCCEEDED" && (d.recommendation || d.answer)) { J.inspectCache[actionId] = { transcript: d.recommendation || d.answer, source: d.source || "agent" }; J.inspect = Object.assign({ actionId: actionId, account: account, instance: instance }, J.inspectCache[actionId]); }
+      else { J.inspect = { actionId: actionId, account: account, instance: instance, error: (d && d.error) || "unavailable" }; }
+      if (J.active && J.active.actionId === actionId) ajRerender();
+    }).catch(function (err) { J.inspect = { actionId: actionId, account: account, instance: instance, error: String(err && err.message ? err.message : err) }; ajRerender(); });
+  }
+
+  function ajTs(ts) {
+    if (!ts && ts !== 0) return 0;
+    if (typeof ts === "number") return ts > 1e12 ? ts : ts * 1000;
+    var s = String(ts).trim(); if (!s) return 0;
+    if (/^\d+$/.test(s)) { var n = Number(s); return n > 1e12 ? n : n * 1000; }
+    s = s.replace(" ", "T"); if (!/[zZ]|[+-]\d\d:?\d\d$/.test(s)) s += "Z";
+    var ms = Date.parse(s); return isNaN(ms) ? 0 : ms;
+  }
+  function ajStopProgress(id) { if (_ajProgressTimers[id]) { clearInterval(_ajProgressTimers[id]); delete _ajProgressTimers[id]; } }
+  function ajFetchTasks() { return domo.post(CE + "listApprovalTasks", { limit: 40 }).then(unwrap).then(function (d) { return (d && Array.isArray(d.tasks)) ? d.tasks : []; }).catch(function () { return []; }); }
+  function ajFetchQueue() { return domo.post(CE + "getApprovalQueue", { persona: state.persona }).then(unwrap).then(function (d) { return d || {}; }).catch(function () { return {}; }); }
+  function ajMatchTask(tasks, run) {
+    if (!tasks || !tasks.length) return null;
+    var anyInst = tasks.some(function (t) { return t.instanceId; });
+    if (run.instanceId && anyInst) { for (var i = 0; i < tasks.length; i++) { if (tasks[i].instanceId === run.instanceId) return tasks[i]; } return null; }
+    var started = run.startedAt || 0;
+    var cand = tasks.filter(function (t) { return ajTs(t.createdOn || t.createdDate || t.created) >= started - 60000; });
+    cand.sort(function (a, b) { return ajTs(b.createdOn || b.createdDate || b.created) - ajTs(a.createdOn || a.createdDate || a.created); });
+    return cand[0] || tasks[0] || null;
+  }
+  function ajQueueDecision(queue, actionId, run) {
+    var wb = (queue && queue.writeback) || [];
+    for (var i = 0; i < wb.length; i++) {
+      var r = wb[i], rid = r.actionId || r.action_id;
+      if (rid !== actionId) continue;
+      var ts = ajTs(r.completedTs || r.completed_ts || r.updatedAt || r.updated_at);
+      if (ts && run && run.startedAt && ts < run.startedAt - 120000) continue; // stale prior-run row
+      var exec = String(r.executionStatus || r.execution_status || "").toLowerCase();
+      var appr = String(r.approvalStatus || r.approval_status || "").toLowerCase();
+      if (appr === "rejected") return "rejected";
+      if (exec === "executed" || appr === "approved") return "approved";
+    }
+    return null;
+  }
+  // Live progression: poll the writeback + Task Center; advance stage from genuine
+  // signals (OPEN/COMPLETED task = awaiting approval; a current decision row = done).
+  function ajStartProgress(actionId) {
+    ajStopProgress(actionId);
+    var attempts = 0, MAX = 220; // ~15 min at 4s
+    // listApprovalTasks is fast (~1s) so we poll it every tick for the stage; the
+    // decision read (getApprovalQueue) is slow + expensive (10-45s, federated), so
+    // throttle it to ~every 14s and force it once the task flips to COMPLETED.
+    var tick = function () {
+      var run = state.journey.runs[actionId];
+      if (!run || run.status !== "PENDING") { ajStopProgress(actionId); return; }
+      if (++attempts > MAX) { ajStopProgress(actionId); return; }
+      ajFetchTasks().then(function (tasks) {
+        var run2 = state.journey.runs[actionId];
+        if (!run2 || run2.status !== "PENDING") { ajStopProgress(actionId); return; }
+        var mt = ajMatchTask(tasks, run2);
+        var taskDone = !!(mt && String(mt.status || "").toUpperCase() === "COMPLETED");
+        if (mt) {
+          run2.taskId = mt.id; run2.taskVersion = mt.version;
+          var st = String(mt.status || "").toUpperCase();
+          if ((st === "OPEN" || st === "COMPLETED") && run2.stage < 2) run2.stage = 2;
+          run2.polling = true;
+        } else { if (run2.stage < 1) run2.stage = 1; run2.polling = true; }
+        var now = Date.now();
+        var shouldQ = taskDone || !run2.lastQ || (now - run2.lastQ >= 14000);
+        if (!shouldQ) { ajRerender(); return; }
+        run2.lastQ = now;
+        if (run2._qBusy) { ajRerender(); return; }
+        run2._qBusy = true;
+        ajFetchQueue().then(function (queue) {
+          var run3 = state.journey.runs[actionId];
+          if (!run3) { ajStopProgress(actionId); return; }
+          run3._qBusy = false;
+          if (run3.status !== "PENDING") { ajStopProgress(actionId); return; }
+          var dec = ajQueueDecision(queue, actionId, run3);
+          if (dec) { ajApplyDecision(actionId, dec); return; }
+          ajRerender();
+        });
+      });
+    };
+    _ajProgressTimers[actionId] = setInterval(tick, 4000);
+    tick();
+  }
+
+  // Row-level controls shared by the queue table.
+  function ajInspectBtn(aid, a) {
+    var acct = a.accountId || a.accountName, rec = a.recommendation || a.play;
+    var b = h("button", { class: "linklike" }, ["Inspect agent \u2192"]);
+    b.addEventListener("click", function () { ajFocus(aid, { account: acct, recommendation: rec }); state.journey.active.showReasoning = true; ajEnsureReasoning(aid, acct, rec, ""); ajRerender(); });
+    return b;
+  }
+  function ajTrackChip(aid, kind) {
+    var label = kind === "done" ? "\u2713 Journey complete \u00b7 Track \u25b8" : kind === "rejected" ? "\u2715 Rejected \u00b7 Track \u25b8" : "Track \u25b8";
+    var kids = kind === "pending" ? [h("span", { class: "wf-live" }), label] : [label];
+    var b = h("button", { class: "aj-chip " + kind }, kids);
+    b.addEventListener("click", function () { ajFocus(aid, {}); ajRerender(); });
+    return b;
+  }
+
   // Full-width Agent Action Queue table (reference parity). Rows come from the
-  // native approval queue (pending) + executed history.
+  // native approval queue (pending) + executed history, overlaid with live run state.
   function agentActionQueueTable() {
     var pending = (state.approvals.pending || []).slice(0, 4);
     var executed = (state.approvals.history || []).slice(0, 2);
@@ -4493,28 +5711,52 @@
     var tb = h("tbody");
 
     pending.forEach(function (a) {
-      var approve = h("button", { class: "mini-btn go solid" }, ["Approve & execute"]);
-      approve.addEventListener("click", function () { goto("approvals"); });
-      var inspect = h("button", { class: "linklike" }, ["Inspect agent \u2192"]);
-      inspect.addEventListener("click", function () { goto("cowork"); });
-      tb.appendChild(h("tr", {}, [
+      var aid = a.actionId || (a.accountId || a.accountName);
+      var run = state.journey.runs[aid];
+      var isExec = Object.prototype.hasOwnProperty.call(state.journey.executed, aid);
+      var isRej = !!state.journey.rejected[aid];
+      var amt = a.expectedRevenueProtected || a.revenueAtRisk || 0;
+      var approvalCell, execBadge, actionEls;
+      if (isExec) {
+        approvalCell = approvalPill("Approved");
+        execBadge = h("span", { class: "exec-badge good" }, ["Executed"]);
+        actionEls = [ajTrackChip(aid, "done"), ajInspectBtn(aid, a)];
+      } else if (isRej) {
+        approvalCell = approvalPill("Rejected");
+        execBadge = h("span", { class: "exec-badge bad" }, ["Cancelled"]);
+        actionEls = [ajTrackChip(aid, "rejected"), ajInspectBtn(aid, a)];
+      } else if (run) {
+        approvalCell = approvalPill("Pending");
+        execBadge = h("span", { class: "exec-badge warn" }, [run.stage >= 2 ? "Awaiting approval" : "In workflow"]);
+        var review = h("button", { class: "linklike strong" }, ["Review & approve \u2192"]);
+        review.addEventListener("click", function () { goto("approvals"); });
+        actionEls = [ajTrackChip(aid, "pending")].concat(run.stage >= 2 ? [review] : []);
+      } else {
+        approvalCell = approvalPill("Pending");
+        execBadge = h("span", { class: "exec-badge warn" }, ["Waiting"]);
+        var approve = h("button", { class: "mini-btn go solid" }, ["Approve & execute"]);
+        approve.addEventListener("click", function () { ajExecute(aid, { account: a.accountId || a.accountName, recommendation: a.recommendation || a.play, protectedRevenue: amt }); });
+        actionEls = [approve, ajInspectBtn(aid, a)];
+      }
+      var row = h("tr", {}, [
         h("td", {}, [h("a", { class: "aaq-acct", href: snowsightObjHref("view", "GOLD_AGENT_ACTION_QUEUE"), target: "_blank", rel: "noopener" }, [a.accountId || a.accountName]),
           h("span", { class: "aaq-sub" }, [a.region || ""])]),
         h("td", {}, [a.recommendation || a.play || "\u2014"]),
-        h("td", {}, [approvalPill("Pending")]),
-        h("td", {}, [h("div", { class: "aaq-exec" }, [h("span", { class: "exec-badge warn" }, ["Waiting"]), h("div", { class: "aaq-actions" }, [approve, inspect])])]),
-        h("td", { class: "num" }, [money(a.expectedRevenueProtected || a.revenueAtRisk || 0)])
-      ]));
+        h("td", {}, [approvalCell]),
+        h("td", {}, [h("div", { class: "aaq-exec" }, [execBadge, h("div", { class: "aaq-actions" }, actionEls)])]),
+        h("td", { class: "num" }, [money(amt)])
+      ]);
+      if (state.journey.active && state.journey.active.actionId === aid) row.classList.add("aaq-row-focus");
+      tb.appendChild(row);
     });
     executed.forEach(function (r) {
-      var inspect = h("button", { class: "linklike" }, ["Inspect agent \u2192"]);
-      inspect.addEventListener("click", function () { goto("cowork"); });
+      var aid = r.actionId || ("hist-" + (r.accountId || r.accountName));
       tb.appendChild(h("tr", {}, [
         h("td", {}, [h("a", { class: "aaq-acct", href: snowsightObjHref("view", "GOLD_AGENT_ACTION_QUEUE"), target: "_blank", rel: "noopener" }, [r.accountId || r.accountName]),
           h("span", { class: "aaq-sub" }, [r.region || ""])]),
         h("td", {}, [r.recommendation || "\u2014"]),
         h("td", {}, [approvalPill("Approved")]),
-        h("td", {}, [h("div", { class: "aaq-exec" }, [h("span", { class: "exec-badge good" }, ["Executed"]), inspect])]),
+        h("td", {}, [h("div", { class: "aaq-exec" }, [h("span", { class: "exec-badge good" }, ["Executed"]), ajInspectBtn(aid, r)])]),
         h("td", { class: "num" }, [money(r.actualRevenueProtected || 0)])
       ]));
     });
@@ -4523,17 +5765,20 @@
     }
     table.appendChild(tb);
 
-    return h("article", { class: "panel col-12 aaq-panel" }, [
+    var journey = renderActionJourney();
+    var panelKids = [
       h("div", { class: "panel-head" }, [
-        h("div", {}, [h("h2", {}, ["Agent Action Queue"]), h("p", {}, ["Approve & execute starts a governed Domo Workflow (human approval + writeback to Snowflake)"])]),
+        h("div", {}, [h("h2", {}, ["Agent Action Queue"]), h("p", {}, ["Approve & execute launches the governed agent\u2192agent flow: Domo Workflow \u2192 Cortex Agent reasoning \u2192 human approval \u2192 writeback to Snowflake"])]),
         h("div", { class: "panel-head-actions" }, [
           (function () { var b = h("button", { class: "linklike strong" }, ["Approvals \u2192"]); b.addEventListener("click", function () { goto("approvals"); }); return b; })(),
           srcLink("GOLD_AGENT_ACTION_QUEUE", snowsightObjHref("view", "GOLD_AGENT_ACTION_QUEUE"), "sf")
         ])
       ]),
-      h("div", { class: "table-wrap" }, [table]),
-      h("p", { class: "aaq-foot" }, ["Cortex Agent called from Domo: ", h("a", { class: "src-link sf", href: snowsightAgentHref(), target: "_blank", rel: "noopener" }, ["REVENUE_CC_AGENT", h("span", { class: "src-arrow" }, ["\u2197"])]), " \u00b7 human approval routed through the native Domo Task Center queue."])
-    ]);
+      h("div", { class: "table-wrap" }, [table])
+    ];
+    if (journey) panelKids.push(journey);
+    panelKids.push(h("p", { class: "aaq-foot" }, ["Cortex Agent called from Domo: ", h("a", { class: "src-link sf", href: snowsightAgentHref(), target: "_blank", rel: "noopener" }, ["REVENUE_CC_AGENT", h("span", { class: "src-arrow" }, ["\u2197"])]), " \u00b7 human approval routed through the native Domo Task Center queue \u00b7 ", h("a", { class: "src-link", href: retentionWorkflowHref(), target: "_blank", rel: "noopener" }, ["Renewal Risk Retention workflow", h("span", { class: "src-arrow" }, ["\u2197"])])]));
+    return h("article", { class: "panel col-12 aaq-panel" }, panelKids);
   }
 
   // Governed Data Lineage (reference parity): 5 gold views federated into Domo
@@ -4618,19 +5863,57 @@
     setMode();
     // Region-scoped surfaces reload lazily on next view after a persona change.
     state.approvals.loaded = false;
+    // Instant paint: on a cold open, render immediately (flagged as hydrating)
+    // so the first view isn't a blank spinner while the federated live read runs;
+    // swap to live when getForecastHome returns. Prefer the last cached *live*
+    // payload (real recent data) and fall back to the sample seed. Fetch the seed
+    // directly (not sampleData) so we don't trip its state.mode = "sample" side
+    // effect and downgrade a live read that wins the race.
+    if (isLive() && !state.data) {
+      state.hydrating = true;
+      var cachedHome = cacheGet("forecast");
+      if (cachedHome) {
+        state.data = cachedHome; state.mode = "loading"; setMode(); renderView();
+      } else {
+        fetch("./public/mock/forecast-home.json").then(function (r) { return r.json(); }).then(function (seed) {
+          if (!state.hydrating || state.data) return;
+          var region = regionOf(state.persona);
+          if (region && seed && seed.regionalRisk) {
+            seed = JSON.parse(JSON.stringify(seed));
+            seed.regionalRisk = seed.regionalRisk.filter(function (row) { return row.region === region; });
+          }
+          state.data = seed; state.mode = "loading"; setMode(); renderView();
+        }).catch(function () { /* seed optional — live read still renders */ });
+      }
+    }
     loadData(state.persona).then(function (data) {
+      state.hydrating = false;
       state.data = data; setMode();
-      el("sourceLabel").textContent = data.source || "SNOWFLAKE_REVENUE_CC.CORE";
+      if (state.mode === "live") cacheSet("forecast", data);
+      var sl = el("sourceLabel"); if (sl) sl.textContent = data.source || "SNOWFLAKE_REVENUE_CC.CORE";
       renderView();
     });
   }
 
+  // Prime tab state from the persistent cache so the first visit to each read
+  // surface paints last-known live data instantly; the tab's normal load still
+  // runs and revalidates (loaded stays false so revalidation fires).
+  function primeCaches() {
+    var co = cacheGet("ops");
+    if (co) { state.ops.scenarios = co.scenarios || []; state.ops.feedback = co.feedback || []; state.ops.live = true; }
+    var cs = cacheGet("semantic");
+    if (cs && cs.model) { state.semantic.model = cs.model; state.semantic.view = cs.view || null; state.semantic.sql = cs.sql || null; state.semantic.live = true; }
+    var cg = cacheGet("governance");
+    if (cg) { if (cg.parity) state.governance.parity = cg.parity; if (cg.masking) state.governance.masking = cg.masking; state.governance.live = true; }
+  }
+
   function init() {
     ceInstrument();
-    ensureDiagWidget();
     buildPersonaSelect();
     initRail();
     renderTabs();
+    startWarmLoop();
+    primeCaches();
     refresh();
     // Close the semantic-view picker on any outside click.
     document.addEventListener("click", function () {
